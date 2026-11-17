@@ -1,10 +1,9 @@
 // Налаштування Firebase. Ці значення НЕ секретні: доступ до даних захищають правила Firestore (firestore.rules).
-// Firebase Console → Project settings → General → Your apps → Web app → SDK setup and configuration → Config.
 window.FIREBASE_CONFIG = {
-  apiKey: "ВСТАВ_СЮДИ_apiKey",
-  authDomain: "ВСТАВ_project-id.firebaseapp.com",
-  projectId: "ВСТАВ_project-id",
-  storageBucket: "ВСТАВ_project-id.appspot.com",
-  messagingSenderId: "ВСТАВ",
-  appId: "ВСТАВ"
+  apiKey: "AIzaSyCkxUWjUPh7PcAK3VCFCt-lANo_ki1Nj_s",
+  authDomain: "ccna-maksym.firebaseapp.com",
+  projectId: "ccna-maksym",
+  storageBucket: "ccna-maksym.firebasestorage.app",
+  messagingSenderId: "816942726798",
+  appId: "1:816942726798:web:70992e7b47338f552a13df"
 };
