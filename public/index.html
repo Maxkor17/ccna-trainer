@@ -32,6 +32,10 @@ html,body{margin:0;background:var(--bg);color:var(--text);font:var(--fs,16px)/1.
 .wrap{max-width:760px;margin:0 auto;padding:12px 14px 60px}
 header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0 12px}
 header h1{font-size:18px;margin:0;cursor:pointer}
+table.cheat{border-collapse:collapse;width:100%;font-size:.88em;margin:4px 0 10px}table.cheat th,table.cheat td{border:1px solid var(--line);padding:5px 7px;text-align:left;vertical-align:top}table.cheat th{background:var(--accent-soft);color:var(--accent)}ul.cheatl{padding-left:20px;margin:6px 0}ul.cheatl li{margin:5px 0}
+.btnlike{display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border:1px solid var(--line);border-radius:10px;cursor:pointer;background:var(--card);font:inherit}.btnlike.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.topo{background:var(--card);border:1px solid var(--line);border-radius:10px;margin:8px 0;padding:4px}.topo svg{width:100%;height:auto;display:block}
+pre.fill{white-space:pre-wrap;line-height:2}pre.fill input{font:inherit;padding:1px 4px;border:1px solid var(--accent);border-radius:4px;background:var(--card);color:var(--text);margin:0 1px}
 .chip{font-size:12px;padding:3px 9px;border-radius:999px;background:var(--accent-soft);color:var(--accent);white-space:nowrap}
 .chip.warn{background:var(--warn-soft);color:var(--warn)}
 .chip.err{background:var(--bad-soft);color:var(--bad)}
@@ -124,6 +128,9 @@ select.full{width:100%}
 <script src="questions-netacad.js"></script>
 <script src="gen.js"></script>
 <script src="gen2.js"></script>
+<script src="gen3.js"></script>
+<script src="questions-figs.js"></script>
+<script src="cheats.js"></script>
 <script src="cli.js"></script>
 <script>
 "use strict";
@@ -146,7 +153,7 @@ const TOPICS = [
  ["ENSA12","ENSA","12","Діагностика мережі"],["ENSA13","ENSA","13","Віртуалізація мережі"],["ENSA14","ENSA","14","Автоматизація мережі"]
 ].map(([id,g,n,name])=>({id,g,n,name}));
 const TMAP = Object.fromEntries(TOPICS.map(t=>[t.id,t]));
-const QB_BASE = [...(window.QB_ITN||[]), ...(window.QB_SRWE||[]), ...(window.QB_NOTES||[]), ...(window.QB_EXTRA||[]), ...(window.QB_SRWE2||[]), ...(window.QB_ENSA||[]), ...(window.QB_NETACAD||[])];
+const QB_BASE = [...(window.QB_ITN||[]), ...(window.QB_SRWE||[]), ...(window.QB_NOTES||[]), ...(window.QB_EXTRA||[]), ...(window.QB_SRWE2||[]), ...(window.QB_ENSA||[]), ...(window.QB_NETACAD||[]), ...(window.QB_FIGS||[])];
 let customQs = [];
 let QB = QB_BASE.slice();
 let QMAP = Object.fromEntries(QB.map(q=>[q.id,q]));
@@ -156,7 +163,7 @@ const GEN = window.GEN, CLI = window.CLI;
 const TID2GEN = {"g-showstp":"g-showstp","g-showtrunk":"g-showtrunk","g-showec":"g-showec","g-showint":"g-showint","g-lpm":"g-lpm","g-ad":"g-ad","g-wild":"g-wild","g-ospfcost":"g-ospfcost","g-rid":"g-rid","g-bin":"g-bin","g-hex":"g-bin","g-net":"g-subnet","g-bc":"g-subnet","g-range":"g-subnet","g-hosts":"g-subnet","g-vlsm":"g-vlsm","g-ipv6":"g-ipv6","g-eui":"g-eui","g-stproot":"g-stproot","g-stprp":"g-stprp","g-stpcost":"g-stpcost","g-stpprio":"g-stpprio"};
 const INT_DAYS = [0,1,3,7,16,35], DAY = 864e5;
 const LS = {snaps:"ccna.snaps.v1",custom:"ccna.custom.v1",prog:"ccna.prog.v1",exams:"ccna.exams.v1",sel:"ccna.sel.v1",opts:"ccna.opts.v1",daily:"ccna.daily.v1",flags:"ccna.flags.v1",labs:"ccna.labs.v1"};
-const TYPE_NAME = {mc:"", order:"Розставте по порядку", match:"Зіставте", cmd:"Введіть команду"};
+const TYPE_NAME = {mc:"", order:"Розставте по порядку", match:"Зіставте", cmd:"Введіть команду", fill:"Заповніть пропуски", flash:"Картка"};
 
 // Концепції для аналітики (за темою + ключовими словами)
 const CONCEPTS = {
@@ -167,7 +174,7 @@ const CONCEPTS = {
  SRWE5:[["PortFast і BPDU Guard",/portfast|bpdu/i],["Вибір root bridge",/root bridge|BID|пріоритет|priority|root primary/i],["Root port і вартість",/root port|вартіст|cost/i],["Ролі портів",/роль|alternate|backup|designated|Altn/i],["Стани й таймери",/стан|listening|learning|blocking|forward delay|таймер|discarding/i],["Петлі й шторми",/петл|шторм|storm|TTL|дублю|лягла/i],["Версії STP",/PVST|MST|RSTP|rapid/i]],
  SRWE6:[["Режими PAgP/LACP",/PAgP|LACP|active|passive|desirable|\bauto\b|mode on|\bon\b/i],["Вимоги до портів",/збіга|швидк|suspended|\(s\)|різн|FastEthernet/i],["Балансування",/баланс|load-balance|хеш|потік/i],["Налаштування й перевірка",/channel-group|summary|port-channel|show|BW/i]]
 };
-function textOf(q){ return [q.q, ...(q.o||[]).map(o=>o[0]), ...(q.items||[]), ...((q.pairs||[]).flat()), ...(q.ans||[])].join(" "); }
+function textOf(q){ return [q.q, ...(q.o||[]).map(o=>o[0]), ...(q.items||[]), ...((q.pairs||[]).flat()), ...(Array.isArray(q.ans)?q.ans:[q.ans||""]), q.cfg||""].join(" "); }
 function conceptOf(id){
   const q=QMAP[id]; if(!q){ return GEN.conceptOf[id]||"Розрахунки"; }
   if(q.k) return q.k;
@@ -193,7 +200,7 @@ const recId = q=>q.tid||q.id;
 // ================= Стан =================
 let prog = lsGet(LS.prog,{}), exams = lsGet(LS.exams,[]), daily = lsGet(LS.daily,{}), flags = lsGet(LS.flags,{}), labs = lsGet(LS.labs,{});
 let sel = new Set(lsGet(LS.sel,["SRWE1","SRWE2","SRWE3","SRWE4","SRWE5","SRWE6"]));
-let opts = Object.assign({train:20, exam:40, src:"all", goal:20, theme:"auto", fs:16, shuffle:true, sound:false, modTopic:"SRWE1"}, lsGet(LS.opts,{}));
+let opts = Object.assign({train:20, exam:40, src:"all", goal:20, theme:"auto", fs:16, shuffle:true, sound:false, modTopic:"SRWE1", examDate:""}, lsGet(LS.opts,{}));
 if(opts.notesOnly){ opts.src="n"; delete opts.notesOnly; }
 let view = "home", S = null, LAB = null, searchQ = "";
 
@@ -203,6 +210,7 @@ function setStatus(){
   const el=$("#status"); el.title="";
   if(store.err){el.className="chip err";el.textContent="⚠ Помилка збереження";el.title=store.err;return;}
   if(store.mode==="loading"){el.className="chip";el.textContent="☁ Підключення…";return;}
+  if(store.mode==="db"&&!navigator.onLine){el.className="chip warn";el.textContent="📴 Офлайн";el.title="Прогрес зберігається на пристрої й синхронізується, щойно з'явиться інтернет.";return;}
   if(store.mode==="db"){el.className="chip";el.textContent="☁ Синхронізовано";el.title=(store.user&&store.user.email)||"";return;}
   if(store.mode==="signedout"){el.className="chip warn";el.textContent="Не виконано вхід";return;}
   el.className="chip warn";el.textContent="⚠ Лише на цьому пристрої";el.title="Firebase не налаштовано або недоступний — робіть резервні копії.";
@@ -307,7 +315,7 @@ function genKeysFor(topics){ return opts.src!=="all"? [] : GEN.forTopics(topics)
 function reviewQueue(){
   const now=Date.now(); const out=[];
   for(const [id,r] of Object.entries(prog)){ if(!(r.w>0 && r.b<5 && r.d<=now)) continue;
-    if(QMAP[id]) out.push(QMAP[id]); else if(TID2GEN[id]){ const g=GEN.make(TID2GEN[id]); if(g) out.push(g); } }
+    if(QMAP[id]) out.push(QMAP[id]); else if(TID2GEN[id]||GEN.list[id]){ const g=GEN.make(TID2GEN[id]||id); if(g) out.push(g); } }
   return out;
 }
 function topicStats(tid){
@@ -335,9 +343,13 @@ function isCorrect(q, ans){
   if(t==="order") return Array.isArray(ans) && ans.length===q.items.length && ans.every((v,i)=>v===i);
   if(t==="match") return Array.isArray(ans) && q.pairs.every((p,i)=>ans[i]===p[1]);
   if(t==="cmd") return typeof ans==="string" && q.ans.some(c=>cmdMatch(ans,c));
+  if(t==="flash") return ans==="yes";
+  if(t==="fill"){ const bl=fillBlanks(q); return Array.isArray(ans) && bl.every((alts,i)=>typeof ans[i]==="string"&&alts.some(c=>fillEq(ans[i],c))); }
   return false;
 }
-function hasAnswer(q,ans){ const t=qtype(q); if(t==="cmd") return !!(ans&&ans.trim()); if(t==="match") return Array.isArray(ans)&&ans.filter(Boolean).length===q.pairs.length; if(t==="order") return Array.isArray(ans)&&ans.length===q.items.length; return Array.isArray(ans)&&ans.length===q.a.length; }
+function fillBlanks(q){ return [...q.cfg.matchAll(/\[\[(.+?)\]\]/g)].map(m=>m[1].split("|")); }
+function fillEq(u,c){ u=(u||"").trim(); if(!u) return false; if(/^[\d.\/]+$/.test(c)) return u===c; return u.toLowerCase()===c.toLowerCase() || cmdMatch(u,c); }
+function hasAnswer(q,ans){ const t=qtype(q); if(t==="flash") return ans==="yes"||ans==="no"; if(t==="fill") return Array.isArray(ans)&&fillBlanks(q).every((_,i)=>ans[i]&&ans[i].trim()); if(t==="cmd") return !!(ans&&ans.trim()); if(t==="match") return Array.isArray(ans)&&ans.filter(Boolean).length===q.pairs.length; if(t==="order") return Array.isArray(ans)&&ans.length===q.items.length; return Array.isArray(ans)&&ans.length===q.a.length; }
 function cmdMatch(input, canon){
   const norm=s=>s.trim().toLowerCase().replace(/\s*,\s*/g,",").replace(/\s+-\s+/g," - ");
   let u=norm(input).split(/\s+/), c=norm(canon).split(/\s+/);
@@ -356,7 +368,7 @@ function startSession(mode, list, title){
   list.forEach((q,k)=>{ const t=qtype(q);
     if(t==="mc") S.order[k]=opts.shuffle? shuffle(q.o.map((_,i)=>i)) : q.o.map((_,i)=>i);
     if(t==="order"){ let o=shuffle(q.items.map((_,i)=>i)); if(o.every((v,i)=>v===i)) o.reverse(); S.order[k]=o; }
-    if(t==="match") S.order[k]=shuffle([...new Set(q.pairs.map(p=>p[1]))]);
+    if(t==="match") S.order[k]=q.choices? q.choices.slice() : shuffle([...new Set(q.pairs.map(p=>p[1]))]);
   });
   view="quiz"; render(); scrollTop(); if(mode==="exam") tick();
 }
@@ -366,7 +378,7 @@ function scrollTop(){try{window.scrollTo(0,0);}catch(e){}}
 function finishExam(){
   if(!S) return; const per={}; let ok=0;
   S.items.forEach((q,k)=>{ const a=S.ans[k]; const good=isCorrect(q,a); if(good) ok++; per[q.t]=per[q.t]||[0,0]; per[q.t][1]++; if(good) per[q.t][0]++; if(hasAnswer(q,a)) record(recId(q),good); });
-  const e={ts:Date.now(), n:S.items.length, correct:ok, pct:Math.round(ok/S.items.length*100), dur:Math.round((Date.now()-S.start)/1000), per,
+  const e={ts:Date.now(), n:S.items.length, correct:ok, pct:Math.round(ok/S.items.length*100), dur:Math.round((Date.now()-S.start)/1000), per, ccna:!!S.ccna,
     ids:S.items.map(q=>q.gen?null:q.id), ans:Object.fromEntries(Object.entries(S.ans).filter(([k])=>!S.items[k].gen).map(([k,v])=>[S.items[k].id,v]))};
   saveExam(e); S.result=e; view="result"; render(); scrollTop();
 }
@@ -376,6 +388,26 @@ const letters="ABCDEFGH";
 function flagBtn(q){ const id=recId(q); const f=flags[id]&&flags[id].on;
   return `<button class="flagbtn ${f?"on":""}" data-act="flag" data-id="${esc(id)}" data-snip="${esc(q.q.slice(0,140))}">${f?"⚑ Позначено як сумнівне":"⚐ Позначити як сумнівне"}</button>`+
   (f?`<div class="row"><input type="text" id="flagnote" placeholder="Що не так? (необов'язково)" value="${esc(flags[id].note||"")}"><button class="mini" data-act="flagnote" data-id="${esc(id)}">Зберегти</button></div>`:""); }
+// Схема топології: nodes [{id,t:"r"|"sw"|"pc"|"srv"|"cloud",x,y,l}], links [{a,b,la,lb,m,dash}] у координатах 0..100 × 0..60
+function topoSVG(f){
+  const W=400,H=Math.round(240*(f.h||60)/60), X=x=>20+x*3.6, Y=y=>18+y*3.4;
+  const N={}; for(const n of f.nodes) N[n.id]=n;
+  let g="";
+  for(const l of f.links){ const a=N[l.a], b=N[l.b]; const x1=X(a.x),y1=Y(a.y),x2=X(b.x),y2=Y(b.y);
+    g+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(${l.c||"--muted"})" stroke-width="${l.w||2}" ${l.dash?'stroke-dasharray="5 4"':""}/>`;
+    const lab=(t,fx,fy)=>t?`<text x="${fx}" y="${fy}" font-size="10" text-anchor="middle" fill="var(--text)" paint-order="stroke" stroke="var(--card)" stroke-width="3">${esc(t)}</text>`:"";
+    g+=lab(l.la,x1+(x2-x1)*0.24,y1+(y2-y1)*0.24-4)+lab(l.lb,x2+(x1-x2)*0.24,y2+(y1-y2)*0.24-4)+lab(l.m,(x1+x2)/2,(y1+y2)/2+(l.mdy||12));
+  }
+  for(const n of f.nodes){ const x=X(n.x), y=Y(n.y); let ic="";
+    if(n.t==="r") ic=`<circle cx="${x}" cy="${y}" r="15" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/><path d="M${x-8} ${y}h16M${x} ${y-8}v16" stroke="var(--accent)" stroke-width="2"/>`;
+    else if(n.t==="sw") ic=`<rect x="${x-18}" y="${y-11}" width="36" height="22" rx="4" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/><path d="M${x-10} ${y-3}h20M${x-10} ${y+4}h20" stroke="var(--accent)" stroke-width="1.6"/>`;
+    else if(n.t==="srv") ic=`<rect x="${x-10}" y="${y-14}" width="20" height="28" rx="3" fill="var(--code)" stroke="var(--muted)" stroke-width="2"/><path d="M${x-6} ${y-6}h12M${x-6} ${y}h12" stroke="var(--muted)" stroke-width="1.5"/>`;
+    else if(n.t==="cloud") ic=`<ellipse cx="${x}" cy="${y}" rx="24" ry="13" fill="var(--code)" stroke="var(--muted)" stroke-width="2"/>`;
+    else ic=`<rect x="${x-13}" y="${y-10}" width="26" height="17" rx="2" fill="var(--code)" stroke="var(--muted)" stroke-width="2"/><path d="M${x-6} ${y+11}h12" stroke="var(--muted)" stroke-width="2"/>`;
+    g+=ic+`<text x="${x}" y="${y+(n.t==="srv"?27:25)}" font-size="11" font-weight="600" text-anchor="middle" fill="var(--text)">${esc(n.l||n.id)}</text>`+(n.sub?`<text x="${x}" y="${y+38}" font-size="9.5" text-anchor="middle" fill="var(--muted)">${esc(n.sub)}</text>`:"");
+  }
+  return `<div class="topo"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Схема топології">${g}</svg></div>`;
+}
 function renderBody(q, k, ans, checked, interactive){
   const t=qtype(q); let h="";
   if(t==="mc"){
@@ -398,7 +430,7 @@ function renderBody(q, k, ans, checked, interactive){
     }
   }
   if(t==="match"){
-    const rights=(S&&S.order[k])||[...new Set(q.pairs.map(p=>p[1]))]; const a=ans||[];
+    const rights=(S&&S.order[k])||q.choices||[...new Set(q.pairs.map(p=>p[1]))]; const a=ans||[];
     h+=q.pairs.map((p,i)=>{ const v=a[i]||"";
       if(!checked) return `<div class="mrow"><div class="l">${esc(p[0])}</div><select data-act="match" data-i="${i}"><option value="">— оберіть —</option>${rights.map(r=>`<option ${r===v?"selected":""}>${esc(r)}</option>`).join("")}</select></div>`;
       const ok=v===p[1]; return `<div class="mrow"><div class="l">${esc(p[0])}</div><div>${ok?"✅":"❌"} ${esc(v||"—")}${ok?"":`<br><span class="small" style="color:var(--ok)">Правильно: ${esc(p[1])}</span>`}</div></div>`; }).join("");
@@ -407,6 +439,14 @@ function renderBody(q, k, ans, checked, interactive){
     if(!checked && interactive) h+=`<input type="text" class="cmdin" id="cmdin" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="наприклад: sh int tr" value="${esc(ans||"")}"><div class="small muted" style="margin-top:4px">Скорочення приймаються, як в IOS.</div>`;
     else { const ok=isCorrect(q,ans); h+=`<pre>${esc(ans||"(без відповіді)")}</pre><div>${ok?"✅":"❌"} Еталон: <code>${esc(q.ans[0])}</code>${q.ans.length>1?` <span class="small muted">(або ${q.ans.slice(1).map(esc).join(", ")})</span>`:""}</div>`; }
   }
+  if(t==="flash"){
+    if(!checked&&interactive){ h+= S&&S.reveal===k? `<div class="note" style="white-space:pre-wrap">${esc(q.ans)}</div><div class="small muted">Чесно оцініть себе:</div><div class="row"><button class="primary grow" data-act="flash" data-v="yes">✅ Знав</button><button class="grow" data-act="flash" data-v="no">❌ Не знав</button></div>` : `<button class="primary" data-act="flashshow">Показати відповідь</button>`; }
+    else h+=`<div class="note" style="white-space:pre-wrap">${esc(q.ans)}</div>${q.file?`<div class="small muted">📒 ${esc(q.file)}</div>`:""}`; }
+  if(t==="fill"){ const bl=fillBlanks(q); const a=ans||[]; let i=-1;
+    const parts=esc(q.cfg).replace(/\[\[(.+?)\]\]/g,()=>{ i++; const v=a[i]||""; const w=Math.max(6,Math.max(...bl[i].map(x=>x.length))+1);
+      if(!checked&&interactive) return `<input class="fillin" data-i="${i}" value="${esc(v)}" style="width:${w}ch" autocomplete="off" autocapitalize="off" spellcheck="false">`;
+      const ok=bl[i].some(c=>fillEq(v,c)); return `<span style="border-bottom:2px solid var(${ok?"--ok":"--bad"})">${ok?"":"<s>"+esc(v||"___")+"</s> "}${esc(ok?v:bl[i][0])}</span>`; });
+    h+=`<pre class="fill">${parts}</pre>`; if(!checked&&interactive) h+=`<div class="small muted">Впишіть пропущені слова. Скорочення команд IOS приймаються.</div>`; }
   if(checked && q.e) h+=`<div class="small" style="margin-top:8px">💡 ${esc(q.e)}</div>`;
   if(checked && q.n) h+=`<div class="note">${esc(q.n)}</div>`;
   return h;
@@ -420,7 +460,8 @@ function renderQuiz(){
   let nav="";
   if(S.mode==="exam"){
     const done=S.items.filter((qq,i)=>hasAnswer(qq,S.ans[i])).length;
-    nav=`<div class="navbar"><button data-act="prev" ${S.i?"":"disabled"}>← Назад</button>${S.i<S.items.length-1?`<button class="primary" data-act="next">Далі →</button>`:""}</div>
+    nav= S.ccna? `<div class="navbar">${S.i<S.items.length-1?`<button class="primary" data-act="next">Далі → (повернутися не можна)</button>`:`<button class="primary" data-act="end2">Завершити іспит</button>`}</div><div class="small muted">Відповіді: ${done}/${S.items.length}. Як на справжньому CCNA, до попередніх питань повернутися не можна.</div>`
+      : `<div class="navbar"><button data-act="prev" ${S.i?"":"disabled"}>← Назад</button>${S.i<S.items.length-1?`<button class="primary" data-act="next">Далі →</button>`:""}</div>
       <div class="navbar"><button class="${S.confirmEnd?"primary":""}" data-act="end">${S.confirmEnd?`Точно завершити? Відповіді: ${done}/${S.items.length}`:"Завершити екзамен"}</button></div>
       <div class="dots">${S.items.map((qq,i)=>`<span class="${hasAnswer(qq,S.ans[i])?"done":""} ${i===S.i?"cur":""}" data-act="jump" data-k="${i}">${i+1}</span>`).join("")}</div>`;
   } else {
@@ -431,7 +472,7 @@ function renderQuiz(){
     <div class="qmeta"><span>${modeName} · ${S.i+1}/${S.items.length}</span>${S.mode==="exam"?`<span>⏱ <span id="timer">${fmtLeft(S.deadline-Date.now())}</span></span>`:`<span>${tlabel(q.t)}</span>`}</div>
     <div class="progress"><i style="width:${Math.round(S.i/S.items.length*100)}%"></i></div>
     <div class="small muted">${S.mode==="exam"?tlabel(q.t)+" · ":""}${esc(TMAP[q.t].name)}${badge}</div>
-    <div class="qtext">${esc(q.q)}</div>${q.c?`<pre>${esc(q.c)}</pre>`:""}
+    <div class="qtext">${esc(q.q)}</div>${q.fig?topoSVG(q.fig):""}${q.c?`<pre>${esc(q.c)}</pre>`:""}
     ${renderBody(q,k,ans,checked,true)}${verdict}${nav}
   </div>
   <button class="ghost" data-act="quit">✕ Вийти${S.mode==="exam"?" (екзамен не зарахується)":""}</button>`;
@@ -439,14 +480,14 @@ function renderQuiz(){
 function reviewItem(q, ans, open){
   const ok=isCorrect(q,ans);
   const saveS=S; S=null; const body=renderBody(q,0,ans||(qtype(q)==="mc"?[]:qtype(q)==="cmd"?"":[]),true,false); S=saveS;
-  return `<details ${open?"open":""}><summary>${ans===undefined?"":ok?"✅ ":"❌ "}<span class="small muted">${tlabel(q.t)}</span> ${esc(q.q)}</summary>${q.c?`<pre>${esc(q.c)}</pre>`:""}${body}${flagBtn(q)}</details>`;
+  return `<details ${open?"open":""}><summary>${ans===undefined?"":ok?"✅ ":"❌ "}<span class="small muted">${tlabel(q.t)}</span> ${esc(q.q)}</summary>${q.fig?topoSVG(q.fig):""}${q.c?`<pre>${esc(q.c)}</pre>`:""}${body}${flagBtn(q)}</details>`;
 }
 
 // ================= Рендеринг: екрани =================
 function render(){
   const app=$("#app");
   ({home:()=>app.innerHTML=renderHome(), quiz:()=>app.innerHTML=renderQuiz(), result:()=>app.innerHTML=renderResult(), stats:()=>{app.innerHTML=renderStats(); bindChart();},
-    backup:()=>app.innerHTML=renderBackup(), search:()=>app.innerHTML=renderSearch(), labs:()=>app.innerHTML=renderLabs(), lab:()=>{app.innerHTML=renderLab(); bindLab();}, custom:()=>app.innerHTML=renderCustom(), settings:()=>app.innerHTML=renderSettings(), summary:()=>{} }[view]||(()=>{}))();
+    backup:()=>app.innerHTML=renderBackup(), search:()=>app.innerHTML=renderSearch(), labs:()=>app.innerHTML=renderLabs(), lab:()=>{app.innerHTML=renderLab(); bindLab();}, custom:()=>app.innerHTML=renderCustom(), settings:()=>app.innerHTML=renderSettings(), cheat:()=>app.innerHTML=renderCheat(), summary:()=>{} }[view]||(()=>{}))();
   if(view==="quiz"){ const ci=$("#cmdin"); if(ci) ci.focus(); }
 }
 function streakInfo(){
@@ -476,7 +517,7 @@ function renderHome(){
   <div class="card"><h2>Тест модуля</h2>
     <p class="small muted" style="margin:0 0 8px">20 питань по одному модулю: спершу 🎓 NetAcad і слабкі місця, потім нові та розрахунки.</p>
     <select class="full" id="modsel">${COURSES.map(([g])=>`<optgroup label="${g}">${TOPICS.filter(t=>t.g===g).map(t=>`<option value="${t.id}" ${opts.modTopic===t.id?"selected":""}>${g} ${t.n}. ${esc(t.name)} (${QB.filter(q=>q.t===t.id).length})</option>`).join("")}</optgroup>`).join("")}</select>
-    <div class="row" style="margin-top:8px"><span class="grow"></span><button class="primary" data-act="module">Почати тест модуля</button></div></div>
+    <div class="row" style="margin-top:8px"><button data-act="cheat">📄 Шпаргалка</button><span class="grow"></span><button class="primary" data-act="module">Почати тест модуля</button></div></div>
   <div class="card"><h2>Тренування</h2>
     <p class="small muted" style="margin:0 0 8px">Розбір одразу. Спершу питання з помилками й нові${gk.length?", плюс розрахунки з генератора":""}.</p>
     <div class="row">${seg("train",[10,20,0],v=>v?v:"Усі")}<span class="grow"></span><button class="primary" data-act="train" ${selQ?"":"disabled"}>Почати</button></div></div>
@@ -489,6 +530,15 @@ function renderHome(){
   <div class="card"><div class="row"><h2 class="grow" style="margin:0">CLI-лаби</h2><span class="small muted">виконано ${labsDone}/${ALLSCEN().length}</span></div>
     <p class="small muted" style="margin:6px 0 8px">Налаштовуйте пристрої командами IOS: від одного комутатора до мережі з маршрутизатором і ПК (ping, tracert).</p>
     <button class="primary" data-act="labs">Відкрити лаби</button></div>
+  ${installCard()}
+  ${(()=>{ const pi=planInfo(); return `<div class="card"><h2>🗓 План до екзамену</h2>${pi?`<p style="margin:0 0 6px">${pi.days>0?`До екзамену <b>${pi.days}</b> дн. (${esc(new Date(opts.examDate).toLocaleDateString("uk-UA"))})`:pi.days===0?"Екзамен сьогодні — успіху!":"Дата екзамену минула"} · готовність <b>${Math.round(pi.avg*100)}%</b></p>
+    <p class="small muted" style="margin:0 0 6px">Нових питань лишилося: ${pi.unseen}, до повторення сьогодні: ${pi.due}. Щоб устигнути, робіть ≈ <b>${pi.perDay}</b> питань на день${pi.days>3?" (останні 3 дні — лише повторення й симуляції)":""}.</p>
+    ${pi.weak.length?`<p class="small" style="margin:0 0 8px">Найслабші теми: ${pi.weak.map(w=>`${tlabel(w.id)} ${esc(TMAP[w.id].name)} — ${Math.round(w.p*100)}%`).join("; ")}</p>`:""}
+    <div class="row"><button class="primary" data-act="plan">Почати план на сьогодні</button><input type="date" id="examdate" value="${esc(opts.examDate)}" style="width:auto"></div>`
+    :`<p class="small muted" style="margin:0 0 8px">Вкажіть дату екзамену — тренажер щодня складатиме набір із повторень і найслабших тем і покаже, чи встигаєте.</p><input type="date" id="examdate" style="width:auto">`}</div>`; })()}
+  <div class="card"><h2>🎯 Симуляція CCNA 200-301</h2>
+    <p class="small muted" style="margin:0 0 8px">Як справжній іспит: питання з усіх курсів за вагами доменів Cisco (основи 20%, доступ 20%, IP-зв'язність 25%, IP-сервіси 10%, безпека 15%, автоматизація 10%), без повернення назад, бал за шкалою 300–1000 (прохідний ≈ 825).</p>
+    <div class="row"><button class="primary" data-act="ccna" data-n="120">Повна: 120 питань / 120 хв</button><button data-act="ccna" data-n="40">Коротка: 40 / 40 хв</button></div></div>
   <div class="card"><h2>Екзамен</h2>
     <p class="small muted" style="margin:0 0 8px">Без підказок, 1 хв на питання, розбір наприкінці.</p>
     <div class="row">${seg("exam",[20,40,60],v=>v)}<span class="grow"></span><button class="primary" data-act="exam" ${selQ?"":"disabled"}>Почати</button></div></div>
@@ -506,6 +556,41 @@ function renderHome(){
 }
 
 // ================= Тест модуля =================
+function cheatHTML(tid){ const c=(window.CHEATS||{})[tid]; if(!c) return `<p class="small muted">Для цієї теми шпаргалки ще немає.</p>`;
+  return (c.t?`<div style="overflow-x:auto"><table class="cheat"><tr>${c.t[0].map(h=>`<th>${esc(h)}</th>`).join("")}</tr>${c.t.slice(1).map(r=>`<tr>${r.map(x=>`<td>${esc(x)}</td>`).join("")}</tr>`).join("")}</table></div>`:"")+
+    (c.p?`<ul class="cheatl">${c.p.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:"")+(c.c?`<pre>${esc(c.c)}</pre>`:""); }
+function renderCheat(){ const tid=opts.modTopic||"SRWE1";
+  return `<div class="card"><h2>📄 Шпаргалка</h2><select class="full" id="cheatsel">${COURSES.map(([g])=>`<optgroup label="${g}">${TOPICS.filter(t=>t.g===g).map(t=>`<option value="${t.id}" ${tid===t.id?"selected":""}>${g} ${t.n}. ${esc(t.name)}</option>`).join("")}</optgroup>`).join("")}</select></div>
+  <div class="card"><h2>${tlabel(tid)} · ${esc(TMAP[tid].name)}</h2>${cheatHTML(tid)}</div>
+  <div class="row"><button class="primary grow" data-act="module2">Пройти тест модуля</button><button class="grow" data-act="home">На головну</button></div>`; }
+// ---- Симуляція CCNA 200-301 ----
+const DOMAINS=[["Основи мереж",0.20,["ITN1","ITN3","ITN4","ITN5","ITN6","ITN7","ITN8","ITN9","ITN11","ITN12","ITN13","ITN14","SRWE2","ENSA7","ENSA11","ENSA12"]],
+ ["Доступ до мережі",0.20,["ITN2","ITN10","SRWE1","SRWE3","SRWE5","SRWE6","SRWE12","SRWE13"]],
+ ["IP-зв'язність",0.25,["SRWE4","SRWE9","SRWE14","SRWE15","SRWE16","ENSA1","ENSA2"]],
+ ["IP-сервіси",0.10,["ITN15","SRWE7","SRWE8","ENSA6","ENSA9","ENSA10"]],
+ ["Основи безпеки",0.15,["ITN16","ITN17","SRWE10","SRWE11","ENSA3","ENSA4","ENSA5","ENSA8"]],
+ ["Автоматизація",0.10,["ENSA13","ENSA14"]]];
+const domainOf=t=>{ const d=DOMAINS.find(x=>x[2].includes(t)); return d?d[0]:"Інше"; };
+function pickCcna(n){
+  const out=[]; const used=new Set();
+  for(const [name,w,ts] of DOMAINS){ const want=Math.round(n*w); const set=new Set(ts);
+    const gk=GEN.forTopics(set); const ng=gk.length?Math.round(want*0.15):0;
+    const qs=shuffle(QB.filter(q=>set.has(q.t)&&!used.has(q.id)&&qtype(q)!=="flash")).slice(0,want-ng); qs.forEach(q=>used.add(q.id)); out.push(...qs);
+    for(let i=0;i<ng;i++){ const g=GEN.make(gk[i%gk.length]); if(g) out.push(g); } }
+  return shuffle(out).slice(0,n);
+}
+// ---- План до дати екзамену ----
+function planInfo(){
+  if(!opts.examDate) return null; const days=Math.ceil((new Date(opts.examDate+"T09:00:00")-Date.now())/864e5);
+  const all=TOPICS.map(t=>Object.assign({id:t.id},topicReady(t.id)||{p:0,n:0,seen:0})).filter(x=>x.n);
+  const avg=all.reduce((a,x)=>a+x.p*x.n,0)/Math.max(1,all.reduce((a,x)=>a+x.n,0));
+  const unseen=all.reduce((a,x)=>a+(x.n-x.seen),0); const due=Object.values(prog).filter(r=>r.d&&r.d<=Date.now()).length;
+  const perDay=days>0? Math.ceil(unseen/Math.max(1,days-3))+Math.min(due,40) : due;
+  const weak=all.filter(x=>x.seen>0||x.p<0.5).sort((a,b)=>a.p-b.p).slice(0,3);
+  return {days,avg,unseen,due,perDay,weak};
+}
+function startPlan(){ const pi=planInfo(); if(!pi) return; const set=new Set(pi.weak.map(w=>w.id)); for(const [id,r] of Object.entries(prog)) if(r.d&&r.d<=Date.now()&&QMAP[id]) set.add(QMAP[id].t);
+  startSession("train", pickTraining(set, Math.max(opts.goal, Math.min(60,pi.perDay))), "План на сьогодні"); }
 function pickModule(tid){
   const now=Date.now(); const qs=QB.filter(q=>q.t===tid);
   const na=shuffle(qs.filter(q=>q.src==="na"));
@@ -608,10 +693,37 @@ function deleteCustom(id){
   if(store.mode==="db") queueWrite(()=>store.db.doc("custom/"+id).delete());
   if(customEdit===id) customEdit=null; render();
 }
+// ---- Імпорт карток з Obsidian (.md) ----
+const KW=[[/vlan|trunk|dtp|802\.1q/i,"SRWE3"],[/inter-?vlan|router-on-a-stick|roas|svi/i,"SRWE4"],[/\bstp\b|spanning|rstp|bpdu|portfast/i,"SRWE5"],[/etherchannel|lacp|pagp/i,"SRWE6"],[/dhcpv6|slaac/i,"SRWE8"],[/dhcp/i,"SRWE7"],[/hsrp|vrrp|glbp|fhrp/i,"SRWE9"],[/port.?security|snooping|\bdai\b/i,"SRWE11"],[/wlan|wi-?fi|802\.11|capwap|wlc/i,"SRWE12"],[/static rout|статичн/i,"SRWE15"],[/ospf/i,"ENSA2"],[/\bacl|access-list|wildcard/i,"ENSA5"],[/\bnat\b|\bpat\b/i,"ENSA6"],[/vpn|ipsec|gre/i,"ENSA8"],[/qos|dscp/i,"ENSA9"],[/snmp|syslog|ntp|cdp|lldp/i,"ENSA10"],[/rest|json|yaml|ansible|sdn/i,"ENSA14"],[/ipv6/i,"ITN12"],[/subnet|підмереж|vlsm|ipv4/i,"ITN11"],[/tcp|udp|порт/i,"ITN14"],[/osi|tcp\/ip|інкапсул/i,"ITN3"],[/ethernet|mac/i,"ITN7"],[/arp/i,"ITN9"]];
+function guessTopic(name,text,def){ const m=(name||"").match(/\b(ITN|SRWE|ENSA)\s*[-_ ]?\s*(\d{1,2})\b/i); if(m&&TMAP[m[1].toUpperCase()+Number(m[2])]) return m[1].toUpperCase()+Number(m[2]);
+  for(const [re,t] of KW) if(re.test(name)) return t; for(const [re,t] of KW) if(re.test(text)) return t; return def; }
+function hashStr(s){ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))>>>0; return h.toString(36); }
+function parseMd(name,txt,def){
+  const out=[]; txt=txt.replace(/\r/g,"").replace(/^---\n[\s\S]*?\n---\n/,""); const lines=txt.split("\n"); const clean=x=>x.replace(/<!--SR:.*?-->/g,"").replace(/\[\[([^\]|]+\|)?([^\]]+)\]\]/g,"$2").trim();
+  const push=(q,a)=>{ q=clean(q); a=clean(a); if(q.length<3||!a) return; out.push({id:"ob-"+hashStr(name+"|"+q),type:"flash",t:guessTopic(name,q+" "+a,def),q,ans:a,src:"n",file:name,ts:Date.now()}); };
+  for(let i=0;i<lines.length;i++){ const l=lines[i];
+    let m=l.match(/^(?:[-*]\s*)?(.+?)\s*:::\s*(.+)$/); if(m){ push(m[1],m[2]); continue; }
+    m=l.match(/^(?:[-*]\s*)?(.+?)\s*::\s*(.+)$/); if(m&&!/^https?$/i.test(m[1])){ push(m[1],m[2]); continue; }
+    m=l.match(/^(?:\*\*)?(?:Q|П|Питання)\s*[:.]\s*(?:\*\*)?\s*(.+)$/i); if(m&&lines[i+1]!==undefined){ const n=lines[i+1].match(/^(?:\*\*)?(?:A|В|Відповідь)\s*[:.]\s*(?:\*\*)?\s*(.+)$/i); if(n){ push(m[1],n[1]); i++; continue; } }
+    if(/^\?{1,2}\s*$/.test(l)){ let a=i-1, qs=[]; while(a>=0&&lines[a].trim()&&!/^#/.test(lines[a])){ qs.unshift(lines[a]); a--; } let b=i+1, as=[]; while(b<lines.length&&lines[b].trim()&&!/^\?{1,2}\s*$/.test(lines[b])&&!/^#/.test(lines[b])){ as.push(lines[b]); b++; } if(qs.length&&as.length) push(qs.join("\n"),as.join("\n")); i=b-1; }
+  }
+  return out; }
+async function importMd(files){
+  const def=($("#obdef")||{}).value||"SRWE1"; let n=0, upd=0, scanned=0;
+  for(const f of files){ if(!/\.md$/i.test(f.name)) continue; scanned++; const txt=await f.text(); const path=f.webkitRelativePath||f.name;
+    for(const q of parseMd(path,txt,def)){ const ex=customQs.find(x=>x.id===q.id); if(ex){ if(ex.ans!==q.ans){ Object.assign(ex,{ans:q.ans,ts:Date.now()}); upd++; if(store.mode==="db") queueWrite(()=>store.db.doc("custom/"+ex.id).set(ex)); } continue; }
+      customQs.push(q); n++; if(store.mode==="db") queueWrite(()=>store.db.doc("custom/"+q.id).set(q)); } }
+  lsSet(LS.custom,customQs); rebuildQB(); opts.obLast=Date.now(); lsSet(LS.opts,opts);
+  const m=$("#obmsg"); if(m) m.textContent="Файлів: "+scanned+", нових карток: "+n+", оновлено: "+upd; setTimeout(()=>{ if(view==="custom") render(); },1500); }
+function renderObsidian(){ const fl=customQs.filter(q=>q.type==="flash").length;
+  return `<div class="card"><h2>📒 Картки з Obsidian</h2><p class="small muted" style="margin:0 0 8px">Оберіть папку CCNA з вашого vault (або окремі .md). Тренажер знайде картки у форматах <code>питання::відповідь</code>, <code>питання:::відповідь</code>, багаторядкові з рядком <code>?</code> між питанням і відповіддю, а також пари <code>Q:</code>/<code>A:</code>. Тему визначає за назвою файлу (наприклад «SRWE 3 VLAN.md») або ключовими словами. Повторний імпорт додає нові й оновлює змінені картки — прогрес не втрачається.</p>
+    <label class="small muted">Тема, якщо не вдалося визначити</label><select class="full" id="obdef">${TOPICS.map(t=>`<option value="${t.id}" ${opts.modTopic===t.id?"selected":""}>${tlabel(t.id)} ${esc(t.name)}</option>`).join("")}</select>
+    <div class="row" style="margin-top:8px"><label class="btnlike primary">📁 Обрати папку<input type="file" id="obdir" webkitdirectory directory multiple hidden></label><label class="btnlike">📄 Обрати файли<input type="file" id="obfiles" accept=".md,text/markdown" multiple hidden></label></div>
+    <p class="small muted" id="obmsg" style="margin:8px 0 0">Карток з нотаток: ${fl}${opts.obLast?" · останній імпорт "+new Date(opts.obLast).toLocaleString("uk-UA"):""}</p>${fl?`<button class="mini" data-act="obtrain" style="margin-top:6px">Тренувати картки</button>`:""}</div>`; }
 function renderCustom(){
   const editing=customEdit? customQs.find(x=>x.id===customEdit) : customDraft;
-  const list=customQs.slice().sort((a,b)=>b.ts-a.ts);
-  return customForm(editing)+`<div class="card"><div class="row"><h2 class="grow" style="margin:0">Мої питання <span class="muted">(${list.length})</span></h2>${list.length?`<button class="mini primary" data-act="ctrain">Тренувати</button>`:""}</div>
+  const list=customQs.filter(q=>q.type!=="flash").sort((a,b)=>b.ts-a.ts);
+  return renderObsidian()+customForm(editing)+`<div class="card"><div class="row"><h2 class="grow" style="margin:0">Мої питання <span class="muted">(${list.length})</span></h2>${list.length?`<button class="mini primary" data-act="ctrain">Тренувати</button>`:""}</div>
     ${list.length?list.map(q=>`<div class="kv"><span class="small"><span class="muted">${tlabel(q.t)}${q.src==="na"?" · 🎓":""}</span><br>${esc(q.q)}</span><span class="row" style="flex-wrap:nowrap"><button class="mini" data-act="cedit" data-id="${esc(q.id)}">✎</button><button class="mini" data-act="cdel" data-id="${esc(q.id)}">🗑</button></span></div>`).join(""):`<p class="small muted" style="margin:6px 0 0">Тут з'являться питання, які ви додасте, — наприклад, зі скриншотів тестів NetAcad. Вони синхронізуються між пристроями і потрапляють у тренування, екзамени та тести модулів.</p>`}</div>
   <button class="primary" data-act="home">На головну</button>`;
 }
@@ -620,8 +732,12 @@ function renderResult(){
   const e=S.result;
   const rows=Object.entries(e.per).sort((a,b)=>TOPICS.findIndex(t=>t.id===a[0])-TOPICS.findIndex(t=>t.id===b[0]))
     .map(([t,[c,n]])=>`<tr><td>${tlabel(t)} · ${esc(TMAP[t].name)}</td><td class="num">${c}/${n}</td><td class="num">${Math.round(c/n*100)}%</td></tr>`).join("");
-  return `<div class="card"><h2>Результат екзамену</h2>
-    <p class="big" style="color:var(${e.pct>=80?"--ok":e.pct>=70?"--warn":"--bad"})">${e.pct}%</p>
+  let ccna=""; if(e.ccna){ const sc=Math.round(300+700*e.correct/e.n); const dom={}; for(const [t,[c,n]] of Object.entries(e.per)){ const d=domainOf(t); dom[d]=dom[d]||[0,0]; dom[d][0]+=c; dom[d][1]+=n; }
+    ccna=`<p class="big" style="color:var(${sc>=825?"--ok":sc>=750?"--warn":"--bad"})">${sc} / 1000</p><p style="margin:0 0 8px"><b>${sc>=825?"✅ Прохідний рівень (≈ 825)":"❌ Нижче прохідного рівня (≈ 825)"}</b></p>
+      <table><tr><th>Домен</th><th class="num">Вірно</th><th class="num">%</th></tr>${DOMAINS.map(([d,w])=>dom[d]?`<tr><td>${esc(d)} <span class="small muted">(${Math.round(w*100)}%)</span></td><td class="num">${dom[d][0]}/${dom[d][1]}</td><td class="num">${Math.round(dom[d][0]/dom[d][1]*100)}%</td></tr>`:"").join("")}</table>
+      <p class="small muted">Справжня шкала Cisco не публікується; тут бал = 300 + 700 × частка правильних.</p>`; }
+  return `<div class="card"><h2>Результат ${e.ccna?"симуляції CCNA":"екзамену"}</h2>${ccna}
+    <p class="${e.ccna?"":"big"}" style="color:var(${e.pct>=80?"--ok":e.pct>=70?"--warn":"--bad"})">${e.pct}%</p>
     <p class="muted" style="margin:0">${e.correct} з ${e.n} · час ${Math.floor(e.dur/60)} хв ${e.dur%60} с</p>
     <table style="margin-top:10px"><tr><th>Тема</th><th class="num">Вірно</th><th class="num">%</th></tr>${rows}</table></div>
   <div class="card"><h2>Розбір</h2>${S.items.map((q,k)=>reviewItem(q,S.ans[k]===undefined?(qtype(q)==="cmd"?"":[]):S.ans[k])).join("")}</div>
@@ -732,20 +848,25 @@ const ALLSCEN=()=>CLI.SCEN.concat(CLI.NETSCEN||[]);
 function renderLabs(){
   const card=sc=>{const st=labs[sc.id]; return `<div class="card"><div class="row"><div class="grow"><b>${sc.net?"🌐 ":""}${esc(sc.title)}</b><br><span class="small muted">${tlabel(sc.t)} · ${esc(TMAP[sc.t].name)}</span></div><span class="small">${st&&st.ok?"✅ виконано":st?"⏳ спроб: "+(st.tries||0):""}</span><button class="primary mini" data-act="lab" data-id="${sc.id}">Відкрити</button></div></div>`;};
   return `<div class="card"><h2>CLI-лаби</h2><p class="small muted" style="margin:0">Симулятор Cisco IOS: працюють скорочення (<code>sh int tr</code>), підказка <code>?</code>, <code>do show …</code>, стрілки ↑↓ для історії. У 🌐-лабах кілька пристроїв: перемикайтеся між ними вкладками, а з ПК перевіряйте <code>ping</code> і <code>tracert</code>.</p></div>
-  <h3>🌐 Мережа з кількох пристроїв</h3>${(CLI.NETSCEN||[]).map(card).join("")}
+  <div class="card"><h2>🛠 Troubleshooting</h2><p class="small muted" style="margin:0 0 8px">Тренажер бере випадкову правильно налаштовану мережу і непомітно ламає її: вимкнений порт, не та VLAN, native mismatch, хибний next-hop, пасивний інтерфейс OSPF, ACL не в тому напрямку, зламаний NAT або DHCP relay… Знайдіть і виправте. Щоразу — нова поломка.</p>
+    <div class="row"><button class="primary" data-act="tsstart" data-n="1">Одна поломка</button><button data-act="tsstart" data-n="2">Дві поломки</button><span class="small muted">Розв'язано: ${Object.keys(labs).filter(k=>k.startsWith("ts-")&&labs[k].ok).reduce((a,k)=>a+(labs[k].solved||1),0)}</span></div></div>
+  <h3>🌐 SRWE: кілька пристроїв</h3>${(CLI.NETSCEN||[]).filter(s=>/^SRWE/.test(s.t)).map(card).join("")}
+  <h3>🌐 ENSA: OSPF, ACL, NAT</h3>${(CLI.NETSCEN||[]).filter(s=>/^ENSA/.test(s.t)).map(card).join("")}
   <h3>Один комутатор</h3>${CLI.SCEN.map(card).join("")}
   <button class="primary" data-act="home">На головну</button>`;
 }
 function renderLab(){
   const sc=LAB.sc;
-  const tabs= sc.net? `<div class="chips" style="margin-top:8px">${Object.keys(LAB.ses).map(d=>`<button class="seg ${LAB.cur===d?"on":""}" data-act="labdev" data-d="${d}">${/^PC/.test(d)?"💻":/^R/.test(d)?"🔀":"🔁"} ${d}</button>`).join("")}</div>` : "";
+  const ico=d=>{ const t=LAB.N&&LAB.N.dev[d]&&LAB.N.dev[d].type; return t==="pc"?"💻":t==="server"?"🗄":t==="router"?"🔀":"🔁"; };
+  const tabs= sc.net? `<div class="chips" style="margin-top:8px">${Object.keys(LAB.ses).map(d=>`<button class="seg ${LAB.cur===d?"on":""}" data-act="labdev" data-d="${d}">${ico(d)} ${d}</button>`).join("")}</div>` : "";
   return `<div class="card"><h2>${sc.net?"🌐 ":""}${esc(sc.title)}</h2>${sc.topo?`<pre>${esc(sc.topo)}</pre>`:""}<ol class="small" style="margin:0;padding-left:20px">${sc.task.map(t=>`<li>${esc(t)}</li>`).join("")}</ol></div>
   ${tabs}
   <div class="term" id="term">${esc(LAB.outs[LAB.cur])}</div>
   <div class="termin"><span id="tprompt">${esc(LAB.ses[LAB.cur].prompt())}</span><input id="tin" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" aria-label="Команда"></div>
-  <div class="row" style="margin-top:8px"><button class="primary" data-act="labcheck">Перевірити</button><button data-act="labsol">${LAB.showSol?"Сховати рішення":"Показати рішення"}</button><button data-act="labreset">Скинути</button></div>
+  <div class="row" style="margin-top:8px"><button class="primary" data-act="labcheck">Перевірити</button>${LAB.ts?`<button data-act="tsgive">${LAB.showSol?"Сховати поломки":"Здатися — показати поломки"}</button><button data-act="tsstart" data-n="${LAB.ts.n}">Нова поломка</button>`:`<button data-act="labsol">${LAB.showSol?"Сховати рішення":"Показати рішення"}</button><button data-act="labreset">Скинути</button>`}</div>
   <div id="labres">${LAB.res||""}</div>
-  ${LAB.showSol?`<div class="card"><h2>Рішення</h2><pre>${esc(sc.sol)}</pre></div>`:""}
+  ${LAB.showSol&&!LAB.ts?`<div class="card"><h2>Рішення</h2><pre>${esc(sc.sol)}</pre></div>`:""}
+  ${LAB.showSol&&LAB.ts?`<div class="card"><h2>Що було зламано</h2><ul class="checklist">${LAB.ts.faults.map(f=>`<li>🔧 ${esc(f)}</li>`).join("")}</ul><p class="small muted">Перевірте, як ці поломки виглядали в show-командах, і виправте їх.</p></div>`:""}
   <button class="ghost" data-act="labs">← До списку лаб</button>`;
 }
 function bindLab(){
@@ -764,15 +885,25 @@ function bindLab(){
 }
 function openLab(id){
   const sc=ALLSCEN().find(s=>s.id===id); if(!sc) return;
-  if(sc.net){ const {N,ses}=CLI.startNet(sc); const outs={}; for(const d of Object.keys(ses)) outs[d]= /^PC/.test(d)? "Microsoft Windows\n\n" : "\nPress RETURN to get started!\n\n";
-    LAB={sc,N,ses,outs,cur:Object.keys(ses).find(d=>/^PC/.test(d))||Object.keys(ses)[0],hist:[],hi:0,res:"",showSol:false}; }
+  if(sc.net){ const {N,ses}=CLI.startNet(sc); const outs={}; for(const d of Object.keys(ses)) outs[d]= /^(pc|server)$/.test(N.dev[d].type)? "Microsoft Windows\n\n" : "\nPress RETURN to get started!\n\n";
+    LAB={sc,N,ses,outs,cur:Object.keys(ses).find(d=>/^(pc|server)$/.test(N.dev[d].type))||Object.keys(ses)[0],hist:[],hi:0,res:"",showSol:false}; }
   else LAB={sc,N:null,ses:{[sc.hostname||"S1"]:CLI.startScenario(sc)},outs:{[sc.hostname||"S1"]:"\nPress RETURN to get started!\n\n"},cur:sc.hostname||"S1",hist:[],hi:0,res:"",showSol:false};
+  view="lab"; render(); scrollTop();
+}
+function startTs(n){
+  const pool=(CLI.NETSCEN||[]); let t=null, base=null;
+  for(let k=0;k<10&&!t;k++){ base=pool[Math.floor(Math.random()*pool.length)]; t=CLI.troubleshoot(base,n); }
+  if(!t){ alert("Не вдалося згенерувати поломку, спробуйте ще раз"); return; }
+  const sc=Object.assign({},base,{id:"ts-"+base.id,title:"🛠 Знайди поломку: "+base.title,task:["Ця мережа була повністю налаштована й працювала. Потім щось зламали ("+(n>1?"кілька змін":"одна зміна")+").","Вимоги, які мають знову виконуватися:"].concat(base.check(CLI.solveNet(base)).map(x=>"• "+x[1])).concat(["Діагностуйте: ping/tracert з ПК, show ip interface brief, show run, show vlan brief, show interfaces trunk, show ip route, show ip ospf neighbor, show access-lists…"])});
+  const outs={}; for(const d of Object.keys(t.ses)) outs[d]= /^(pc|server)$/.test(t.N.dev[d].type)? "Microsoft Windows\n\n" : "\nPress RETURN to get started!\n\n";
+  LAB={sc,N:t.N,ses:t.ses,outs,cur:Object.keys(t.ses).find(d=>/^(pc|server)$/.test(t.N.dev[d].type))||Object.keys(t.ses)[0],hist:[],hi:0,res:"",showSol:false,ts:{n,faults:t.faults}};
   view="lab"; render(); scrollTop();
 }
 function checkLab(){
   const r= LAB.sc.net? LAB.sc.check(LAB.N) : LAB.sc.check(LAB.ses[LAB.cur].state); const ok=r.every(x=>x[0]);
   LAB.res=`<div class="card"><h2>${ok?"✅ Усе виконано!":"Ще не все"}</h2><ul class="checklist">${r.map(([v,t])=>`<li>${v?"✅":"❌"} ${esc(t)}</li>`).join("")}</ul></div>`;
   const prev=labs[LAB.sc.id]||{tries:0}; const rec={ok:ok||!!prev.ok, tries:(prev.tries||0)+1, ts:Date.now()}; if(ok&&!prev.ok) rec.done=Date.now();
+  if(LAB.ts){ rec.solved=(prev.solved||0)+(ok&&!LAB.ts.done&&!LAB.showSol?1:0); if(ok) LAB.ts.done=true; }
   labs[LAB.sc.id]=rec; patch({labs:{[LAB.sc.id]:rec}}); $("#labres").innerHTML=LAB.res;
 }
 
@@ -797,8 +928,15 @@ document.addEventListener("click", async ev=>{
   if(act==="opt"){ opts[el.dataset.k]=Number(el.dataset.v); lsSet(LS.opts,opts); render(); return; }
   if(act==="train"){ startSession("train", pickTraining(sel, opts.train)); return; }
   if(act==="review"){ startSession("review", shuffle(reviewQueue())); return; }
-  if(act==="exam"){ const gk=genKeysFor(sel); const n=opts.exam; const ng=gk.length?Math.round(n*0.15):0; const list=shuffle(qsFor(sel)).slice(0,n-ng); for(let i=0;i<ng;i++){const g=GEN.make(gk[i%gk.length]); if(g) list.push(g);} startSession("exam", shuffle(list)); return; }
+  if(act==="obtrain"){ startSession("train", shuffle(customQs.filter(q=>q.type==="flash")).slice(0,opts.train), "Картки з нотаток"); return; }
+  if(act==="install"){ if(installEvt){ installEvt.prompt(); installEvt.userChoice.finally(()=>{ installEvt=null; render(); }); } return; }
+  if(act==="installhide"){ opts.installHide=true; lsSet(LS.opts,opts); render(); return; }
+  if(act==="ccna"){ const n=Number(el.dataset.n)||120; startSession("exam", pickCcna(n), n>=100?"CCNA 200-301":"CCNA (коротка)"); S.ccna=true; render(); return; }
+  if(act==="plan"){ startPlan(); return; }
+  if(act==="exam"){ const gk=genKeysFor(sel); const n=opts.exam; const ng=gk.length?Math.round(n*0.15):0; const list=shuffle(qsFor(sel).filter(q=>qtype(q)!=="flash")).slice(0,n-ng); for(let i=0;i<ng;i++){const g=GEN.make(gk[i%gk.length]); if(g) list.push(g);} startSession("exam", shuffle(list)); return; }
   if(act==="gen"){ const list=[]; for(let i=0;i<10;i++){ const g=GEN.make(el.dataset.k); if(g) list.push(g);} startSession("gen", list); return; }
+  if(act==="cheat"){ const tid=($("#modsel")||{}).value||opts.modTopic; opts.modTopic=tid; lsSet(LS.opts,opts); view="cheat"; render(); scrollTop(); return; }
+  if(act==="module2"){ startSession("module", pickModule(opts.modTopic), "Тест модуля "+tlabel(opts.modTopic)); return; }
   if(act==="module"){ const tid=($("#modsel")||{}).value||opts.modTopic; opts.modTopic=tid; lsSet(LS.opts,opts); startSession("module", pickModule(tid), "Тест модуля "+tlabel(tid)); return; }
   if(act==="setopt"){ const k=el.dataset.k; let v=el.dataset.v; if(v==="true"||v==="false") v=(v==="true"); else if(/^\d+$/.test(v)) v=Number(v); opts[k]=v; lsSet(LS.opts,opts); applyLook(); render(); return; }
   if(act==="cadd"){ customDraft=null; customEdit=null; render(); return; }
@@ -811,6 +949,8 @@ document.addEventListener("click", async ev=>{
   if(act==="lab"){ openLab(el.dataset.id); return; }
   if(act==="labcheck"){ checkLab(); return; }
   if(act==="labdev"){ LAB.cur=el.dataset.d; render(); return; }
+  if(act==="tsstart"){ startTs(Number(el.dataset.n)||1); return; }
+  if(act==="tsgive"){ LAB.showSol=!LAB.showSol; render(); return; }
   if(act==="labsol"){ LAB.showSol=!LAB.showSol; render(); return; }
   if(act==="labreset"){ openLab(LAB.sc.id); return; }
   if(act==="home"||act==="quit"){ view="home"; S=null; render(); scrollTop(); return; }
@@ -819,12 +959,15 @@ document.addEventListener("click", async ev=>{
   if(act==="unflag"){ const id=el.dataset.id; const rec={on:false,ts:Date.now()}; flags[id]=rec; patch({flags:{[id]:rec}}); render(); return; }
   if(!S) { if(act==="copy"||act==="import"||act==="reset") return backupAct(act,el); return; }
   const k=S.i, q=S.items[k];
+  if(act==="flashshow"){ S.reveal=S.i; render(); return; }
+  if(act==="flash"){ S.ans[S.i]=el.dataset.v; doCheck(); return; }
   if(act==="pick"){ if(S.mode!=="exam"&&S.checked[k]) return; const i=Number(el.dataset.i); let ch=(S.ans[k]||[]).slice();
     if(q.a.length>1){ ch=ch.includes(i)?ch.filter(x=>x!==i):ch.concat(i); if(ch.length>q.a.length) ch.shift(); } else ch=[i];
     S.ans[k]=ch; S.confirmEnd=false; render(); return; }
   if(act==="ord"){ const i=Number(el.dataset.i); S.ans[k]=(S.ans[k]||[]).concat(i); S.confirmEnd=false; render(); return; }
   if(act==="unord"){ const i=Number(el.dataset.i); S.ans[k]=(S.ans[k]||[]).filter(x=>x!==i); render(); return; }
   if(act==="check"){ doCheck(); return; }
+  if(act==="end2"){ finishExam(); return; }
   if(act==="next"){ if(S.mode!=="exam" && S.i>=S.items.length-1){ showSummary(); return; } S.i=Math.min(S.i+1,S.items.length-1); S.confirmEnd=false; render(); scrollTop(); return; }
   if(act==="prev"){ S.i=Math.max(0,S.i-1); S.confirmEnd=false; render(); scrollTop(); return; }
   if(act==="jump"){ S.i=Number(el.dataset.k); S.confirmEnd=false; render(); return; }
@@ -840,11 +983,15 @@ document.addEventListener("change", ev=>{
   const t=ev.target;
   if(t.dataset && t.dataset.act==="notesonly"){ opts.notesOnly=t.checked; lsSet(LS.opts,opts); render(); return; }
   if(t.dataset && t.dataset.act==="topic"){ t.checked?sel.add(t.dataset.t):sel.delete(t.dataset.t); lsSet(LS.sel,[...sel]); render(); return; }
+  if((t.id==="obdir"||t.id==="obfiles")&&t.files&&t.files.length){ importMd([...t.files]); return; }
+  if(t.id==="examdate"){ opts.examDate=t.value; lsSet(LS.opts,opts); render(); return; }
+  if(t.id==="cheatsel"){ opts.modTopic=t.value; lsSet(LS.opts,opts); render(); return; }
   if(t.dataset && t.dataset.act==="match" && S){ const k=S.i; const a=(S.ans[k]||[]).slice(); a[Number(t.dataset.i)]=t.value; S.ans[k]=a; S.confirmEnd=false; const y=window.scrollY; render(); try{window.scrollTo(0,y);}catch(e){} return; }
   if(t.id==="impfile" && t.files && t.files[0]){ const r=new FileReader(); r.onload=()=>{$("#imp").value=String(r.result);}; r.readAsText(t.files[0]); }
 });
 document.addEventListener("input", ev=>{
   const t=ev.target;
+  if(t.classList&&t.classList.contains("fillin") && S){ const a=(S.ans[S.i]||[]).slice(); a[Number(t.dataset.i)]=t.value; S.ans[S.i]=a; const b=$("#checkbtn"); if(b) b.disabled=!hasAnswer(S.items[S.i],a); const dots=document.querySelectorAll(".dots span"); if(dots[S.i]) dots[S.i].classList.toggle("done",hasAnswer(S.items[S.i],a)); }
   if(t.id==="cmdin" && S){ S.ans[S.i]=t.value; const b=$("#checkbtn"); if(b) b.disabled=!t.value.trim(); const dots=document.querySelectorAll(".dots span"); if(dots[S.i]) dots[S.i].classList.toggle("done",!!t.value.trim()); }
   if(t.id==="searchin"){ searchQ=t.value; const pos=t.selectionStart; render(); const si=$("#searchin"); si.focus(); try{si.setSelectionRange(pos,pos);}catch(e){} }
 });
@@ -869,6 +1016,14 @@ customQs=lsGet(LS.custom,[]); rebuildQB(); applyLook();
 render();
 initStore(); setTimeout(()=>{ if(store.mode!=="db") autoBackup(); },8000);
 if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+addEventListener("online",setStatus); addEventListener("offline",setStatus);
+var installEvt=null; addEventListener("beforeinstallprompt",e=>{ e.preventDefault(); installEvt=e; if(view==="home") render(); });
+addEventListener("appinstalled",()=>{ installEvt=null; opts.installed=true; lsSet(LS.opts,opts); if(view==="home") render(); });
+function standalone(){ return matchMedia("(display-mode: standalone)").matches||navigator.standalone===true; }
+function installCard(){ if(standalone()||opts.installHide) return "";
+  const ios=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  if(!installEvt&&!ios) return "";
+  return `<div class="card"><div class="row"><h2 class="grow" style="margin:0">📲 Встановити на пристрій</h2><button class="mini ghost" data-act="installhide">✕</button></div><p class="small muted" style="margin:6px 0 8px">Тренажер відкриватиметься як застосунок з іконкою, працюватиме без інтернету (питання, лаби, генератори), а прогрес синхронізується, коли зв'язок повернеться.</p>${installEvt?`<button class="primary" data-act="install">Встановити</button>`:`<p class="small" style="margin:0">iPhone/iPad: у Safari натисніть «Поділитися» → «На початковий екран».</p>`}</div>`; }
 </script>
 </body>
 </html>
