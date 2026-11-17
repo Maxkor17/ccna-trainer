@@ -155,7 +155,7 @@ const COURSES=[["ITN","Вступ до мереж"],["SRWE","Комутація,
 const GEN = window.GEN, CLI = window.CLI;
 const TID2GEN = {"g-showstp":"g-showstp","g-showtrunk":"g-showtrunk","g-showec":"g-showec","g-showint":"g-showint","g-lpm":"g-lpm","g-ad":"g-ad","g-wild":"g-wild","g-ospfcost":"g-ospfcost","g-rid":"g-rid","g-bin":"g-bin","g-hex":"g-bin","g-net":"g-subnet","g-bc":"g-subnet","g-range":"g-subnet","g-hosts":"g-subnet","g-vlsm":"g-vlsm","g-ipv6":"g-ipv6","g-eui":"g-eui","g-stproot":"g-stproot","g-stprp":"g-stprp","g-stpcost":"g-stpcost","g-stpprio":"g-stpprio"};
 const INT_DAYS = [0,1,3,7,16,35], DAY = 864e5;
-const LS = {custom:"ccna.custom.v1",prog:"ccna.prog.v1",exams:"ccna.exams.v1",sel:"ccna.sel.v1",opts:"ccna.opts.v1",daily:"ccna.daily.v1",flags:"ccna.flags.v1",labs:"ccna.labs.v1"};
+const LS = {snaps:"ccna.snaps.v1",custom:"ccna.custom.v1",prog:"ccna.prog.v1",exams:"ccna.exams.v1",sel:"ccna.sel.v1",opts:"ccna.opts.v1",daily:"ccna.daily.v1",flags:"ccna.flags.v1",labs:"ccna.labs.v1"};
 const TYPE_NAME = {mc:"", order:"Розставте по порядку", match:"Зіставте", cmd:"Введіть команду"};
 
 // Концепції для аналітики (за темою + ключовими словами)
@@ -259,7 +259,7 @@ async function connectDb(db){
     try{ const cs=await db.collection("custom").orderBy("ts","desc").limit(1000).get(); const remote=cs.docs.map(d=>d.data()).filter(q=>q&&q.id); const ids=new Set(remote.map(q=>q.id));
       for(const q of customQs){ if(!ids.has(q.id)){ try{await db.doc("custom/"+q.id).set(q);}catch(_){} remote.push(q);} }
       customQs=remote; lsSet(LS.custom,customQs); rebuildQB(); }catch(e){}
-    store.mode="db"; setStatus();
+    store.mode="db"; setStatus(); setTimeout(autoBackup,3000);
     store.unsub=store.ref.onSnapshot(s=>{ if(!s.exists) return; const d=s.data()||{}; prog=clone(d.q||{}); daily=clone(d.daily||{}); flags=clone(d.flags||{}); labs=clone(d.labs||{}); cacheAll(); rerenderPassive(); },()=>{});
     rerenderPassive();
   }catch(e){ console.error(e); store.db=null; store.ref=null; store.mode="local"; store.err=e.message||String(e); setStatus(); rerenderPassive(); }
@@ -465,7 +465,7 @@ function renderHome(){
       return `<label class="topic"><input type="checkbox" data-act="topic" data-t="${t.id}" ${sel.has(t.id)?"checked":""}>
       <span class="name"><b>${t.n}.</b>${esc(t.name)}${st.gen?" 🎲":""}<br><span class="small muted">${st.seen}/${st.n} пройдено${st.acc!=null?" · точність "+p+"%":""}</span></span>
       <span class="bar"><i style="width:${st.n?Math.round(st.mast/st.n*100):0}%"></i></span></label>`;}).join(""); };
-  const labsDone=CLI.SCEN.filter(s=>labs[s.id]&&labs[s.id].ok).length;
+  const labsDone=ALLSCEN().filter(s=>labs[s.id]&&labs[s.id].ok).length;
   return `${authCard()}
   <div class="card">
     <div class="row"><h2 class="grow" style="margin:0">Денна норма</h2><span class="small">${si.streak?`🔥 ${si.streak} ${si.streak===1?"день":si.streak<5?"дні":"днів"} поспіль`:"Серія ще не почалась"}</span></div>
@@ -486,8 +486,8 @@ function renderHome(){
   <div class="card"><h2>Розрахунки 🎲</h2>
     <p class="small muted" style="margin:0 0 8px">Щоразу нові числа — відповіді не завчиш.</p>
     <div class="chips">${Object.entries(GEN.list).map(([k,g])=>`<button class="seg" data-act="gen" data-k="${k}">${esc(g.name)}</button>`).join("")}</div></div>
-  <div class="card"><div class="row"><h2 class="grow" style="margin:0">CLI-лаби</h2><span class="small muted">виконано ${labsDone}/${CLI.SCEN.length}</span></div>
-    <p class="small muted" style="margin:6px 0 8px">Налаштовуйте комутатор командами IOS — симулятор перевірить результат.</p>
+  <div class="card"><div class="row"><h2 class="grow" style="margin:0">CLI-лаби</h2><span class="small muted">виконано ${labsDone}/${ALLSCEN().length}</span></div>
+    <p class="small muted" style="margin:6px 0 8px">Налаштовуйте пристрої командами IOS: від одного комутатора до мережі з маршрутизатором і ПК (ping, tracert).</p>
     <button class="primary" data-act="labs">Відкрити лаби</button></div>
   <div class="card"><h2>Екзамен</h2>
     <p class="small muted" style="margin:0 0 8px">Без підказок, 1 хв на питання, розбір наприкінці.</p>
@@ -562,6 +562,9 @@ function renderSettings(){
     <div class="kv"><span>Перемішувати варіанти відповідей</span><span class="row">${seg("shuffle",[[true,"Так"],[false,"Ні"]])}</span></div>
     <div class="kv"><span>Звук правильної/неправильної відповіді</span><span class="row">${seg("sound",[[true,"Увімк."],[false,"Вимк."]])}</span></div>
     <div class="kv"><span>Денна норма</span><span class="row">${seg("goal",[[10,"10"],[20,"20"],[30,"30"],[50,"50"]])}</span></div></div>
+  <div class="card"><h2>Нагадування</h2><p class="small muted" style="margin:0 0 8px">Щоденне нагадування з'явиться у вашому календарі (Google, Apple, Outlook) і спрацює навіть із закритим тренажером. Відкрийте завантажений файл .ics на телефоні — календар запропонує додати подію.</p>
+    <div class="row"><label class="small">Час</label><input type="time" id="remtime" value="${esc(opts.remind||"19:00")}" style="width:auto"><button class="primary" data-act="ics">📅 Додати в календар</button></div>
+    <p class="small muted" style="margin:8px 0 0">${(()=>{const d=daily[dkey()]; const n=d?d.n||0:0; return n>=opts.goal?"✅ Сьогоднішню норму виконано.":"Сьогодні: "+n+"/"+opts.goal+" — до норми ще "+(opts.goal-n)+".";})()}</p></div>
   <button class="primary" data-act="home">На головну</button>`;
 }
 
@@ -655,7 +658,7 @@ function renderStats(){
   const fl=Object.entries(flags).filter(([id,f])=>f.on);
   const ex=exams.slice(0,15).map(e=>`<tr><td>${fmtDate(e.ts)}</td><td class="num">${e.correct}/${e.n}</td><td class="num">${e.pct}%</td></tr>`).join("");
   return `<div class="card"><h2>Загалом</h2>
-    <p style="margin:0">Пройдено питань банку: <b>${seen}</b> з ${QB.length} · відповідей: ${c+w} · точність: <b>${(c+w)?Math.round(c/(c+w)*100)+"%":"—"}</b> · лаби: ${CLI.SCEN.filter(s=>labs[s.id]&&labs[s.id].ok).length}/${CLI.SCEN.length}</p></div>
+    <p style="margin:0">Пройдено питань банку: <b>${seen}</b> з ${QB.length} · відповідей: ${c+w} · точність: <b>${(c+w)?Math.round(c/(c+w)*100)+"%":"—"}</b> · лаби: ${ALLSCEN().filter(s=>labs[s.id]&&labs[s.id].ok).length}/${ALLSCEN().length}</p></div>
   <div class="card"><h2>Прогрес по днях</h2>${chartSVG()}</div>
   <div class="card"><h2>Прогноз готовності</h2>${readinessSection()}</div>
   <div class="card"><h2>Що плутає найбільше</h2>
@@ -677,6 +680,40 @@ function renderSearch(){
   ${res.length?`<div class="card">${res.slice(0,60).map(q=>reviewItem(q,undefined)).join("")}</div>`:""}
   <button class="primary" data-act="home">На головну</button>`;
 }
+function makeICS(t){
+  const [h,m]=t.split(":"); const d=new Date(); const p=x=>String(x).padStart(2,"0");
+  const ds=d.getFullYear()+p(d.getMonth()+1)+p(d.getDate()); const stamp=new Date().toISOString().replace(/[-:]/g,"").slice(0,15)+"Z";
+  const url=location.origin+location.pathname;
+  return ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//CCNA trainer//UK","CALSCALE:GREGORIAN","BEGIN:VEVENT","UID:ccna-daily-"+Date.now()+"@ccna-trainer","DTSTAMP:"+stamp,
+    "DTSTART:"+ds+"T"+p(h)+p(m)+"00","DURATION:PT20M","RRULE:FREQ=DAILY","SUMMARY:📚 CCNA тренажер — денна норма","DESCRIPTION:Повтори питання за інтервалами і пройди лабу: "+url,"URL:"+url,
+    "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:Час для CCNA","TRIGGER:PT0M","END:VALARM","END:VEVENT","END:VCALENDAR"].join("\r\n");
+}
+// ---- Автоматичні щотижневі резервні копії ----
+const WEEK=7*864e5, SNAP_KEEP=8;
+function saveDownload(name,text,type){ const b=new Blob([text],{type}); const u=URL.createObjectURL(b); const l=document.createElement("a"); l.href=u; l.download=name; document.body.appendChild(l); l.click(); l.remove(); setTimeout(()=>URL.revokeObjectURL(u),2000); }
+let remoteSnaps=null;
+async function autoBackup(){
+  try{
+    if(!Object.keys(prog).length) return;
+    const snaps=lsGet(LS.snaps,[]);
+    if(!snaps.length || Date.now()-snaps[0].ts>=WEEK){ snaps.unshift({ts:Date.now(),n:Object.keys(prog).length,json:exportJSON()}); lsSet(LS.snaps,snaps.slice(0,4)); }
+    if(store.mode==="db"&&store.db){
+      const meta=store.db.doc("backups/meta"); const m=await meta.get(); const md=m.exists?(m.data()||{}):{};
+      if(!md.last || Date.now()-md.last>=WEEK){ const slot=((md.slot||0)+1)%SNAP_KEEP;
+        await store.db.doc("backups/s"+slot).set({ts:Date.now(),n:Object.keys(prog).length,json:exportJSON()});
+        await meta.set({last:Date.now(),slot}); remoteSnaps=null; }
+    }
+  }catch(e){ console.warn("backup",e); }
+}
+async function loadRemoteSnaps(){
+  if(store.mode!=="db"||!store.db) return [];
+  const out=[]; for(let i=0;i<SNAP_KEEP;i++){ try{ const d=await store.db.doc("backups/s"+i).get(); if(d.exists){ const x=d.data(); if(x&&x.json) out.push(Object.assign({where:"☁ хмара"},x)); } }catch(e){} }
+  return out.sort((a,b)=>b.ts-a.ts);
+}
+function snapList(){
+  const loc=lsGet(LS.snaps,[]).map(x=>Object.assign({where:"📱 пристрій"},x));
+  const all=(remoteSnaps||[]).concat(loc).sort((a,b)=>b.ts-a.ts); window._snaps=all; return all;
+}
 function exportJSON(){ return JSON.stringify({app:"ccna-trainer",v:3,exported:new Date().toISOString(),progress:prog,daily,flags,labs,exams,custom:customQs}); }
 function renderBackup(){
   const acc = store.user? `<div class="card"><h2>Акаунт</h2><p class="small" style="margin:0 0 8px">Ви увійшли як <b>${esc(store.user.email||store.user.uid)}</b>. Прогрес синхронізується через Firebase.</p><button data-act="logout">Вийти</button></div>` : "";
@@ -685,19 +722,27 @@ function renderBackup(){
   <div class="card"><h2>Імпорт</h2><p class="small muted" style="margin:0 0 8px">Файл або вставлений JSON. Дані об'єднуються — лишається новіший запис.</p>
     <input type="file" id="impfile" accept=".json,application/json,text/plain"><textarea id="imp" placeholder='{"app":"ccna-trainer",...}' style="margin-top:8px"></textarea>
     <div class="row" style="margin-top:8px"><button class="primary" data-act="import">Імпортувати</button><span id="impmsg" class="small muted"></span></div></div>
+  <div class="card"><h2>Автоматичні копії</h2><p class="small muted" style="margin:0 0 8px">Раз на тиждень тренажер сам зберігає знімок прогресу: останні ${SNAP_KEEP} — у вашому акаунті Firebase, останні 4 — на цьому пристрої. Відновлення об'єднує дані, тож нічого не затирає.</p>
+    <div id="snaps">${snapList().map((x,i)=>`<div class="kv"><span>${new Date(x.ts).toLocaleDateString("uk-UA")} · ${x.n} записів <span class="small muted">${x.where}</span></span><span class="row"><button class="mini" data-act="snapdl" data-i="${i}">⬇</button><button class="mini" data-act="snaprestore" data-i="${i}">Відновити</button></span></div>`).join("")||`<p class="small muted">Ще немає копій — перша з'явиться автоматично.</p>`}</div>
+    <div class="row" style="margin-top:8px"><button data-act="snapnow">Зробити копію зараз</button><span id="snapmsg" class="small muted"></span></div></div>
   <div class="card"><h2>Скидання</h2><p class="small muted" style="margin:0 0 8px">Видаляє прогрес по питаннях (денна статистика, лаби та історія екзаменів лишаються).</p><button data-act="reset">Скинути прогрес</button></div>
   <button class="primary" data-act="home">На головну</button>`;
 }
+const ALLSCEN=()=>CLI.SCEN.concat(CLI.NETSCEN||[]);
 function renderLabs(){
-  return `<div class="card"><h2>CLI-лаби</h2><p class="small muted" style="margin:0">Комутатор Cisco 2960 (у лабі з маршрутизацією — L3-комутатор). Працюють скорочення (<code>sh int tr</code>), підказка <code>?</code>, <code>do show …</code> з режиму конфігурації.</p></div>
-  ${CLI.SCEN.map(sc=>{const st=labs[sc.id]; return `<div class="card"><div class="row"><div class="grow"><b>${esc(sc.title)}</b><br><span class="small muted">${tlabel(sc.t)} · ${esc(TMAP[sc.t].name)}</span></div><span class="small">${st&&st.ok?"✅ виконано":st?"⏳ спроб: "+(st.tries||0):""}</span><button class="primary mini" data-act="lab" data-id="${sc.id}">Відкрити</button></div></div>`;}).join("")}
+  const card=sc=>{const st=labs[sc.id]; return `<div class="card"><div class="row"><div class="grow"><b>${sc.net?"🌐 ":""}${esc(sc.title)}</b><br><span class="small muted">${tlabel(sc.t)} · ${esc(TMAP[sc.t].name)}</span></div><span class="small">${st&&st.ok?"✅ виконано":st?"⏳ спроб: "+(st.tries||0):""}</span><button class="primary mini" data-act="lab" data-id="${sc.id}">Відкрити</button></div></div>`;};
+  return `<div class="card"><h2>CLI-лаби</h2><p class="small muted" style="margin:0">Симулятор Cisco IOS: працюють скорочення (<code>sh int tr</code>), підказка <code>?</code>, <code>do show …</code>, стрілки ↑↓ для історії. У 🌐-лабах кілька пристроїв: перемикайтеся між ними вкладками, а з ПК перевіряйте <code>ping</code> і <code>tracert</code>.</p></div>
+  <h3>🌐 Мережа з кількох пристроїв</h3>${(CLI.NETSCEN||[]).map(card).join("")}
+  <h3>Один комутатор</h3>${CLI.SCEN.map(card).join("")}
   <button class="primary" data-act="home">На головну</button>`;
 }
 function renderLab(){
   const sc=LAB.sc;
-  return `<div class="card"><h2>${esc(sc.title)}</h2><ol class="small" style="margin:0;padding-left:20px">${sc.task.map(t=>`<li>${esc(t)}</li>`).join("")}</ol></div>
-  <div class="term" id="term">${esc(LAB.out)}</div>
-  <div class="termin"><span id="tprompt">${esc(LAB.ses.prompt())}</span><input id="tin" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" aria-label="Команда IOS"></div>
+  const tabs= sc.net? `<div class="chips" style="margin-top:8px">${Object.keys(LAB.ses).map(d=>`<button class="seg ${LAB.cur===d?"on":""}" data-act="labdev" data-d="${d}">${/^PC/.test(d)?"💻":/^R/.test(d)?"🔀":"🔁"} ${d}</button>`).join("")}</div>` : "";
+  return `<div class="card"><h2>${sc.net?"🌐 ":""}${esc(sc.title)}</h2>${sc.topo?`<pre>${esc(sc.topo)}</pre>`:""}<ol class="small" style="margin:0;padding-left:20px">${sc.task.map(t=>`<li>${esc(t)}</li>`).join("")}</ol></div>
+  ${tabs}
+  <div class="term" id="term">${esc(LAB.outs[LAB.cur])}</div>
+  <div class="termin"><span id="tprompt">${esc(LAB.ses[LAB.cur].prompt())}</span><input id="tin" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" aria-label="Команда"></div>
   <div class="row" style="margin-top:8px"><button class="primary" data-act="labcheck">Перевірити</button><button data-act="labsol">${LAB.showSol?"Сховати рішення":"Показати рішення"}</button><button data-act="labreset">Скинути</button></div>
   <div id="labres">${LAB.res||""}</div>
   ${LAB.showSol?`<div class="card"><h2>Рішення</h2><pre>${esc(sc.sol)}</pre></div>`:""}
@@ -706,18 +751,26 @@ function renderLab(){
 function bindLab(){
   const tin=$("#tin"), term=$("#term"); term.scrollTop=term.scrollHeight; tin.focus();
   tin.addEventListener("keydown",e=>{
-    if(e.key==="Enter"){ const line=tin.value; const pr=LAB.ses.prompt(); const out=LAB.ses.exec(line);
-      let hint=""; if(/Invalid|Incomplete/.test(out) && /^\s*(sh|show)\b/i.test(line) && /\(config/.test(pr)) hint="(Підказка: у режимі конфігурації використовуйте do "+line.trim()+")";
-      LAB.out+=pr+line+"\n"+(out?out+"\n":"")+hint+(hint?"\n":""); LAB.hist.push(line); LAB.hi=LAB.hist.length; tin.value="";
-      term.textContent=LAB.out; term.scrollTop=term.scrollHeight; $("#tprompt").textContent=LAB.ses.prompt(); e.preventDefault(); }
+    if(e.key==="Enter"){ const line=tin.value; const ses=LAB.ses[LAB.cur]; const pr=ses.prompt(); const out=ses.exec(line);
+      let hint=""; if(/Invalid|Incomplete/.test(out) && /^\s*(sh|show|ping)\b/i.test(line) && /\(config/.test(pr)) hint="(Підказка: у режимі конфігурації використовуйте do "+line.trim()+")";
+      LAB.outs[LAB.cur]+=pr+line+"\n"+(out?out+"\n":"")+hint+(hint?"\n":"");
+      if(LAB.N){ for(const [d,m] of LAB.N.recompute()) LAB.outs[d]+=m+"\n"; }
+      LAB.hist.push(line); LAB.hi=LAB.hist.length; tin.value="";
+      term.textContent=LAB.outs[LAB.cur]; term.scrollTop=term.scrollHeight; $("#tprompt").textContent=LAB.ses[LAB.cur].prompt(); e.preventDefault(); }
     else if(e.key==="ArrowUp"){ if(LAB.hi>0){LAB.hi--; tin.value=LAB.hist[LAB.hi]||"";} e.preventDefault(); }
     else if(e.key==="ArrowDown"){ if(LAB.hi<LAB.hist.length){LAB.hi++; tin.value=LAB.hist[LAB.hi]||"";} e.preventDefault(); }
   });
   term.addEventListener("click",()=>tin.focus());
 }
-function openLab(id){ const sc=CLI.SCEN.find(s=>s.id===id); LAB={sc, ses:CLI.startScenario(sc), out:"\nPress RETURN to get started!\n\n", hist:[], hi:0, res:"", showSol:false}; view="lab"; render(); scrollTop(); }
+function openLab(id){
+  const sc=ALLSCEN().find(s=>s.id===id); if(!sc) return;
+  if(sc.net){ const {N,ses}=CLI.startNet(sc); const outs={}; for(const d of Object.keys(ses)) outs[d]= /^PC/.test(d)? "Microsoft Windows\n\n" : "\nPress RETURN to get started!\n\n";
+    LAB={sc,N,ses,outs,cur:Object.keys(ses).find(d=>/^PC/.test(d))||Object.keys(ses)[0],hist:[],hi:0,res:"",showSol:false}; }
+  else LAB={sc,N:null,ses:{[sc.hostname||"S1"]:CLI.startScenario(sc)},outs:{[sc.hostname||"S1"]:"\nPress RETURN to get started!\n\n"},cur:sc.hostname||"S1",hist:[],hi:0,res:"",showSol:false};
+  view="lab"; render(); scrollTop();
+}
 function checkLab(){
-  const r=LAB.sc.check(LAB.ses.state); const ok=r.every(x=>x[0]);
+  const r= LAB.sc.net? LAB.sc.check(LAB.N) : LAB.sc.check(LAB.ses[LAB.cur].state); const ok=r.every(x=>x[0]);
   LAB.res=`<div class="card"><h2>${ok?"✅ Усе виконано!":"Ще не все"}</h2><ul class="checklist">${r.map(([v,t])=>`<li>${v?"✅":"❌"} ${esc(t)}</li>`).join("")}</ul></div>`;
   const prev=labs[LAB.sc.id]||{tries:0}; const rec={ok:ok||!!prev.ok, tries:(prev.tries||0)+1, ts:Date.now()}; if(ok&&!prev.ok) rec.done=Date.now();
   labs[LAB.sc.id]=rec; patch({labs:{[LAB.sc.id]:rec}}); $("#labres").innerHTML=LAB.res;
@@ -729,7 +782,13 @@ document.addEventListener("click", async ev=>{
   const el=ev.target.closest("[data-act]"); if(!el) return; const act=el.dataset.act;
   if(act==="topic"||act==="notesonly"||act==="match") return;
   if(act==="grp"){ const ts=TOPICS.filter(t=>t.g===el.dataset.g); const allOn=ts.every(t=>sel.has(t.id)); ts.forEach(t=>allOn?sel.delete(t.id):sel.add(t.id)); lsSet(LS.sel,[...sel]); render(); return; }
-  if(act==="download"){ const b=new Blob([exportJSON()],{type:"application/json"}); const u=URL.createObjectURL(b); const l=document.createElement("a"); l.href=u; l.download="ccna-progress-"+dkey()+".json"; document.body.appendChild(l); l.click(); l.remove(); setTimeout(()=>URL.revokeObjectURL(u),2000); return; }
+  if(act==="download"){ saveDownload("ccna-progress-"+dkey()+".json",exportJSON(),"application/json"); return; }
+  if(act==="snapdl"){ const x=(window._snaps||[])[+el.dataset.i]; if(x) saveDownload("ccna-backup-"+new Date(x.ts).toISOString().slice(0,10)+".json",x.json,"application/json"); return; }
+  if(act==="snaprestore"){ const x=(window._snaps||[])[+el.dataset.i]; if(!x) return; $("#imp").value=x.json; await backupAct("import",el); $("#snapmsg").textContent="Відновлено з копії від "+new Date(x.ts).toLocaleDateString("uk-UA"); return; }
+  if(act==="snapnow"){ const snaps=lsGet(LS.snaps,[]); snaps.unshift({ts:Date.now(),n:Object.keys(prog).length,json:exportJSON()}); lsSet(LS.snaps,snaps.slice(0,4));
+    if(store.mode==="db"){ try{ const meta=store.db.doc("backups/meta"); const m=await meta.get(); const md=m.exists?(m.data()||{}):{}; const slot=((md.slot||0)+1)%SNAP_KEEP; await store.db.doc("backups/s"+slot).set({ts:Date.now(),n:Object.keys(prog).length,json:exportJSON()}); await meta.set({last:Date.now(),slot}); remoteSnaps=await loadRemoteSnaps(); }catch(e){} }
+    render(); return; }
+  if(act==="ics"){ const t=($("#remtime")||{}).value||"19:00"; opts.remind=t; lsSet(LS.opts,opts); saveDownload("ccna-reminder.ics",makeICS(t),"text/calendar"); return; }
   if(act==="authgoogle"){ doAuth("google"); return; }
   if(act==="authlogin"){ doAuth("login"); return; }
   if(act==="authsignup"){ doAuth("signup"); return; }
@@ -748,9 +807,10 @@ document.addEventListener("click", async ev=>{
   if(act==="cdel"){ if(el.dataset.confirm!=="1"){ el.dataset.confirm="1"; el.textContent="Точно видалити?"; return; } deleteCustom(el.dataset.id); return; }
   if(act==="caddopt"){ const f=readCustomForm(); f.o.push(["",""]); customDraft=f; render(); return; }
   if(act==="ctrain"){ const list=shuffle(customQs.filter(q=>TMAP[q.t])); startSession("train", list.slice(0,20), "Мої питання"); return; }
-  if(["stats","backup","search","labs","custom","settings"].includes(act)){ view=act; render(); scrollTop(); if(act==="search"){const si=$("#searchin"); si&&si.focus();} return; }
+  if(["stats","backup","search","labs","custom","settings"].includes(act)){ view=act; render(); scrollTop(); if(act==="search"){const si=$("#searchin"); si&&si.focus();} if(act==="backup"&&store.mode==="db"&&remoteSnaps===null){ remoteSnaps=[]; loadRemoteSnaps().then(r=>{ remoteSnaps=r; if(view==="backup") render(); }); } return; }
   if(act==="lab"){ openLab(el.dataset.id); return; }
   if(act==="labcheck"){ checkLab(); return; }
+  if(act==="labdev"){ LAB.cur=el.dataset.d; render(); return; }
   if(act==="labsol"){ LAB.showSol=!LAB.showSol; render(); return; }
   if(act==="labreset"){ openLab(LAB.sc.id); return; }
   if(act==="home"||act==="quit"){ view="home"; S=null; render(); scrollTop(); return; }
@@ -807,7 +867,7 @@ async function backupAct(act,el){
 
 customQs=lsGet(LS.custom,[]); rebuildQB(); applyLook();
 render();
-initStore();
+initStore(); setTimeout(()=>{ if(store.mode!=="db") autoBackup(); },8000);
 if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
 </body>
