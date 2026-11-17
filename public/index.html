@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CCNA тренажер — ITN + SRWE</title>
+<title>CCNA тренажер</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0b6e8a">
 <link rel="icon" href="icon-192.png">
@@ -16,14 +16,19 @@
   --warn:#8a5a00; --warn-soft:#fff4dc; --code:#f0f2f5; --term:#0f1419; --term-text:#d6e2ea; --grid:#e9ecef;
 }
 @media (prefers-color-scheme: dark){
-  :root{
+  :root:not([data-theme=light]){
     --bg:#111418; --card:#1a1e24; --text:#e7eaee; --muted:#9aa4b0; --line:#2b313a;
     --accent:#4fb3cf; --accent-soft:#16313a; --ok:#5cc98a; --ok-soft:#163323; --bad:#ff8a80; --bad-soft:#3a1d1b;
     --warn:#ffcc66; --warn-soft:#3a2f14; --code:#0f1216; --term:#0a0d10; --term-text:#d6e2ea; --grid:#252b33;
   }
 }
+:root[data-theme=dark]{
+    --bg:#111418; --card:#1a1e24; --text:#e7eaee; --muted:#9aa4b0; --line:#2b313a;
+    --accent:#4fb3cf; --accent-soft:#16313a; --ok:#5cc98a; --ok-soft:#163323; --bad:#ff8a80; --bad-soft:#3a1d1b;
+    --warn:#ffcc66; --warn-soft:#3a2f14; --code:#0f1216; --term:#0a0d10; --term-text:#d6e2ea; --grid:#252b33;
+}
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
+html,body{margin:0;background:var(--bg);color:var(--text);font:var(--fs,16px)/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
 .wrap{max-width:760px;margin:0 auto;padding:12px 14px 60px}
 header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0 12px}
 header h1{font-size:18px;margin:0;cursor:pointer}
@@ -95,6 +100,8 @@ textarea{min-height:120px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;ba
 .chart .gl{stroke:var(--grid);stroke-width:1}
 .chart .b{fill:var(--accent)} .chart .b:hover{opacity:.8}
 .tip{position:fixed;pointer-events:none;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.12);display:none;z-index:10}
+select.full{width:100%}
+.course{display:flex;gap:8px;flex-wrap:wrap}.course div{flex:1;min-width:90px;background:var(--code);border-radius:10px;padding:10px;text-align:center}.course b{display:block;font-size:24px}
 .kv{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--line);font-size:14px}
 </style>
 </head>
@@ -112,8 +119,11 @@ textarea{min-height:120px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;ba
 <script src="questions-srwe.js"></script>
 <script src="questions-notes.js"></script>
 <script src="questions-extra.js"></script>
+<script src="questions-srwe2.js"></script>
+<script src="questions-ensa.js"></script>
 <script src="questions-netacad.js"></script>
 <script src="gen.js"></script>
+<script src="gen2.js"></script>
 <script src="cli.js"></script>
 <script>
 "use strict";
@@ -126,15 +136,26 @@ const TOPICS = [
  ["ITN12","ITN","12","IPv6-адресація"],["ITN13","ITN","13","ICMP"],["ITN14","ITN","14","Транспортний рівень"],
  ["ITN15","ITN","15","Прикладний рівень"],["ITN16","ITN","16","Основи мережевої безпеки"],["ITN17","ITN","17","Побудова невеликої мережі"],
  ["SRWE1","SRWE","1","Базове налаштування пристроїв"],["SRWE2","SRWE","2","Принципи комутації"],["SRWE3","SRWE","3","VLAN"],
- ["SRWE4","SRWE","4","Маршрутизація між VLAN"],["SRWE5","SRWE","5","Принципи роботи STP"],["SRWE6","SRWE","6","EtherChannel"]
+ ["SRWE4","SRWE","4","Маршрутизація між VLAN"],["SRWE5","SRWE","5","Принципи роботи STP"],["SRWE6","SRWE","6","EtherChannel"],
+ ["SRWE7","SRWE","7","DHCPv4"],["SRWE8","SRWE","8","SLAAC і DHCPv6"],["SRWE9","SRWE","9","FHRP"],["SRWE10","SRWE","10","Принципи безпеки LAN"],
+ ["SRWE11","SRWE","11","Налаштування безпеки комутатора"],["SRWE12","SRWE","12","Принципи WLAN"],["SRWE13","SRWE","13","Налаштування WLAN"],
+ ["SRWE14","SRWE","14","Принципи маршрутизації"],["SRWE15","SRWE","15","Статична маршрутизація"],["SRWE16","SRWE","16","Діагностика статичних маршрутів"],
+ ["ENSA1","ENSA","1","Принципи OSPFv2"],["ENSA2","ENSA","2","Налаштування OSPFv2"],["ENSA3","ENSA","3","Принципи мережевої безпеки"],
+ ["ENSA4","ENSA","4","Принципи ACL"],["ENSA5","ENSA","5","Налаштування ACL"],["ENSA6","ENSA","6","NAT для IPv4"],["ENSA7","ENSA","7","Принципи WAN"],
+ ["ENSA8","ENSA","8","VPN і IPsec"],["ENSA9","ENSA","9","QoS"],["ENSA10","ENSA","10","Керування мережею"],["ENSA11","ENSA","11","Проєктування мережі"],
+ ["ENSA12","ENSA","12","Діагностика мережі"],["ENSA13","ENSA","13","Віртуалізація мережі"],["ENSA14","ENSA","14","Автоматизація мережі"]
 ].map(([id,g,n,name])=>({id,g,n,name}));
 const TMAP = Object.fromEntries(TOPICS.map(t=>[t.id,t]));
-const QB = [...(window.QB_ITN||[]), ...(window.QB_SRWE||[]), ...(window.QB_NOTES||[]), ...(window.QB_EXTRA||[]), ...(window.QB_NETACAD||[])];
-const QMAP = Object.fromEntries(QB.map(q=>[q.id,q]));
+const QB_BASE = [...(window.QB_ITN||[]), ...(window.QB_SRWE||[]), ...(window.QB_NOTES||[]), ...(window.QB_EXTRA||[]), ...(window.QB_SRWE2||[]), ...(window.QB_ENSA||[]), ...(window.QB_NETACAD||[])];
+let customQs = [];
+let QB = QB_BASE.slice();
+let QMAP = Object.fromEntries(QB.map(q=>[q.id,q]));
+function rebuildQB(){ QB = QB_BASE.concat(customQs.filter(q=>TMAP[q.t])); QMAP = Object.fromEntries(QB.map(q=>[q.id,q])); }
+const COURSES=[["ITN","Вступ до мереж"],["SRWE","Комутація, маршрутизація, бездротові мережі"],["ENSA","Корпоративні мережі, безпека, автоматизація"]];
 const GEN = window.GEN, CLI = window.CLI;
-const TID2GEN = {"g-bin":"g-bin","g-hex":"g-bin","g-net":"g-subnet","g-bc":"g-subnet","g-range":"g-subnet","g-hosts":"g-subnet","g-vlsm":"g-vlsm","g-ipv6":"g-ipv6","g-eui":"g-eui","g-stproot":"g-stproot","g-stprp":"g-stprp","g-stpcost":"g-stpcost","g-stpprio":"g-stpprio"};
+const TID2GEN = {"g-showstp":"g-showstp","g-showtrunk":"g-showtrunk","g-showec":"g-showec","g-showint":"g-showint","g-lpm":"g-lpm","g-ad":"g-ad","g-wild":"g-wild","g-ospfcost":"g-ospfcost","g-rid":"g-rid","g-bin":"g-bin","g-hex":"g-bin","g-net":"g-subnet","g-bc":"g-subnet","g-range":"g-subnet","g-hosts":"g-subnet","g-vlsm":"g-vlsm","g-ipv6":"g-ipv6","g-eui":"g-eui","g-stproot":"g-stproot","g-stprp":"g-stprp","g-stpcost":"g-stpcost","g-stpprio":"g-stpprio"};
 const INT_DAYS = [0,1,3,7,16,35], DAY = 864e5;
-const LS = {prog:"ccna.prog.v1",exams:"ccna.exams.v1",sel:"ccna.sel.v1",opts:"ccna.opts.v1",daily:"ccna.daily.v1",flags:"ccna.flags.v1",labs:"ccna.labs.v1"};
+const LS = {custom:"ccna.custom.v1",prog:"ccna.prog.v1",exams:"ccna.exams.v1",sel:"ccna.sel.v1",opts:"ccna.opts.v1",daily:"ccna.daily.v1",flags:"ccna.flags.v1",labs:"ccna.labs.v1"};
 const TYPE_NAME = {mc:"", order:"Розставте по порядку", match:"Зіставте", cmd:"Введіть команду"};
 
 // Концепції для аналітики (за темою + ключовими словами)
@@ -172,7 +193,7 @@ const recId = q=>q.tid||q.id;
 // ================= Стан =================
 let prog = lsGet(LS.prog,{}), exams = lsGet(LS.exams,[]), daily = lsGet(LS.daily,{}), flags = lsGet(LS.flags,{}), labs = lsGet(LS.labs,{});
 let sel = new Set(lsGet(LS.sel,["SRWE1","SRWE2","SRWE3","SRWE4","SRWE5","SRWE6"]));
-let opts = Object.assign({train:20, exam:40, src:"all", goal:20}, lsGet(LS.opts,{}));
+let opts = Object.assign({train:20, exam:40, src:"all", goal:20, theme:"auto", fs:16, shuffle:true, sound:false, modTopic:"SRWE1"}, lsGet(LS.opts,{}));
 if(opts.notesOnly){ opts.src="n"; delete opts.notesOnly; }
 let view = "home", S = null, LAB = null, searchQ = "";
 
@@ -203,6 +224,7 @@ function makeDb(F,uid){
     get:async()=>{ const s=await fsM.getDoc(r); return {exists:s.exists(),data:()=>s.data()}; },
     set:d=>fsM.setDoc(r,plain(d)),
     update:d=>fsM.setDoc(r,plain(d),{merge:true}),
+    delete:()=>fsM.deleteDoc(r),
     onSnapshot:(n,e)=>fsM.onSnapshot(r,s=>n({exists:s.exists(),data:()=>s.data(),metadata:s.metadata}),e)
   });
   return {
@@ -234,6 +256,9 @@ async function connectDb(db){
     try{ const es=await db.collection("exams").orderBy("ts","desc").limit(100).get(); const remote=es.docs.map(d=>d.data()); const have=new Set(remote.map(e=>e.ts));
       for(const e of exams){ if(!have.has(e.ts)){ try{await db.collection("exams").add(e);}catch(_){} remote.push(e);} }
       exams=remote.sort((a,b)=>b.ts-a.ts); lsSet(LS.exams,exams); }catch(e){}
+    try{ const cs=await db.collection("custom").orderBy("ts","desc").limit(1000).get(); const remote=cs.docs.map(d=>d.data()).filter(q=>q&&q.id); const ids=new Set(remote.map(q=>q.id));
+      for(const q of customQs){ if(!ids.has(q.id)){ try{await db.doc("custom/"+q.id).set(q);}catch(_){} remote.push(q);} }
+      customQs=remote; lsSet(LS.custom,customQs); rebuildQB(); }catch(e){}
     store.mode="db"; setStatus();
     store.unsub=store.ref.onSnapshot(s=>{ if(!s.exists) return; const d=s.data()||{}; prog=clone(d.q||{}); daily=clone(d.daily||{}); flags=clone(d.flags||{}); labs=clone(d.labs||{}); cacheAll(); rerenderPassive(); },()=>{});
     rerenderPassive();
@@ -329,7 +354,7 @@ function startSession(mode, list, title){
   if(!list.length) return;
   S={mode, title, items:list, i:0, ans:{}, checked:{}, order:{}, start:Date.now(), deadline: mode==="exam"? Date.now()+list.length*60*1000 : null, confirmEnd:false};
   list.forEach((q,k)=>{ const t=qtype(q);
-    if(t==="mc") S.order[k]=shuffle(q.o.map((_,i)=>i));
+    if(t==="mc") S.order[k]=opts.shuffle? shuffle(q.o.map((_,i)=>i)) : q.o.map((_,i)=>i);
     if(t==="order"){ let o=shuffle(q.items.map((_,i)=>i)); if(o.every((v,i)=>v===i)) o.reverse(); S.order[k]=o; }
     if(t==="match") S.order[k]=shuffle([...new Set(q.pairs.map(p=>p[1]))]);
   });
@@ -389,8 +414,8 @@ function renderBody(q, k, ans, checked, interactive){
 function renderQuiz(){
   const k=S.i, q=S.items[k], ans=S.ans[k];
   const checked = S.mode!=="exam" && S.checked[k];
-  const modeName={train:"Тренування",review:"Повтор помилок",exam:"Екзамен",gen:"Розрахунки"}[S.mode];
-  const badge=(q.src==="na"?` <span class="chip" style="font-size:11px;padding:1px 7px">🎓 NetAcad</span>`:"")+(q.src==="n"?` <span class="chip" style="font-size:11px;padding:1px 7px">📒 з нотаток</span>`:"")+(q.gen?` <span class="chip" style="font-size:11px;padding:1px 7px">🎲 генератор</span>`:"")+(TYPE_NAME[qtype(q)]?` <span class="chip" style="font-size:11px;padding:1px 7px">${TYPE_NAME[qtype(q)]}</span>`:"");
+  const modeName=S.title||{train:"Тренування",review:"Повтор помилок",exam:"Екзамен",gen:"Розрахунки",module:"Тест модуля"}[S.mode];
+  const badge=(q.src==="my"?` <span class="chip" style="font-size:11px;padding:1px 7px">✍ моє</span>`:"")+(q.src==="na"?` <span class="chip" style="font-size:11px;padding:1px 7px">🎓 NetAcad</span>`:"")+(q.src==="n"?` <span class="chip" style="font-size:11px;padding:1px 7px">📒 з нотаток</span>`:"")+(q.gen?` <span class="chip" style="font-size:11px;padding:1px 7px">🎲 генератор</span>`:"")+(TYPE_NAME[qtype(q)]?` <span class="chip" style="font-size:11px;padding:1px 7px">${TYPE_NAME[qtype(q)]}</span>`:"");
   let verdict=""; if(checked){ const ok=isCorrect(q,ans); verdict=`<div class="verdict ${ok?"ok":"bad"}">${ok?"Правильно!":"Неправильно"}</div>`; }
   let nav="";
   if(S.mode==="exam"){
@@ -421,7 +446,7 @@ function reviewItem(q, ans, open){
 function render(){
   const app=$("#app");
   ({home:()=>app.innerHTML=renderHome(), quiz:()=>app.innerHTML=renderQuiz(), result:()=>app.innerHTML=renderResult(), stats:()=>{app.innerHTML=renderStats(); bindChart();},
-    backup:()=>app.innerHTML=renderBackup(), search:()=>app.innerHTML=renderSearch(), labs:()=>app.innerHTML=renderLabs(), lab:()=>{app.innerHTML=renderLab(); bindLab();}, summary:()=>{} }[view]||(()=>{}))();
+    backup:()=>app.innerHTML=renderBackup(), search:()=>app.innerHTML=renderSearch(), labs:()=>app.innerHTML=renderLabs(), lab:()=>{app.innerHTML=renderLab(); bindLab();}, custom:()=>app.innerHTML=renderCustom(), settings:()=>app.innerHTML=renderSettings(), summary:()=>{} }[view]||(()=>{}))();
   if(view==="quiz"){ const ci=$("#cmdin"); if(ci) ci.focus(); }
 }
 function streakInfo(){
@@ -447,6 +472,11 @@ function renderHome(){
     <div class="bar wide"><i style="width:${pct}%"></i></div>
     <div class="row"><span class="small muted grow">Сьогодні: <b>${si.today}</b> / ${opts.goal} відповідей${si.today>=opts.goal?" ✅":""}</span>${seg("goal",[10,20,30,50],v=>v)}</div>
   </div>
+  ${readinessCard()}
+  <div class="card"><h2>Тест модуля</h2>
+    <p class="small muted" style="margin:0 0 8px">20 питань по одному модулю: спершу 🎓 NetAcad і слабкі місця, потім нові та розрахунки.</p>
+    <select class="full" id="modsel">${COURSES.map(([g])=>`<optgroup label="${g}">${TOPICS.filter(t=>t.g===g).map(t=>`<option value="${t.id}" ${opts.modTopic===t.id?"selected":""}>${g} ${t.n}. ${esc(t.name)} (${QB.filter(q=>q.t===t.id).length})</option>`).join("")}</optgroup>`).join("")}</select>
+    <div class="row" style="margin-top:8px"><span class="grow"></span><button class="primary" data-act="module">Почати тест модуля</button></div></div>
   <div class="card"><h2>Тренування</h2>
     <p class="small muted" style="margin:0 0 8px">Розбір одразу. Спершу питання з помилками й нові${gk.length?", плюс розрахунки з генератора":""}.</p>
     <div class="row">${seg("train",[10,20,0],v=>v?v:"Усі")}<span class="grow"></span><button class="primary" data-act="train" ${selQ?"":"disabled"}>Почати</button></div></div>
@@ -463,14 +493,126 @@ function renderHome(){
     <p class="small muted" style="margin:0 0 8px">Без підказок, 1 хв на питання, розбір наприкінці.</p>
     <div class="row">${seg("exam",[20,40,60],v=>v)}<span class="grow"></span><button class="primary" data-act="exam" ${selQ?"":"disabled"}>Почати</button></div></div>
   <div class="card"><div class="row"><h2 class="grow" style="margin:0">Теми</h2><span class="small muted">питань: ${selQ}</span></div>
-    <div class="row" style="margin:8px 0 4px"><span class="small muted">Джерело:</span>${[["all","Усі"],["n","📒 Нотатки"],["na","🎓 NetAcad"]].map(([v,l])=>`<button class="seg ${opts.src===v?"on":""}" data-act="src" data-v="${v}">${l}${v!=="all"?" ("+QB.filter(q=>q.src===v).length+")":""}</button>`).join("")}</div>
-    ${grp("ITN")}${grp("SRWE")}
+    <div class="row" style="margin:8px 0 4px"><span class="small muted">Джерело:</span>${[["all","Усі"],["n","📒 Нотатки"],["na","🎓 NetAcad"],["my","✍ Мої"]].map(([v,l])=>`<button class="seg ${opts.src===v?"on":""}" data-act="src" data-v="${v}">${l}${v!=="all"?" ("+QB.filter(q=>q.src===v).length+")":""}</button>`).join("")}</div>
+    ${grp("ITN")}${grp("SRWE")}${grp("ENSA")}
     <p class="small muted" style="margin:10px 0 0">Смужка — частка засвоєних питань (3+ правильні поспіль). 🎲 — є генератор.</p></div>
   <div class="row">
-    <button class="ghost grow" data-act="stats">📊 Статистика</button><button class="ghost grow" data-act="search">🔎 Пошук</button><button class="ghost grow" data-act="backup">💾 Копія</button>
+    <button class="ghost grow" data-act="stats">📊 Статистика</button><button class="ghost grow" data-act="search">🔎 Пошук</button><button class="ghost grow" data-act="custom">✍ Мої питання</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button class="ghost grow" data-act="settings">⚙ Налаштування</button><button class="ghost grow" data-act="backup">💾 Копія</button>
   </div>
   ${store.mode==="local"?`<div class="note">Хмарне сховище недоступне: прогрес зберігається лише в цьому браузері. Зробіть резервну копію.</div>`:""}`;
 }
+
+// ================= Тест модуля =================
+function pickModule(tid){
+  const now=Date.now(); const qs=QB.filter(q=>q.t===tid);
+  const na=shuffle(qs.filter(q=>q.src==="na"));
+  const weak=shuffle(qs.filter(q=>q.src!=="na"&&prog[q.id]&&prog[q.id].k===0));
+  const fresh=shuffle(qs.filter(q=>q.src!=="na"&&!prog[q.id]));
+  const rest=shuffle(qs.filter(q=>q.src!=="na"&&prog[q.id]&&prog[q.id].k!==0)).sort((a,b)=>(prog[a.id].b||0)-(prog[b.id].b||0));
+  const gk=Object.entries(GEN.list).filter(([k,g])=>g.t===tid).map(([k])=>k);
+  const ng=gk.length?Math.min(4,Math.max(2,20-qs.length)):0;
+  let list=[...na,...weak,...fresh,...rest].slice(0,20-ng);
+  for(let i=0;i<ng;i++){ const g=GEN.make(gk[i%gk.length]); if(g) list.push(g); }
+  return shuffle(list);
+}
+
+// ================= Прогноз готовності =================
+// Оцінка ймовірності правильної відповіді: точність питання × «пам'ять» (згасає з часом, повільніше для засвоєних).
+function pKnow(id){
+  const r=prog[id]; if(!r) return 0.25;
+  const acc=(r.c+1)/(r.c+r.w+2);
+  const stability=DAY*(1+[1,2,5,12,25,50][Math.min(5,r.b||0)]);
+  const ret=Math.exp(-(Date.now()-(r.l||0))/stability);
+  return 0.25+0.75*acc*(r.k?Math.max(ret,0.35):ret*0.6);
+}
+function topicReady(tid){
+  const ids=QB.filter(q=>q.t===tid).map(q=>q.id).concat(Object.keys(GEN.topicOf).filter(g=>GEN.topicOf[g]===tid));
+  if(!ids.length) return null;
+  const seen=ids.filter(i=>prog[i]).length;
+  return {p:ids.reduce((s,i)=>s+pKnow(i),0)/ids.length, n:ids.length, seen};
+}
+function courseReady(g){
+  const ts=TOPICS.filter(t=>t.g===g).map(t=>Object.assign({t},topicReady(t.id)||{p:0,n:0,seen:0}));
+  const n=ts.reduce((s,x)=>s+x.n,0); return {p:n?ts.reduce((s,x)=>s+x.p*x.n,0)/n:0, seen:ts.reduce((s,x)=>s+x.seen,0), n, topics:ts};
+}
+function readinessCard(){
+  const cs=COURSES.map(([g])=>[g,courseReady(g)]);
+  if(!cs.some(([g,c])=>c.seen)) return "";
+  const weak=TOPICS.map(t=>({t,r:topicReady(t.id)})).filter(x=>x.r&&x.r.seen>=3).sort((a,b)=>a.r.p-b.r.p).slice(0,3);
+  return `<div class="card"><div class="row"><h2 class="grow" style="margin:0">Готовність</h2><button class="linkbtn" data-act="stats">детальніше</button></div>
+    <div class="course" style="margin-top:8px">${cs.map(([g,c])=>`<div><span class="small muted">${g}</span><b>${Math.round(c.p*100)}%</b><span class="small muted">${c.seen}/${c.n}</span></div>`).join("")}</div>
+    ${weak.length?`<p class="small muted" style="margin:8px 0 0">Найслабше: ${weak.map(x=>tlabel(x.t.id)+" "+esc(x.t.name)+" ("+Math.round(x.r.p*100)+"%)").join(", ")}</p>`:""}</div>`;
+}
+function readinessSection(){
+  return COURSES.map(([g,name])=>{ const c=courseReady(g);
+    return `<h3>${g} — ${Math.round(c.p*100)}%</h3>`+c.topics.map(x=>`<div class="kv"><span>${x.t.n}. ${esc(x.t.name)} <span class="small muted">${x.seen}/${x.n}</span></span><span style="display:flex;align-items:center;gap:8px"><span class="bar"><i style="width:${Math.round(x.p*100)}%;background:var(${x.p>=0.75?"--ok":x.p>=0.5?"--warn":"--bad"})"></i></span><b class="small">${Math.round(x.p*100)}%</b></span></div>`).join(""); }).join("")+
+  `<p class="small muted" style="margin:8px 0 0">Оцінка ймовірності правильної відповіді: враховує точність, давність повторення та вгадування (25%) для непройдених питань.</p>`;
+}
+
+// ================= Налаштування =================
+function renderSettings(){
+  const seg=(k,vals)=>vals.map(([v,l])=>`<button class="seg ${opts[k]===v?"on":""}" data-act="setopt" data-k="${k}" data-v="${v}">${l}</button>`).join("");
+  return `<div class="card"><h2>Вигляд</h2>
+    <div class="kv"><span>Тема</span><span class="row">${seg("theme",[["auto","Авто"],["light","Світла"],["dark","Темна"]])}</span></div>
+    <div class="kv"><span>Розмір шрифту</span><span class="row">${seg("fs",[[14,"A−"],[16,"A"],[18,"A+"],[20,"A++"]])}</span></div></div>
+  <div class="card"><h2>Навчання</h2>
+    <div class="kv"><span>Перемішувати варіанти відповідей</span><span class="row">${seg("shuffle",[[true,"Так"],[false,"Ні"]])}</span></div>
+    <div class="kv"><span>Звук правильної/неправильної відповіді</span><span class="row">${seg("sound",[[true,"Увімк."],[false,"Вимк."]])}</span></div>
+    <div class="kv"><span>Денна норма</span><span class="row">${seg("goal",[[10,"10"],[20,"20"],[30,"30"],[50,"50"]])}</span></div></div>
+  <button class="primary" data-act="home">На головну</button>`;
+}
+
+// ================= Мої питання =================
+let customDraft=null, customEdit=null;
+function customForm(q){
+  q=q||{t:opts.modTopic||"SRWE1",q:"",c:"",o:[["",""],["",""],["",""],["",""]],a:[],src:"my",n:""};
+  return `<div class="card"><h2>${customEdit?"Редагувати питання":"Нове питання"}</h2>
+    <label class="small muted">Тема</label><select class="full" id="cf_t">${COURSES.map(([g])=>`<optgroup label="${g}">${TOPICS.filter(t=>t.g===g).map(t=>`<option value="${t.id}" ${q.t===t.id?"selected":""}>${g} ${t.n}. ${esc(t.name)}</option>`).join("")}</optgroup>`).join("")}</select>
+    <label class="small muted">Джерело</label><select class="full" id="cf_src"><option value="my" ${q.src!=="na"?"selected":""}>✍ Моє</option><option value="na" ${q.src==="na"?"selected":""}>🎓 NetAcad</option></select>
+    <label class="small muted">Питання</label><textarea id="cf_q" style="min-height:70px;font:inherit">${esc(q.q)}</textarea>
+    <label class="small muted">Вивід/конфіг (необов'язково)</label><textarea id="cf_c" style="min-height:60px">${esc(q.c||"")}</textarea>
+    <div class="small muted" style="margin-top:6px">Варіанти: позначте правильні (можна кілька) і за бажанням додайте пояснення.</div>
+    ${q.o.map((o,i)=>`<div class="mrow"><label class="row"><input type="checkbox" class="cf_ok" ${q.a.includes(i)?"checked":""} style="width:20px;height:20px"> <span class="small">Правильний</span></label><input type="text" class="cf_o" placeholder="Варіант ${letters[i]}" value="${esc(o[0])}"><input type="text" class="cf_e" placeholder="Пояснення (необов'язково)" value="${esc(o[1])}"></div>`).join("")}
+    ${q.o.length<6?`<button class="mini" data-act="caddopt">+ Варіант</button>`:""}
+    <label class="small muted">Примітка / загальне пояснення</label><input type="text" id="cf_n" value="${esc(q.n||"")}">
+    <div class="row" style="margin-top:10px"><button class="primary" data-act="csave">Зберегти</button>${customEdit?`<button data-act="cadd">Скасувати</button>`:""}<span id="cmsg" class="small muted"></span></div></div>`;
+}
+function readCustomForm(){
+  const o=[...document.querySelectorAll(".cf_o")].map((el,i)=>[el.value.trim(),(document.querySelectorAll(".cf_e")[i]||{}).value||""]);
+  const a=[...document.querySelectorAll(".cf_ok")].map((el,i)=>el.checked?i:-1).filter(i=>i>=0);
+  return {t:$("#cf_t").value, src:$("#cf_src").value, q:$("#cf_q").value.trim(), c:$("#cf_c").value.replace(/\s+$/,""), o, a, n:$("#cf_n").value.trim()};
+}
+function saveCustom(){
+  const f=readCustomForm(); const msg=$("#cmsg");
+  const keep=f.o.map((x,i)=>({x,i})).filter(z=>z.x[0]);
+  if(!f.q){ msg.textContent="Введіть текст питання."; return; }
+  if(keep.length<2){ msg.textContent="Потрібно щонайменше 2 варіанти."; return; }
+  const a=keep.map((z,j)=>f.a.includes(z.i)?j:-1).filter(j=>j>=0);
+  if(!a.length){ msg.textContent="Позначте правильний варіант."; return; }
+  const o=keep.map(z=>[z.x[0], z.x[1].trim()||(f.a.includes(z.i)?"Правильно.":"Неправильно.")]);
+  const id=customEdit||("c-"+Date.now().toString(36)+Math.random().toString(36).slice(2,5));
+  let q=f.q; if(a.length>1 && !/Оберіть/i.test(q)) q+=" (Оберіть "+a.length+".)";
+  const rec={id,t:f.t,src:f.src,q,o,a,ts:Date.now(),custom:true}; if(f.c) rec.c=f.c; if(f.n) rec.n=f.n;
+  customQs=customQs.filter(x=>x.id!==id).concat([rec]); lsSet(LS.custom,customQs); rebuildQB();
+  if(store.mode==="db") queueWrite(()=>store.db.doc("custom/"+id).set(rec));
+  customEdit=null; customDraft=null; render(); const m=$("#cmsg"); if(m) m.textContent="Збережено ✓";
+}
+function deleteCustom(id){
+  customQs=customQs.filter(x=>x.id!==id); lsSet(LS.custom,customQs); rebuildQB();
+  if(store.mode==="db") queueWrite(()=>store.db.doc("custom/"+id).delete());
+  if(customEdit===id) customEdit=null; render();
+}
+function renderCustom(){
+  const editing=customEdit? customQs.find(x=>x.id===customEdit) : customDraft;
+  const list=customQs.slice().sort((a,b)=>b.ts-a.ts);
+  return customForm(editing)+`<div class="card"><div class="row"><h2 class="grow" style="margin:0">Мої питання <span class="muted">(${list.length})</span></h2>${list.length?`<button class="mini primary" data-act="ctrain">Тренувати</button>`:""}</div>
+    ${list.length?list.map(q=>`<div class="kv"><span class="small"><span class="muted">${tlabel(q.t)}${q.src==="na"?" · 🎓":""}</span><br>${esc(q.q)}</span><span class="row" style="flex-wrap:nowrap"><button class="mini" data-act="cedit" data-id="${esc(q.id)}">✎</button><button class="mini" data-act="cdel" data-id="${esc(q.id)}">🗑</button></span></div>`).join(""):`<p class="small muted" style="margin:6px 0 0">Тут з'являться питання, які ви додасте, — наприклад, зі скриншотів тестів NetAcad. Вони синхронізуються між пристроями і потрапляють у тренування, екзамени та тести модулів.</p>`}</div>
+  <button class="primary" data-act="home">На головну</button>`;
+}
+
 function renderResult(){
   const e=S.result;
   const rows=Object.entries(e.per).sort((a,b)=>TOPICS.findIndex(t=>t.id===a[0])-TOPICS.findIndex(t=>t.id===b[0]))
@@ -515,6 +657,7 @@ function renderStats(){
   return `<div class="card"><h2>Загалом</h2>
     <p style="margin:0">Пройдено питань банку: <b>${seen}</b> з ${QB.length} · відповідей: ${c+w} · точність: <b>${(c+w)?Math.round(c/(c+w)*100)+"%":"—"}</b> · лаби: ${CLI.SCEN.filter(s=>labs[s.id]&&labs[s.id].ok).length}/${CLI.SCEN.length}</p></div>
   <div class="card"><h2>Прогрес по днях</h2>${chartSVG()}</div>
+  <div class="card"><h2>Прогноз готовності</h2>${readinessSection()}</div>
   <div class="card"><h2>Що плутає найбільше</h2>
     ${wc.length?wc.map(x=>`<div class="kv"><span>${esc(x.c)} <span class="small muted">· ${tlabel(x.t)}</span></span><span class="small"><b style="color:var(--bad)">${x.bad} ${x.bad===1?"помилка":x.bad<5?"помилки":"помилок"}</b> · точність ${Math.round(x.ok/(x.ok+x.bad)*100)}%</span></div>`).join(""):`<p class="small muted" style="margin:0">Поки помилок немає.</p>`}
     <p class="small muted" style="margin:8px 0 0">Порада: експортуйте JSON (💾 Копія) і попросіть Claude чи іншого AI-асистента розібрати слабкі місця.</p></div>
@@ -534,7 +677,7 @@ function renderSearch(){
   ${res.length?`<div class="card">${res.slice(0,60).map(q=>reviewItem(q,undefined)).join("")}</div>`:""}
   <button class="primary" data-act="home">На головну</button>`;
 }
-function exportJSON(){ return JSON.stringify({app:"ccna-trainer",v:2,exported:new Date().toISOString(),progress:prog,daily,flags,labs,exams}); }
+function exportJSON(){ return JSON.stringify({app:"ccna-trainer",v:3,exported:new Date().toISOString(),progress:prog,daily,flags,labs,exams,custom:customQs}); }
 function renderBackup(){
   const acc = store.user? `<div class="card"><h2>Акаунт</h2><p class="small" style="margin:0 0 8px">Ви увійшли як <b>${esc(store.user.email||store.user.uid)}</b>. Прогрес синхронізується через Firebase.</p><button data-act="logout">Вийти</button></div>` : "";
   return acc+`<div class="card"><h2>Експорт</h2><p class="small muted" style="margin:0 0 8px">Скопіюйте текст і збережіть як файл (наприклад, ccna-progress.json).</p>
@@ -597,7 +740,15 @@ document.addEventListener("click", async ev=>{
   if(act==="review"){ startSession("review", shuffle(reviewQueue())); return; }
   if(act==="exam"){ const gk=genKeysFor(sel); const n=opts.exam; const ng=gk.length?Math.round(n*0.15):0; const list=shuffle(qsFor(sel)).slice(0,n-ng); for(let i=0;i<ng;i++){const g=GEN.make(gk[i%gk.length]); if(g) list.push(g);} startSession("exam", shuffle(list)); return; }
   if(act==="gen"){ const list=[]; for(let i=0;i<10;i++){ const g=GEN.make(el.dataset.k); if(g) list.push(g);} startSession("gen", list); return; }
-  if(["stats","backup","search","labs"].includes(act)){ view=act; render(); scrollTop(); if(act==="search"){const si=$("#searchin"); si&&si.focus();} return; }
+  if(act==="module"){ const tid=($("#modsel")||{}).value||opts.modTopic; opts.modTopic=tid; lsSet(LS.opts,opts); startSession("module", pickModule(tid), "Тест модуля "+tlabel(tid)); return; }
+  if(act==="setopt"){ const k=el.dataset.k; let v=el.dataset.v; if(v==="true"||v==="false") v=(v==="true"); else if(/^\d+$/.test(v)) v=Number(v); opts[k]=v; lsSet(LS.opts,opts); applyLook(); render(); return; }
+  if(act==="cadd"){ customDraft=null; customEdit=null; render(); return; }
+  if(act==="csave"){ saveCustom(); return; }
+  if(act==="cedit"){ customEdit=el.dataset.id; render(); scrollTop(); return; }
+  if(act==="cdel"){ if(el.dataset.confirm!=="1"){ el.dataset.confirm="1"; el.textContent="Точно видалити?"; return; } deleteCustom(el.dataset.id); return; }
+  if(act==="caddopt"){ const f=readCustomForm(); f.o.push(["",""]); customDraft=f; render(); return; }
+  if(act==="ctrain"){ const list=shuffle(customQs.filter(q=>TMAP[q.t])); startSession("train", list.slice(0,20), "Мої питання"); return; }
+  if(["stats","backup","search","labs","custom","settings"].includes(act)){ view=act; render(); scrollTop(); if(act==="search"){const si=$("#searchin"); si&&si.focus();} return; }
   if(act==="lab"){ openLab(el.dataset.id); return; }
   if(act==="labcheck"){ checkLab(); return; }
   if(act==="labsol"){ LAB.showSol=!LAB.showSol; render(); return; }
@@ -621,7 +772,10 @@ document.addEventListener("click", async ev=>{
   if(act==="copy"||act==="import"||act==="reset") return backupAct(act,el);
 });
 function rerenderInPlace(){ const y=window.scrollY; render(); try{window.scrollTo(0,y);}catch(e){} if(view==="stats") bindChart(); }
-function doCheck(){ const k=S.i, q=S.items[k]; if(qtype(q)==="cmd"){ const ci=$("#cmdin"); if(ci) S.ans[k]=ci.value; } if(!hasAnswer(q,S.ans[k])) return; S.checked[k]=true; record(recId(q),isCorrect(q,S.ans[k])); render(); }
+function doCheck(){ const k=S.i, q=S.items[k]; if(qtype(q)==="cmd"){ const ci=$("#cmdin"); if(ci) S.ans[k]=ci.value; } if(!hasAnswer(q,S.ans[k])) return; S.checked[k]=true; const ok=isCorrect(q,S.ans[k]); record(recId(q),ok); beep(ok); render(); }
+let audioCtx=null;
+function beep(ok){ if(!opts.sound) return; try{ audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)(); const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.frequency.value=ok?880:220; o.type=ok?"sine":"triangle"; g.gain.setValueAtTime(0.08,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+(ok?0.18:0.3)); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+(ok?0.2:0.32)); }catch(e){} }
+function applyLook(){ const r=document.documentElement; if(opts.theme==="auto") delete r.dataset.theme; else r.dataset.theme=opts.theme; r.style.setProperty("--fs",(opts.fs||16)+"px"); }
 document.addEventListener("change", ev=>{
   const t=ev.target;
   if(t.dataset && t.dataset.act==="notesonly"){ opts.notesOnly=t.checked; lsSet(LS.opts,opts); render(); return; }
@@ -645,11 +799,13 @@ async function backupAct(act,el){
   if(act==="copy"){ const t=$("#exp"); try{ await navigator.clipboard.writeText(t.value); $("#copymsg").textContent="Скопійовано"; }catch(e){ t.focus(); t.select(); $("#copymsg").textContent="Виділено — скопіюйте вручну"; } return; }
   if(act==="import"){ const msg=$("#impmsg"); try{ const d=JSON.parse($("#imp").value); if(!d||typeof d.progress!=="object") throw new Error("Немає поля progress");
       prog=mergeByTs(prog,d.progress,"l"); daily=mergeDaily(daily,d.daily||{}); flags=mergeByTs(flags,d.flags||{},"ts"); labs=mergeByTs(labs,d.labs||{},"ts"); saveAll();
+      if(Array.isArray(d.custom)){ for(const q of d.custom){ if(q&&q.id&&q.t&&Array.isArray(q.o)&&!customQs.some(x=>x.id===q.id)){ customQs.push(q); if(store.mode==="db") queueWrite(()=>store.db.doc("custom/"+q.id).set(q)); } } lsSet(LS.custom,customQs); rebuildQB(); }
       if(Array.isArray(d.exams)){ const have=new Set(exams.map(e=>e.ts)); for(const e of d.exams){ if(e&&e.ts&&!have.has(e.ts)){ exams.push(e); if(store.mode==="db") queueWrite(()=>store.db.collection("exams").add(e)); } } exams.sort((a,b)=>b.ts-a.ts); lsSet(LS.exams,exams); }
       msg.textContent="Імпортовано: "+Object.keys(d.progress).length+" записів"; }catch(e){ msg.textContent="Помилка: "+e.message; } return; }
   if(act==="reset"){ if(el.dataset.confirm!=="1"){ el.dataset.confirm="1"; el.textContent="Точно скинути? Натисніть ще раз"; el.classList.add("primary"); return; } prog={}; saveAll(); el.textContent="Скинуто"; el.disabled=true; }
 }
 
+customQs=lsGet(LS.custom,[]); rebuildQB(); applyLook();
 render();
 initStore();
 if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
