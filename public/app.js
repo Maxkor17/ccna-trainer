@@ -23,7 +23,11 @@ const QB_BASE = [...(window.QB_ITN||[]), ...(window.QB_SRWE||[]), ...(window.QB_
 let customQs = [];
 let QB = QB_BASE.slice();
 let QMAP = Object.fromEntries(QB.map(q=>[q.id,q]));
-function rebuildQB(){ QB = QB_BASE.concat(customQs.filter(q=>TMAP[q.t])); QMAP = Object.fromEntries(QB.map(q=>[q.id,q])); }
+function trq(q){ const t=window.QB_TR&&window.QB_TR[q.id]; if(!t) return q;
+  const n=Object.assign({},q,{q:t.q,_uk:q.q,_tr:1});
+  if(t.o&&q.o) n.o=q.o.map((p,i)=>{ const r=t.o[i]; return r?[r[0]===0?p[0]:r[0], r[1]]:p; });
+  ["items","pairs","e","cfg"].forEach(k=>{ if(t[k]!=null) n[k]=t[k]; }); return n; }
+function rebuildQB(){ const base=opts.lang==="en"?QB_BASE.map(trq):QB_BASE; QB = base.concat(customQs.filter(q=>TMAP[q.t])); QMAP = Object.fromEntries(QB.map(q=>[q.id,q])); }
 const COURSES=[["ITN","Вступ до мереж"],["SRWE","Комутація, маршрутизація, бездротові мережі"],["ENSA","Корпоративні мережі, безпека, автоматизація"],["LNX","Після CCNA: Linux і DevOps"]];
 const GEN = window.GEN, CLI = window.CLI;
 const TID2GEN = {"g-showstp":"g-showstp","g-showtrunk":"g-showtrunk","g-showec":"g-showec","g-showint":"g-showint","g-lpm":"g-lpm","g-ad":"g-ad","g-wild":"g-wild","g-ospfcost":"g-ospfcost","g-rid":"g-rid","g-bin":"g-bin","g-hex":"g-bin","g-net":"g-subnet","g-bc":"g-subnet","g-range":"g-subnet","g-hosts":"g-subnet","g-vlsm":"g-vlsm","g-ipv6":"g-ipv6","g-eui":"g-eui","g-stproot":"g-stproot","g-stprp":"g-stprp","g-stpcost":"g-stpcost","g-stpprio":"g-stpprio"};
@@ -202,7 +206,7 @@ function record(id, ok){
   const dk=dkey(); const dd=Object.assign({n:0,c:0},daily[dk]); dd.n++; if(ok) dd.c++; daily[dk]=dd;
   patch({q:{[id]:r}, daily:{[dk]:dd}});
 }
-function langOk(q){ if(opts.src==="en") return true; if(opts.lang==="en") return q.src==="en"; if(opts.lang==="uk") return q.src!=="en"; return true; }
+function langOk(q){ if(opts.src==="en") return true; if(opts.lang==="en") return true; if(opts.lang==="uk") return q.src!=="en"; return true; }
 function qsFor(topics){ const base=QB.filter(q=>topics.has(q.t) && (opts.src==="all" || q.src===opts.src)); const l=base.filter(langOk); return l.length? l : base; }
 let GLRE=null;
 function annotate(html){ const G=window.GLOSSARY||[]; if(!GLRE) GLRE=G.slice().sort((a,b)=>b[0].length-a[0].length).map(([ua,en])=>[new RegExp("(^|[^\\p{L}])("+ua.split(" ").map(w=>w.length>4? w.slice(0,Math.max(4,w.length-2)).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"\\p{L}*" : w.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("\\s+")+")","iu"),en]);
@@ -392,7 +396,7 @@ function renderQuiz(){
     <div class="qmeta"><span>${modeName} · ${S.i+1}/${S.items.length}</span>${S.mode==="exam"?`<span>⏱ <span id="timer">${fmtLeft(S.deadline-Date.now())}</span></span>`:`<span>${tlabel(q.t)}</span>`}</div>
     <div class="progress"><i style="width:${Math.round(S.i/S.items.length*100)}%"></i></div>
     <div class="small muted">${S.mode==="exam"?tlabel(q.t)+" · ":""}${esc(TMAP[q.t].name)}${badge}</div>
-    <div class="qtext">${opts.enTerms&&q.src!=="en"?annotate(esc(q.q)):esc(q.q)}</div>${q.fig?topoSVG(q.fig):""}${q.c?`<pre>${esc(q.c)}</pre>`:""}
+    <div class="qtext">${opts.enTerms&&q.src!=="en"&&!q._tr?annotate(esc(q.q)):esc(q.q)}</div>${q._uk?`<details class="small muted"><summary>Українською</summary>${esc(q._uk)}</details>`:(window.QB_TR&&window.QB_TR[q.id]?`<details class="small muted"><summary>In English</summary>${esc(window.QB_TR[q.id].q)}</details>`:"")}${q.fig?topoSVG(q.fig):""}${q.c?`<pre>${esc(q.c)}</pre>`:""}
     ${renderBody(q,k,ans,checked,true)}${verdict}${nav}
   </div>
   <button class="ghost" data-act="quit">✕ Вийти${S.mode==="exam"?" (екзамен не зарахується)":""}</button>`;
@@ -570,6 +574,7 @@ function renderSettings(){
     <div class="kv"><span>Перемішувати варіанти відповідей</span><span class="row">${seg("shuffle",[[true,"Так"],[false,"Ні"]])}</span></div>
     <div class="kv"><span>Звук правильної/неправильної відповіді</span><span class="row">${seg("sound",[[true,"Увімк."],[false,"Вимк."]])}</span></div>
     <div class="kv"><span>Мова питань</span><span class="row">${seg("lang",[["uk","Українська"],["mix","Змішано"],["en","English"]])}</span></div>
+    <p class="small muted" style="margin:6px 0">English — увесь банк CCNA перекладено англійською (як на справжньому іспиті); під кожним питанням можна розгорнути український оригінал. Змішано — оригінали плюс окремі англомовні питання.</p>
     <div class="kv"><span>Підказувати англійські терміни в питаннях</span><span class="row">${seg("enTerms",[[true,"Так"],[false,"Ні"]])}</span></div>
     <p class="small muted" style="margin:6px 0">Інтервали повторення рахує алгоритм FSRS (як у сучасному Anki): він оцінює стабільність пам'яті для кожного питання і повертає його, коли ймовірність пригадати падає до 90%. На комп'ютері: 1–9 — варіант, Enter — перевірити/далі, F — сумнівне, ? — довідка.</p>
     <div class="kv"><span>Денна норма</span><span class="row">${seg("goal",[[10,"10"],[20,"20"],[30,"30"],[50,"50"]])}</span></div></div>
@@ -1019,7 +1024,7 @@ document.addEventListener("click", async ev=>{
   if(act==="cheat"){ const tid=($("#modsel")||{}).value||opts.modTopic; opts.modTopic=tid; lsSet(LS.opts,opts); view="cheat"; render(); scrollTop(); return; }
   if(act==="module2"){ startSession("module", pickModule(opts.modTopic), "Тест модуля "+tlabel(opts.modTopic)); return; }
   if(act==="module"){ const tid=($("#modsel")||{}).value||opts.modTopic; opts.modTopic=tid; lsSet(LS.opts,opts); startSession("module", pickModule(tid), "Тест модуля "+tlabel(tid)); return; }
-  if(act==="setopt"){ const k=el.dataset.k; let v=el.dataset.v; if(v==="true"||v==="false") v=(v==="true"); else if(/^\d+$/.test(v)) v=Number(v); opts[k]=v; lsSet(LS.opts,opts); if(k==="goal") pushSync(); applyLook(); render(); return; }
+  if(act==="setopt"){ const k=el.dataset.k; let v=el.dataset.v; if(v==="true"||v==="false") v=(v==="true"); else if(/^\d+$/.test(v)) v=Number(v); opts[k]=v; lsSet(LS.opts,opts); if(k==="goal") pushSync(); if(k==="lang") rebuildQB(); applyLook(); render(); return; }
   if(act==="cadd"){ customDraft=null; customEdit=null; render(); return; }
   if(act==="csave"){ saveCustom(); return; }
   if(act==="cedit"){ customEdit=el.dataset.id; render(); scrollTop(); return; }

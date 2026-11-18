@@ -4,14 +4,14 @@ const path=require("path"); const P=f=>path.join(__dirname,"..","public",f);
 global.window={}; global.btoa=s=>Buffer.from(s).toString("base64"); global.atob=s=>Buffer.from(s,"base64").toString();
 const files=["wlc","bash","questions-linux","questions-itn","questions-srwe","questions-notes","questions-extra","questions-srwe2","questions-ensa","questions-netacad","questions-figs","questions-en","glossary","cheats","pairs","gen","gen2","gen3","api","cli"];
 for(const f of files) require(P(f+".js"));
-for(const f of ["questions-en-tr","questions-linux"]) { try{ require(P(f+".js")); }catch(e){ if(e.code!=="MODULE_NOT_FOUND") throw e; } }
+for(const f of require("fs").readdirSync(path.join(__dirname,"..","public")).filter(f=>/^tr-.*\.js$/.test(f))) require(P(f));
 let fails=0, checks=0; const fail=m=>{ fails++; console.error("✗ "+m); }; const ok=(c,m)=>{ checks++; if(!c) fail(m); };
 // ---- теми з app.js ----
 const app=require("fs").readFileSync(P("app.js"),"utf8");
 const topicIds=new Set([...app.matchAll(/\["((?:ITN|SRWE|ENSA|LNX)\d+)","/g)].map(m=>m[1]));
 ok(topicIds.size>=47,"знайдено теми в app.js: "+topicIds.size);
 // ---- банки ----
-const banks=Object.keys(window).filter(k=>k.startsWith("QB_")); const ids=new Set(); let total=0;
+const banks=Object.keys(window).filter(k=>k.startsWith("QB_")&&Array.isArray(window[k])); const ids=new Set(); let total=0;
 for(const b of banks) for(const q of window[b]){ total++;
   ok(!ids.has(q.id),"дубль id "+q.id); ids.add(q.id); ok(topicIds.has(q.t),q.id+": невідома тема "+q.t); ok(typeof q.q==="string"&&q.q.length>3,q.id+": порожнє питання");
   const t=q.type||"mc";
@@ -23,7 +23,11 @@ for(const b of banks) for(const q of window[b]){ total++;
   else fail(q.id+": невідомий тип "+t); }
 console.log("Питань у банках:",total);
 // переклад
-if(window.QB_TR){ for(const [id,tr] of Object.entries(window.QB_TR)){ ok(ids.has(id),"переклад для неіснуючого "+id); } console.log("Перекладів:",Object.keys(window.QB_TR).length); }
+const CYR=/[а-яіїєґ]/i; const allQ={}; for(const b of banks) for(const q of window[b]) allQ[q.id]=q;
+if(window.QB_TR){ for(const [id,tr] of Object.entries(window.QB_TR)){ const q=allQ[id]; ok(!!q,"переклад для неіснуючого "+id); if(!q) continue; ok(!CYR.test(tr.q),"переклад "+id+": кирилиця в питанні");
+  if(q.o){ ok(Array.isArray(tr.o)&&tr.o.length===q.o.length,"переклад "+id+": кількість варіантів "+(tr.o||[]).length+"≠"+q.o.length); (tr.o||[]).forEach((o,i)=>{ const t=o[0]===0?(q.o[i]||[])[0]:o[0]; ok(!CYR.test(t||""),"переклад "+id+": варіант "+i+" не перекладено: "+t); ok(!CYR.test(o[1]||""),"переклад "+id+": пояснення "+i); }); }
+  if(q.items) ok(Array.isArray(tr.items)&&tr.items.length===q.items.length&&!tr.items.some(x=>CYR.test(x)),"переклад "+id+": items"); if(q.pairs) ok(Array.isArray(tr.pairs)&&tr.pairs.length===q.pairs.length&&!tr.pairs.flat().some(x=>CYR.test(x)),"переклад "+id+": pairs"); if(tr.e) ok(!CYR.test(tr.e),"переклад "+id+": e"); if(q.e&&CYR.test(q.e)) ok(!!tr.e,"переклад "+id+": бракує пояснення"); if(q.cfg&&CYR.test(q.cfg)) ok(!!tr.cfg,"переклад "+id+": cfg кирилицею"); if(tr.cfg){ const bl=x=>(x.match(/\[\[[^\]]+\]\]/g)||[]).join("|"); ok(bl(tr.cfg)===bl(q.cfg),"переклад "+id+": пропуски cfg"); } }
+  const untr=Object.keys(allQ).filter(id=>!window.QB_TR[id]&&allQ[id].src!=="en"&&!id.startsWith("lx")); console.log("Перекладів:",Object.keys(window.QB_TR).length,"· без перекладу:",untr.length); }
 // ---- генератори ----
 const G=window.GEN;
 for(const k of Object.keys(G.list)){ for(let i=0;i<300;i++){ let q; try{ q=G.make(k); }catch(e){ fail(k+": виняток "+e.message); break; } if(!q) continue;
