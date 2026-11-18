@@ -19,3 +19,13 @@ self.addEventListener("fetch", e => {
   const net = fetch(e.request).then(r => { if (r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); } return r; });
   e.respondWith(timeout(net, 3000).catch(() => caches.match(e.request, {ignoreSearch: true}).then(r => r || net.catch(() => caches.match("index.html")))));
 });
+// Push-сповіщення (FCM): показуємо самі, бо SDK Firebase у service worker не підключено.
+self.addEventListener("push", e => {
+  let d = {}; try { d = e.data ? e.data.json() : {}; } catch (_) { d = { notification: { body: e.data && e.data.text() } }; }
+  const n = d.notification || {}, extra = d.data || {};
+  e.waitUntil(self.registration.showNotification(n.title || extra.title || "CCNA тренажер", { body: n.body || extra.body || "Час повторити питання", icon: "icon-192.png", badge: "icon-192.png", tag: "ccna-daily", data: { url: extra.url || "./" } }));
+});
+self.addEventListener("notificationclick", e => {
+  e.notification.close(); const url = new URL((e.notification.data && e.notification.data.url) || "./", self.registration.scope).href;
+  e.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(ws => { for (const w of ws) if (w.url.startsWith(self.registration.scope)) { w.focus(); return w.navigate(url); } return clients.openWindow(url); }));
+});

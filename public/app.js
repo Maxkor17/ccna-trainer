@@ -89,8 +89,23 @@ async function loadFirebase(){
   const [appM,authM,fsM]=await Promise.all([import(base+"firebase-app.js"),import(base+"firebase-auth.js"),import(base+"firebase-firestore.js")]);
   const app=appM.initializeApp(cfg); const auth=authM.getAuth(app);
   let db; try{ db=fsM.initializeFirestore(app,{localCache:fsM.persistentLocalCache({tabManager:fsM.persistentMultipleTabManager()})}); }catch(e){ db=fsM.getFirestore(app); }
-  return {authM,fsM,auth,db};
+  return {authM,fsM,auth,db,app};
 }
+// ---- Push-сповіщення (Firebase Cloud Messaging) ----
+const VAPID="BEt1UWcuzuRLI94i1YjFQyRz1KcQAturkR-gqBpsgA0cWZAGtldFRBOsU5JQcokUtgFzpGFL9Engwh6s4aondr0";
+async function pushEnable(){
+  if(store.mode!=="db"||!store.F) throw new Error("Спершу увійдіть в акаунт (push прив'язується до нього)");
+  if(!("Notification" in window)||!("serviceWorker" in navigator)) throw new Error("Цей браузер не підтримує push. На iPhone — спершу встановіть тренажер на початковий екран (iOS 16.4+).");
+  const perm=await Notification.requestPermission(); if(perm!=="granted") throw new Error("Дозвіл на сповіщення не надано");
+  const m=await import("https://www.gstatic.com/firebasejs/"+FB_VER+"/firebase-messaging.js");
+  if(!(await m.isSupported())) throw new Error("FCM не підтримується в цьому браузері");
+  const reg=await navigator.serviceWorker.ready; const token=await m.getToken(m.getMessaging(store.F.app),{vapidKey:VAPID,serviceWorkerRegistration:reg});
+  const id=hashStr(token); const [h,mi]=(opts.remind||"19:00").split(":").map(Number);
+  await store.db.doc("push/"+id).set({token,hour:h,minute:mi||0,tz:Intl.DateTimeFormat().resolvedOptions().timeZone||"Europe/Kyiv",goal:opts.goal,ua:navigator.userAgent.slice(0,120),ts:Date.now()});
+  opts.pushId=id; lsSet(LS.opts,opts); return id; }
+async function pushDisable(){ if(opts.pushId&&store.db){ try{ await store.db.doc("push/"+opts.pushId).delete(); }catch(e){} }
+  try{ const m=await import("https://www.gstatic.com/firebasejs/"+FB_VER+"/firebase-messaging.js"); await m.deleteToken(m.getMessaging(store.F.app)); }catch(e){} delete opts.pushId; lsSet(LS.opts,opts); }
+async function pushSync(){ if(!opts.pushId||store.mode!=="db") return; const [h,mi]=(opts.remind||"19:00").split(":").map(Number); try{ await store.db.doc("push/"+opts.pushId).update({hour:h,minute:mi||0,goal:opts.goal,ts:Date.now()}); }catch(e){} }
 const plain=o=>JSON.parse(JSON.stringify(o)); // Firestore не приймає undefined
 function makeDb(F,uid){
   const {fsM,db}=F;
@@ -558,6 +573,8 @@ function renderSettings(){
     <div class="kv"><span>Підказувати англійські терміни в питаннях</span><span class="row">${seg("enTerms",[[true,"Так"],[false,"Ні"]])}</span></div>
     <p class="small muted" style="margin:6px 0">Інтервали повторення рахує алгоритм FSRS (як у сучасному Anki): він оцінює стабільність пам'яті для кожного питання і повертає його, коли ймовірність пригадати падає до 90%. На комп'ютері: 1–9 — варіант, Enter — перевірити/далі, F — сумнівне, ? — довідка.</p>
     <div class="kv"><span>Денна норма</span><span class="row">${seg("goal",[[10,"10"],[20,"20"],[30,"30"],[50,"50"]])}</span></div></div>
+  <div class="card"><h2>🔔 Push-сповіщення</h2><p class="small muted" style="margin:0 0 8px">Щодня у вибраний нижче час сервер перевіряє вашу денну норму і, якщо її ще не виконано, надсилає сповіщення: скільки лишилося і що серія днів під загрозою. Працює навіть із закритим тренажером. На iPhone — лише якщо тренажер встановлено на початковий екран.</p>
+    ${opts.pushId?`<div class="row"><span class="grow">✅ Увімкнено на цьому пристрої</span><button data-act="pushoff">Вимкнути</button></div>`:`<button class="primary" data-act="pushon">Увімкнути push</button>`}<p class="small muted" id="pushmsg" style="margin:6px 0 0"></p></div>
   <div class="card"><h2>Нагадування</h2><p class="small muted" style="margin:0 0 8px">Щоденне нагадування з'явиться у вашому календарі (Google, Apple, Outlook) і спрацює навіть із закритим тренажером. Відкрийте завантажений файл .ics на телефоні — календар запропонує додати подію.</p>
     <div class="row"><label class="small">Час</label><input type="time" id="remtime" value="${esc(opts.remind||"19:00")}" style="width:auto"><button class="primary" data-act="ics">📅 Додати в календар</button></div>
     <p class="small muted" style="margin:8px 0 0">${(()=>{const d=daily[dkey()]; const n=d?d.n||0:0; return n>=opts.goal?"✅ Сьогоднішню норму виконано.":"Сьогодні: "+n+"/"+opts.goal+" — до норми ще "+(opts.goal-n)+".";})()}</p></div>
@@ -981,6 +998,8 @@ document.addEventListener("click", async ev=>{
   if(act==="snapnow"){ const snaps=lsGet(LS.snaps,[]); snaps.unshift({ts:Date.now(),n:Object.keys(prog).length,json:exportJSON()}); lsSet(LS.snaps,snaps.slice(0,4));
     if(store.mode==="db"){ try{ const meta=store.db.doc("backups/meta"); const m=await meta.get(); const md=m.exists?(m.data()||{}):{}; const slot=((md.slot||0)+1)%SNAP_KEEP; await store.db.doc("backups/s"+slot).set({ts:Date.now(),n:Object.keys(prog).length,json:exportJSON()}); await meta.set({last:Date.now(),slot}); remoteSnaps=await loadRemoteSnaps(); }catch(e){} }
     render(); return; }
+  if(act==="pushon"){ const m=$("#pushmsg"); m.textContent="Підключення…"; try{ await pushEnable(); render(); }catch(e){ m.textContent="⚠ "+(e.message||e); } return; }
+  if(act==="pushoff"){ await pushDisable(); render(); return; }
   if(act==="ics"){ const t=($("#remtime")||{}).value||"19:00"; opts.remind=t; lsSet(LS.opts,opts); saveDownload("ccna-reminder.ics",makeICS(t),"text/calendar"); return; }
   if(act==="authgoogle"){ doAuth("google"); return; }
   if(act==="authlogin"){ doAuth("login"); return; }
@@ -1000,7 +1019,7 @@ document.addEventListener("click", async ev=>{
   if(act==="cheat"){ const tid=($("#modsel")||{}).value||opts.modTopic; opts.modTopic=tid; lsSet(LS.opts,opts); view="cheat"; render(); scrollTop(); return; }
   if(act==="module2"){ startSession("module", pickModule(opts.modTopic), "Тест модуля "+tlabel(opts.modTopic)); return; }
   if(act==="module"){ const tid=($("#modsel")||{}).value||opts.modTopic; opts.modTopic=tid; lsSet(LS.opts,opts); startSession("module", pickModule(tid), "Тест модуля "+tlabel(tid)); return; }
-  if(act==="setopt"){ const k=el.dataset.k; let v=el.dataset.v; if(v==="true"||v==="false") v=(v==="true"); else if(/^\d+$/.test(v)) v=Number(v); opts[k]=v; lsSet(LS.opts,opts); applyLook(); render(); return; }
+  if(act==="setopt"){ const k=el.dataset.k; let v=el.dataset.v; if(v==="true"||v==="false") v=(v==="true"); else if(/^\d+$/.test(v)) v=Number(v); opts[k]=v; lsSet(LS.opts,opts); if(k==="goal") pushSync(); applyLook(); render(); return; }
   if(act==="cadd"){ customDraft=null; customEdit=null; render(); return; }
   if(act==="csave"){ saveCustom(); return; }
   if(act==="cedit"){ customEdit=el.dataset.id; render(); scrollTop(); return; }
@@ -1079,6 +1098,7 @@ document.addEventListener("change", ev=>{
   if(t.id==="sbimport"&&t.files&&t.files[0]){ t.files[0].text().then(x=>{ let d; try{ d=JSON.parse(x); }catch(e){} if(!sbValid(d)){ alert("Це не файл топології"); return; } if(!confirm("Замінити поточну пісочницю імпортованою топологією?")) return; LAB.outs={}; sbMutate(z=>{ z.devs=d.devs; z.links=d.links; }); }); return; }
   if((t.id==="obdir"||t.id==="obfiles")&&t.files&&t.files.length){ importMd([...t.files]); return; }
   if((t.id==="sbA"||t.id==="sbB")&&LAB){ LAB[t.id]=t.value; render(); return; }
+  if(t.id==="remtime"){ opts.remind=t.value; lsSet(LS.opts,opts); pushSync(); return; }
   if(t.id==="examdate"){ opts.examDate=t.value; lsSet(LS.opts,opts); render(); return; }
   if(t.id==="cheatsel"){ opts.modTopic=t.value; lsSet(LS.opts,opts); render(); return; }
   if(t.dataset && t.dataset.act==="match" && S){ const k=S.i; const a=(S.ans[k]||[]).slice(); a[Number(t.dataset.i)]=t.value; S.ans[k]=a; S.confirmEnd=false; const y=window.scrollY; render(); try{window.scrollTo(0,y);}catch(e){} return; }
