@@ -362,6 +362,7 @@ function showDhcpBind(s){ let o="Bindings from all pools not associated with VRF
   for(const [ip,b] of Object.entries(s.dhcp.bind)) o+=ip.padEnd(20)+b.cid.padEnd(24)+"Nov 18 2026 09:30 PM    Automatic\n"; return o.trimEnd(); }
 function showDhcpPool(s){ return Object.values(s.dhcp.pools).map(p=>"\nPool "+p.name+" :\n Utilization mark (high/low)    : 100 / 0\n Total addresses                : "+(p.mask?Math.pow(2,32-maskLen(p.mask))-2:0)+"\n Leased addresses               : "+Object.values(s.dhcp.bind).filter(b=>b.pool===p.name).length+"\n Excluded addresses             : "+s.dhcp.excl.length+"\n 1 subnet is currently in the pool :\n Current index        IP address range                    Leased/Excluded/Total\n "+(p.net||"0.0.0.0").padEnd(20)+(p.net||"")+" - "+(p.net?n2ipT((ipToN(p.net)|~ipToN(p.mask))>>>0):"")).join("\n"); }
 function l3extra(i){ const L=[]; for(const h of i.helper||[]) L.push(" ip helper-address "+h); if(i.aclIn) L.push(" ip access-group "+i.aclIn+" in"); if(i.aclOut) L.push(" ip access-group "+i.aclOut+" out");
+  for(const x of i.v6||[]) L.push(" ipv6 address "+(x.eui?v6fmt(v6net(v6parse(x.addr),64))+"/64 eui-64":x.addr+"/"+x.len)); if(i.llStatic) L.push(" ipv6 address "+i.llStatic+" link-local"); if(i.v6on&&!(i.v6||[]).length&&!i.llStatic) L.push(" ipv6 enable");
   for(const [g,h] of Object.entries(i.hsrp||{})){ if(h.ip) L.push(" standby "+g+" ip "+h.ip); if(h.prio!==100) L.push(" standby "+g+" priority "+h.prio); if(h.preempt) L.push(" standby "+g+" preempt"); } if(i.hsrpV===2) L.push(" standby version 2"); if(i.cdpOff) L.push(" no cdp enable");
   if(i.natIn) L.push(" ip nat inside"); if(i.natOut) L.push(" ip nat outside"); if(i.ospfPid) L.push(" ip ospf "+i.ospfPid+" area "+i.ospfArea); if(i.ospfCost) L.push(" ip ospf cost "+i.ospfCost); if(i.ospfPrio!==1) L.push(" ip ospf priority "+i.ospfPrio);
   if(i.hello!==10) L.push(" ip ospf hello-interval "+i.hello); if(i.deadSet) L.push(" ip ospf dead-interval "+i.dead); if(i.ospfP2p) L.push(" ip ospf network point-to-point"); if(i.bw) L.push(" bandwidth "+i.bw); return L; }
@@ -414,6 +415,60 @@ function svcRun(s){ const v=s.svc; if(!v) return []; const L=[];
   for(const c of v.snmp) L.push("snmp-server community "+c.name+" "+(c.rw?"RW":"RO")+(c.acl?" "+c.acl:"")); if(v.location) L.push("snmp-server location "+v.location); if(v.contact) L.push("snmp-server contact "+v.contact);
   if(!v.cdp) L.push("no cdp run"); if(v.lldp) L.push("lldp run"); for(const n of v.ntp) L.push("ntp server "+n); return L; }
 
+// ================= IPv6 =================
+const V6MAX=(1n<<128n)-1n;
+function v6parse(s){ s=String(s||"").toLowerCase(); if(!/^[0-9a-f:]+$/.test(s)||s.indexOf(":")<0||(s.match(/::/g)||[]).length>1) return null;
+  const dbl=s.includes("::"); const [h,t]=dbl?s.split("::"):[s,""]; const hp=h?h.split(":"):[], tp=t?t.split(":"):[];
+  let parts; if(dbl){ const fill=8-hp.length-tp.length; if(fill<1) return null; parts=hp.concat(Array(fill).fill("0"),tp); } else parts=hp;
+  if(parts.length!==8||parts.some(p=>!/^[0-9a-f]{1,4}$/.test(p))) return null; return parts.reduce((a,p)=>(a<<16n)|BigInt(parseInt(p,16)),0n); }
+function v6fmt(n){ const g=[]; for(let i=7;i>=0;i--) g.push(Number((n>>BigInt(i*16))&0xffffn).toString(16).toUpperCase());
+  let bs=-1,bl=0; for(let i=0;i<8;){ if(g[i]==="0"){ let j=i; while(j<8&&g[j]==="0") j++; if(j-i>bl&&j-i>=2){ bs=i; bl=j-i; } i=j; } else i++; }
+  if(bs<0) return g.join(":"); return g.slice(0,bs).join(":")+"::"+g.slice(bs+bl).join(":"); }
+const v6mask=len=>len===0?0n:(V6MAX ^ ((1n<<BigInt(128-len))-1n));
+const v6net=(a,len)=>a & v6mask(len);
+const v6same=(a,b,len)=>{ const x=v6parse(a), y=v6parse(b); return x!==null&&y!==null&&v6net(x,len)===v6net(y,len); };
+const v6eq=(a,b)=>{ const x=v6parse(a), y=v6parse(b); return x!==null&&x===y; };
+function v6pfx(t){ const m=String(t).match(/^([0-9a-fA-F:]+)\/(\d{1,3})$/); if(!m) return null; const a=v6parse(m[1]); const len=Number(m[2]); if(a===null||len>128) return null; return {a,len,addr:v6fmt(a)}; }
+function hmac(key){ let h=5381; for(let i=0;i<key.length;i++) h=((h<<5)+h+key.charCodeAt(i))>>>0; const x=h.toString(16).padStart(8,"0"); return "00"+x.slice(0,2)+"."+x.slice(2,6)+"."+x.slice(6,8)+"0"+(key.length%10); }
+function eui64(mac){ const h=mac.replace(/\./g,""); const b=[]; for(let i=0;i<12;i+=2) b.push(parseInt(h.slice(i,i+2),16)); b[0]^=0x02; const by=b.slice(0,3).concat([0xff,0xfe],b.slice(3)); return by.reduce((a,x)=>(a<<8n)|BigInt(x),0n); }
+const ifMac=(s,i)=>hmac((s.mac||"")+"|"+i.name.split(".")[0]);
+const v6ll=(s,i)=>v6fmt((0xfe80n<<112n)|eui64(ifMac(s,i)));
+const v6on=i=>!!(i.v6on||(i.v6&&i.v6.length));
+function v6list(s,i){ if(!i||!v6on(i)) return []; return [{addr:i.llStatic||v6ll(s,i),len:64,ll:true}].concat(i.v6||[]); }
+add(C,"ipv6 unicast-routing",(s)=>{ if(!s.l3) return INV; s.v6routing=true; });
+add(C,"no ipv6 unicast-routing",(s)=>{ s.v6routing=false; });
+const v6route=(s,p,nh,ifc,ad)=>{ const P=v6pfx(p); if(!P) return "% Invalid IPv6 prefix"; if(nh&&v6parse(nh)===null) return INV; if(nh&&/^fe80/i.test(nh)&&!ifc) return "% Interface has to be specified for a link-local nexthop";
+  s.routes6=(s.routes6||[]).filter(r=>!(r.pfx===v6fmt(v6net(P.a,P.len))&&r.len===P.len&&r.nh===(nh?v6fmt(v6parse(nh)):null)&&r.ifc===(ifc||null))); s.routes6.push({pfx:v6fmt(v6net(P.a,P.len)),len:P.len,nh:nh?v6fmt(v6parse(nh)):null,ifc:ifc||null,ad:ad||1}); };
+add(C,"ipv6 route <w> <v6>",(s,a)=>v6route(s,a[0],a[1]));
+add(C,"ipv6 route <w> <v6> <n>",(s,a)=>v6route(s,a[0],a[1],null,a[2]));
+add(C,"ipv6 route <w> <if>",(s,a)=>{ if(!s.ifs[a[1]]) return INV; return v6route(s,a[0],null,a[1]); });
+add(C,"ipv6 route <w> <if> <v6>",(s,a)=>{ if(!s.ifs[a[1]]) return INV; return v6route(s,a[0],a[2],a[1]); });
+add(C,"no ipv6 route <w> <rest>",(s,a)=>{ const P=v6pfx(a[0]); if(!P) return INV; const net=v6fmt(v6net(P.a,P.len)); s.routes6=(s.routes6||[]).filter(r=>!(r.pfx===net&&r.len===P.len)); });
+add("if","ipv6 address <w>",F((i,a,s)=>{ if(i.switchport&&!i.svi) return "% IPv6 addresses may not be configured on L2 links."; const P=v6pfx(a[0]); if(!P) return "% Invalid IPv6 address"; i.v6=(i.v6||[]).filter(x=>!v6same(x.addr,P.addr,P.len)); i.v6.push({addr:P.addr,len:P.len}); i.v6on=true; }));
+add("if","ipv6 address <w> eui-64",F((i,a,s)=>{ if(i.switchport&&!i.svi) return INV; const P=v6pfx(a[0]); if(!P||P.len!==64) return "% Invalid IPv6 prefix"; const addr=v6fmt(v6net(P.a,64)|eui64(ifMac(s,i))); i.v6=(i.v6||[]).filter(x=>!v6same(x.addr,addr,64)); i.v6.push({addr,len:64,eui:true}); i.v6on=true; }));
+add("if","ipv6 address <v6> link-local",F((i,a)=>{ i.llStatic=v6fmt(v6parse(a[0])); i.v6on=true; }));
+add("if","ipv6 enable",F(i=>{ i.v6on=true; }));
+add("if","no ipv6 address",F(i=>{ i.v6=[]; i.llStatic=null; }));
+add("if","no ipv6 address <w>",F((i,a)=>{ const P=v6pfx(a[0]); if(!P) return INV; i.v6=(i.v6||[]).filter(x=>!v6eq(x.addr,P.addr)); }));
+add("if","no ipv6 enable",F(i=>{ i.v6on=false; }));
+for(const m of ["user","exec"]){
+  add(m,"show ipv6 interface brief",(s)=>{ let o=""; for(const i of Object.values(s.ifs).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}))){ if(i.switchport&&!i.svi) continue; const [st,pr]=ifStatus(s,i); o+=longIf(i.name).padEnd(23)+"["+st.replace("administratively down","administratively down")+"/"+pr+"]\n"+(v6on(i)?v6list(s,i).map(x=>"    "+x.addr).join("\n"):"    unassigned")+"\n"; } return o.trimEnd(); });
+  add(m,"show ipv6 route",(s)=>showRoute6(s,null)); add(m,"show ipv6 route static",(s)=>showRoute6(s,"S"));
+  add(m,"ping <v6>",(s,a)=>s.net? s.net.ping6Cli(s,v6fmt(v6parse(a[0]))) : "Sending 5, 100-byte ICMP Echos to "+a[0]+", timeout is 2 seconds:\n.....\nSuccess rate is 0 percent (0/5)");
+  add(m,"ping ipv6 <v6>",(s,a)=>s.net? s.net.ping6Cli(s,v6fmt(v6parse(a[0]))) : "% No route");
+  add(m,"show mac address-table",(s)=>s.net? s.net.macTable(s) : "          Mac Address Table\n-------------------------------------------\n\nVlan    Mac Address       Type        Ports\n----    -----------       --------    -----\nTotal Mac Addresses for this criterion: 0");
+  add(m,"show mac address-table dynamic",(s)=>s.net? s.net.macTable(s) : "");
+}
+add("exec","debug ip ospf adj",(s)=>{ s.dbgOspf=true; return "OSPF adjacency debugging is on"+(s.net? "\n"+s.net.ospfDebug(s) : ""); });
+add("exec","undebug all",(s)=>{ s.dbgOspf=false; return "All possible debugging has been turned off"; });
+add("exec","no debug all",(s)=>{ s.dbgOspf=false; return "All possible debugging has been turned off"; });
+function activeStatics6(s){ return (s.routes6||[]).filter(r=>{ if(r.ifc){ const i=s.ifs[r.ifc]; return i&&ifStatus(s,i)[1]==="up"; } return Object.values(s.ifs).some(i=>ifStatus(s,i)[1]==="up"&&(i.v6||[]).some(x=>v6same(x.addr,r.nh,x.len))); }); }
+function showRoute6(s,only){ const L=[]; const up=Object.values(s.ifs).filter(i=>ifStatus(s,i)[1]==="up"&&v6on(i));
+  if(only!=="S") for(const i of up) for(const x of i.v6||[]){ L.push("C   "+v6fmt(v6net(v6parse(x.addr),x.len))+"/"+x.len+" [0/0]\n     via "+longIf(i.name)+", directly connected"); L.push("L   "+x.addr+"/128 [0/0]\n     via "+longIf(i.name)+", receive"); }
+  for(const r of activeStatics6(s)) L.push("S   "+r.pfx+"/"+r.len+" ["+r.ad+"/0]\n     via "+(r.nh?r.nh+(r.ifc?", "+longIf(r.ifc):""):longIf(r.ifc)+", directly connected"));
+  if(only!=="S") L.push("L   FF00::/8 [0/0]\n     via Null0, receive");
+  return "IPv6 Routing Table - default - "+L.length+" entries\nCodes: C - Connected, L - Local, S - Static, U - Per-user Static route\n       B - BGP, R - RIP, O - OSPF Intra, OI - OSPF Inter, ND - ND Default\n\n"+L.join("\n"); }
+
 const INV="% Invalid input detected at '^' marker.";
 function parseRange(str){
   const out=[];
@@ -443,6 +498,7 @@ function valid(ph,tok){
     case "<list>": return !!parseList(tok);
     case "<if>": return !!normIf(tok);
     case "<ip>": return ipRe.test(tok);
+    case "<v6>": return v6parse(tok)!==null;
     case "<mask>": return ipRe.test(tok);
   } return false;
 }
@@ -537,7 +593,7 @@ function showIpBrief(s){
 }
 function showStatus(s){ let o="Port      Name               Status       Vlan       Duplex  Speed Type\n";
   for(const i of Object.values(s.ifs).filter(x=>isPhys(x.name))){ const st=i.shutdown?"disabled":i.connected?"connected":"notconnect"; o+=i.name.padEnd(10)+(i.desc||"").slice(0,18).padEnd(19)+st.padEnd(13)+(operTrunk(i)?"trunk":!i.switchport?"routed":String(i.accessVlan)).padEnd(11)+"auto".padEnd(8)+"auto  "+(i.name.startsWith("Gi")?"10/100/1000BaseTX":"10/100BaseTX")+"\n"; } return o; }
-function showIface(s,n){ const i=s.ifs[n]; if(!i) return INV; const [st,pr]=ifStatus(s,i); return longIf(n)+" is "+st+", line protocol is "+pr+(i.connected&&!i.shutdown?" (connected)":"")+"\n  Hardware is "+(i.svi?"EtherSVI":"Fast Ethernet")+", address is "+s.mac+"\n"+(i.ip?"  Internet address is "+i.ip+"/"+maskLen(i.mask)+"\n":"")+"  MTU 1500 bytes, BW "+(n.startsWith("Gi")?"1000000":n.startsWith("Po")?String(1000000*Object.values(s.ifs).filter(p=>p.chGroup===Number(n.slice(2))).length):"100000")+" Kbit/sec\n  ..."; }
+function showIface(s,n){ const i=s.ifs[n]; if(!i) return INV; const [st,pr]=ifStatus(s,i); return longIf(n)+" is "+st+", line protocol is "+pr+(i.connected&&!i.shutdown?" (connected)":"")+"\n  Hardware is "+(i.svi?"EtherSVI":n.startsWith("Gi")?"Gigabit Ethernet":"Fast Ethernet")+", address is "+s.mac+"\n"+(i.ip?"  Internet address is "+i.ip+"/"+maskLen(i.mask)+"\n":"")+"  MTU 1500 bytes, BW "+(n.startsWith("Gi")?"1000000":n.startsWith("Po")?String(1000000*Object.values(s.ifs).filter(p=>p.chGroup===Number(n.slice(2))).length):"100000")+" Kbit/sec\n  "+((i._dupBad||(i.duplex==="half"?"half":"full"))==="half"?"Half":"Full")+"-duplex, "+(n.startsWith("Gi")?"1000Mb/s":"100Mb/s")+", media type is 10/100/1000BaseTX\n  5 minute input rate 2000 bits/sec, 3 packets/sec\n     "+(i._dupBad?"1843 input errors, 1211 CRC, 0 frame, 0 overrun, 0 ignored\n     0 output errors, "+(i._dupBad==="half"?"0":"0")+" collisions, 0 interface resets\n     "+(i._dupBad==="half"?"512 late collision":"0 late collision")+", 0 deferred":"0 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored\n     0 output errors, 0 collisions, 0 interface resets\n     0 late collision, 0 deferred"); }
 function showEc(s){
   const groups={}; for(const i of Object.values(s.ifs)) if(i.chGroup){ (groups[i.chGroup]=groups[i.chGroup]||[]).push(i); }
   let o="Flags:  D - down        P - bundled in port-channel\n        I - stand-alone s - suspended\n        S - Layer2      R - Layer3\n        U - in use      N - not in use, no aggregation\n\nNumber of channel-groups in use: "+Object.keys(groups).length+"\nNumber of aggregators:           "+Object.keys(groups).length+"\n\nGroup  Port-channel  Protocol    Ports\n------+-------------+-----------+-----------------------------------------------\n";
@@ -627,6 +683,7 @@ function showRun(s){
   for(const d of s.nat.dyn) L.push("ip nat inside source list "+d.acl+(d.pool?" pool "+d.pool:" interface "+longIf(d.ifc))+(d.overload?" overload":""));
   for(const x of s.nat.statics) L.push("ip nat inside source static "+x.local+" "+x.global);
   { const sv=svcRun(s); if(sv.length) L.push(...sv,"!"); }
+  if(s.v6routing) L.push("ipv6 unicast-routing","!"); for(const r of s.routes6||[]) L.push("ipv6 route "+r.pfx+"/"+r.len+(r.ifc?" "+longIf(r.ifc):"")+(r.nh?" "+r.nh:"")+(r.ad>1?" "+r.ad:""));
   if(s.defaultGw) L.push("ip default-gateway "+s.defaultGw,"!");
   for(const r of s.routes) L.push("ip route "+r.net+" "+r.mask+(r.ifc?" "+longIf(r.ifc):"")+(r.nh?" "+r.nh:"")+(r.ad&&r.ad!==1?" "+r.ad:""));
   if(s.routes.length) L.push("!");
@@ -745,7 +802,7 @@ function Net(def){
   const N={dev:{}, links:[], logs:[], seenMsgs:new Set()};
   const isHost=d=>d&&(d.type==="pc"||d.type==="server");
   for(const [name,d] of Object.entries(def.devices)){
-    if(d.type==="pc"||d.type==="server") N.dev[name]={name,type:d.type,ip:d.ip||null,mask:d.mask||null,gw:d.gw||null,port:"Fa0",dhcp:!!d.dhcp,services:d.services||(d.type==="server"?[80]:[])};
+    if(d.type==="pc"||d.type==="server") N.dev[name]={name,type:d.type,ip:d.ip||null,mask:d.mask||null,gw:d.gw||null,port:"Fa0",dhcp:!!d.dhcp,services:d.services||(d.type==="server"?[80]:[]),ip6:d.ip6||null,slaac:!!d.slaac};
     else { const st=newState({hostname:name,router:d.type==="router",l3:d.l3||d.type==="router",vlans:d.vlans,setup:d.setup}); st.net=N; st.devName=name; st.type=d.type; if(d.mac) st.mac=d.mac; N.dev[name]=st; }
   }
   for(const [a,pa,b,pb] of def.links){ N.links.push({a,pa,b,pb}); for(const [d,p] of [[a,pa],[b,pb]]){ const x=N.dev[d]; if(!isHost(x)&&x.ifs[p]) x.ifs[p].connected=true; } }
@@ -770,8 +827,11 @@ function Net(def){
       if(ia&&A.type==="switch"&&ia.chGroup&&A.ifs["Po"+ia.chGroup]) A.ifs["Po"+ia.chGroup]._oper=ia._oper;
       if(ib&&B.type==="switch"&&ib.chGroup&&B.ifs["Po"+ib.chGroup]) B.ifs["Po"+ib.chGroup]._oper=ib._oper;
     }
-    // CDP: невідповідність native VLAN
+    // CDP: невідповідність native VLAN і дуплексу
     const msgs=[];
+    for(const l of N.links){ const A=N.dev[l.a], B=N.dev[l.b]; if(isHost(A)||isHost(B)) continue; const ia=A.ifs[l.pa], ib=B.ifs[l.pb]; if(!ia||!ib) continue; delete ia._dupBad; delete ib._dupBad;
+      const da=ia.duplex||"auto", db=ib.duplex||"auto"; const effA= da==="auto"? (db==="auto"?"full":"half") : da, effB= db==="auto"? (da==="auto"?"full":"half") : db;
+      if(effA!==effB&&!ia.shutdown&&!ib.shutdown){ ia._dupBad=effA; ib._dupBad=effB; msgs.push([l.a,"%CDP-4-DUPLEX_MISMATCH: duplex mismatch discovered on "+longIf(l.pa)+" ("+(effA==="full"?"full":"not full")+" duplex), with "+l.b+" "+longIf(l.pb)+" ("+(effB==="full"?"full":"not full")+" duplex)."]); } }
     for(const l of N.links){ const A=N.dev[l.a], B=N.dev[l.b]; if(!isSw(A)||!isSw(B)) continue; const ia=eff(A,l.pa), ib=eff(B,l.pb);
       if(ia&&ib&&!ia.shutdown&&!ib.shutdown&&operTrunk(ia)&&operTrunk(ib)&&ia.nativeVlan!==ib.nativeVlan){
         msgs.push([l.a,"%CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on "+longIf(l.pa)+" ("+ia.nativeVlan+"), with "+l.b+" "+longIf(l.pb)+" ("+ib.nativeVlan+")."]);
@@ -789,12 +849,12 @@ function Net(def){
     const vips=(devName,ifc,path)=>{ if(opt.noVip||!ifc||!ifc.hsrp) return; for(const [g,h] of Object.entries(ifc.hsrp)) if(h.ip&&hsrpActive(devName,ifc.name,Number(g))) res.push({dev:devName,ip:h.ip,mask:ifc.mask,ifn:ifc.name,kind:"l3",vip:true,mac:(ifc.hsrpV===2?"0000.0c9f.f"+Number(g).toString(16).padStart(3,"0"):"0000.0c07.ac"+Number(g).toString(16).padStart(2,"0")),path}); };
     const enter=(devName,port,tag,path)=>{
       path=path||[]; const d=N.dev[devName]; if(!d) return;
-      if(isHost(d)){ if(tag===null&&d.ip) res.push({dev:devName,ip:d.ip,mask:d.mask,kind:"pc",path}); return; }
+      if(isHost(d)){ if(tag===null&&(d.ip||d.ip6||d.slaac)) res.push({dev:devName,ip:d.ip,mask:d.mask,kind:"pc",path}); return; }
       if(d.type==="router"||(d.ifs[port]&&!d.ifs[port].switchport)){
         const ph=d.ifs[port]; if(!ph||ph.shutdown) return;
-        if(tag===null && ph.ip){ res.push({dev:devName,ip:ph.ip,mask:ph.mask,ifn:port,kind:"l3",path}); vips(devName,ph,path); }
+        if(tag===null && (ph.ip||v6on(ph))){ res.push({dev:devName,ip:ph.ip,mask:ph.mask,ifn:port,kind:"l3",path}); if(ph.ip) vips(devName,ph,path); }
         if(tag===null && ph.ip && ph.natOut){ const g=new Set(d.nat.statics.map(x=>x.global)); for(const pl of Object.values(d.nat.pools)) for(let n=ipToN(pl.start);n<=ipToN(pl.end)&&n-ipToN(pl.start)<64;n++) g.add(n2ip(n)); for(const ip of g) if(ip!==ph.ip&&sameNet(ip,ph.ip,ph.mask)) res.push({dev:devName,ip,mask:ph.mask,ifn:port,kind:"l3",proxy:true,path}); }
-        for(const i of Object.values(d.ifs)) if(i.sub&&i.name.split(".")[0]===port&&!i.shutdown&&i.ip&&i.encap&&((tag===null&&i.native)||(tag!==null&&i.encap===tag))){ res.push({dev:devName,ip:i.ip,mask:i.mask,ifn:i.name,kind:"l3",path}); vips(devName,i,path); }
+        for(const i of Object.values(d.ifs)) if(i.sub&&i.name.split(".")[0]===port&&!i.shutdown&&(i.ip||v6on(i))&&i.encap&&((tag===null&&i.native)||(tag!==null&&i.encap===tag))){ res.push({dev:devName,ip:i.ip,mask:i.mask,ifn:i.name,kind:"l3",path}); vips(devName,i,path); }
         return; }
       const i=eff(d,port); if(!i||i.shutdown||!i.connected) return;
       let v; if(operTrunk(i)){ v= tag===null? i.nativeVlan : (tag===i.nativeVlan? null : tag); if(v===null) return; if(i.allowed&&!i.allowed.includes(v)) return; }
@@ -803,7 +863,7 @@ function Net(def){
     };
     if(start.sw) q.push([start.sw,start.v,[],"Vlan"+start.v,null]); else enter(start.dev,start.port,start.tag,[]);
     while(q.length){ const [dn,v,path,inp,tagIn]=q.shift(); const k=dn+"|"+v; if(seen.has(k)) continue; seen.add(k); const sw=N.dev[dn];
-      const svi=sw.ifs["Vlan"+v]; if(svi&&svi.ip&&!svi.shutdown){ const pth=inp==="Vlan"+v?[]:path.concat([{dev:dn,inp,tagIn,v,out:"Vlan"+v}]); res.push({dev:dn,ip:svi.ip,mask:svi.mask,ifn:"Vlan"+v,kind:sw.ipRouting?"l3":"svi",path:pth}); vips(dn,svi,pth); }
+      const svi=sw.ifs["Vlan"+v]; if(svi&&(svi.ip||v6on(svi))&&!svi.shutdown){ const pth=inp==="Vlan"+v?[]:path.concat([{dev:dn,inp,tagIn,v,out:"Vlan"+v}]); res.push({dev:dn,ip:svi.ip,mask:svi.mask,ifn:"Vlan"+v,kind:sw.ipRouting?"l3":"svi",path:pth}); vips(dn,svi,pth); }
       for(const p of Object.keys(sw.ifs)){ if(!isPhys(p)) continue; const ei=eff(sw,p); const c=carries(sw,ei,v); if(!c) continue; const pr=N.peer(dn,p); if(pr) enter(pr.dev,pr.port,c.tag,path.concat([{dev:dn,inp,tagIn,v,out:p,tagOut:c.tag,trunk:operTrunk(ei)}])); } }
     return res;
   }
@@ -916,14 +976,15 @@ function Net(def){
     cands.sort((a,b)=>b.len-a.len||a.ad-b.ad); return cands[0]||null;
   }
   const T=(c,o)=>{ if(c&&c.tr) c.tr.push(o); };
-  const macOf=(dev,ifn)=>{ const d=N.dev[dev]; const key=isHost(d)? dev : dev+"|"+String(ifn||"").split(".")[0]; let h=5381; for(let i=0;i<key.length;i++) h=((h<<5)+h+key.charCodeAt(i))>>>0; const x=h.toString(16).padStart(8,"0");
+  const macOf=(dev,ifn)=>{ const d=N.dev[dev]; const key=isHost(d)? dev : dev+"|"+String(ifn||"").split(".")[0]; let h=0x811c9dc5; for(let i=0;i<key.length;i++){ h^=key.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } h^=h>>>13; h=Math.imul(h,0x5bd1e995)>>>0; h^=h>>>15; const x=(h>>>0).toString(16).padStart(8,"0");
     return isHost(d)? "0050.79"+x.slice(0,2)+"."+x.slice(2,6) : "00"+(d.type==="router"?"1a":"19")+"."+x.slice(0,4)+"."+x.slice(4,8); };
   function l2Trace(c,from,fromIf,e,pkt){
     if(!c||!c.tr) return; const srcMac=macOf(from,fromIf), dstMac=e.mac||macOf(e.dev,e.ifn);
     T(c,{dev:from,k:"arp",text:"ARP: «Хто має "+e.ip+"?» (broadcast) → відповідає "+e.dev+(e.ifn?" "+longIf(e.ifn):"")+": "+dstMac+(e.proxy?" (proxy ARP для адреси NAT)":"")+(e.vip?" (віртуальний MAC HSRP — відповідає активний маршрутизатор)":"")});
-    T(c,{dev:from,k:"l2",text:"Кадр Ethernet: src MAC "+srcMac+" → dst MAC "+dstMac+"; усередині IP "+pkt.src+" → "+pkt.dst});
+    const frame=tag=>({dmac:dstMac,smac:srcMac,tag:tag||null,ip:{src:pkt.src,dst:pkt.dst,ttl:pkt.ttl,proto:pkt.proto,sport:pkt.sport,dport:pkt.dport,reply:!!pkt.reply}});
+    T(c,{dev:from,k:"l2",frame:frame(null),text:"Кадр Ethernet: src MAC "+srcMac+" → dst MAC "+dstMac+"; усередині IP "+pkt.src+" → "+pkt.dst});
     let prev=from;
-    for(const h of e.path||[]){ T(c,{dev:h.dev,k:"sw",link:[prev,h.dev],text:h.dev+": кадр прийшов на "+h.inp+(h.tagIn?" з тегом 802.1Q "+h.tagIn:" без тегу")+" → VLAN "+h.v+" → за MAC-таблицею "+(String(h.out).startsWith("Vlan")?"до власного SVI "+h.out:"вийшов з "+h.out+(h.tagOut?" з тегом 802.1Q "+h.tagOut:(h.trunk?" без тегу (native VLAN "+h.v+")":" без тегу (access-порт)")))}); prev=h.dev; }
+    for(const h of e.path||[]){ T(c,{dev:h.dev,k:"sw",link:[prev,h.dev],frame:frame(h.tagOut),text:h.dev+": кадр прийшов на "+h.inp+(h.tagIn?" з тегом 802.1Q "+h.tagIn:" без тегу")+" → VLAN "+h.v+" → за MAC-таблицею "+(String(h.out).startsWith("Vlan")?"до власного SVI "+h.out:"вийшов з "+h.out+(h.tagOut?" з тегом 802.1Q "+h.tagOut:(h.trunk?" без тегу (native VLAN "+h.v+")":" без тегу (access-порт)")))}); prev=h.dev; }
     if(prev!==e.dev) T(c,{dev:e.dev,k:"l2",link:[prev,e.dev],text:"Кадр доставлено на "+e.dev+(e.ifn?" "+longIf(e.ifn):"")});
   }
   function l2To(d,exitIf,target,pkt,c){
@@ -948,7 +1009,7 @@ function Net(def){
     T(c,{dev:devName,k:"route",text:devName+": найдовший збіг для "+pkt.dst+" — "+r.code+" "+r.pfx+(r.ad?" [AD "+r.ad+"]":"")+(r.nh?" → next-hop "+r.nh:" (мережа підключена напряму)")+" через "+longIf(exitIf)+(inIf?"; TTL зменшено на 1":"")});
     if(inIf && d.ifs[inIf].natIn && d.ifs[exitIf] && d.ifs[exitIf].natOut){ const before=pkt.src; const e=natOutbound(d,pkt); if(e){ T(c,{dev:devName,k:"fail",text:"🔄 "+e}); return {ok:false,why:e}; } T(c,{dev:devName,k:"nat",text:before!==pkt.src?"🔄 NAT (inside → outside): джерело "+before+" → "+pkt.src+(pkt.sport&&pkt.proto!=="icmp"?":"+pkt.sport:""):"🔄 NAT: пакет не підпадає під жодне правило — без трансляції"}); }
     if(inIf){ const b=aclBlocks(d,exitIf,pkt,"out"); if(b){ T(c,{dev:devName,k:"fail",text:"🛡 "+b}); return {ok:false,why:b,acl:true,at:devName}; } if(d.ifs[exitIf]&&d.ifs[exitIf].aclOut) T(c,{dev:devName,k:"acl",text:"🛡 ACL "+d.ifs[exitIf].aclOut+" (out) дозволяє пакет"}); }
-    if(inIf) c.hops.push(d.ifs[inIf].ip||"?");
+    if(inIf){ c.hops.push(d.ifs[inIf].ip||"?"); pkt.ttl=(pkt.ttl||255)-1; }
     return l2To(d,exitIf,target,pkt,c);
   }
   function originate(devName,pkt,c){
@@ -976,17 +1037,70 @@ function Net(def){
     proto=proto||"icmp"; const src=srcIpOf(fromDev,dst); const fd=N.dev[fromDev]; const tr=N.counting;
     if(!src) return {ok:false,why:fromDev+": немає IP-адреси"+(fd.dhcp?" (виконайте ipconfig /renew)":""),hops:[]};
     N._sp=((N._sp||0)+1)%1000; const pkt={src,dst,proto,dport:proto==="icmp"?null:dport,sport:proto==="icmp"?N._sp+1:49152+N._sp};
-    const c={hops:[],ttl:16,tr:tr?[]:null}; const f=originate(fromDev,pkt,c);
+    pkt.ttl=isHost(fd)?128:255; const c={hops:[],ttl:16,tr:tr?[]:null}; const f=originate(fromDev,pkt,c);
     const save=(res,back)=>{ if(tr) N.lastFlow={from:fromDev,dst,proto,dport,ok:res.ok,why:res.why,fwd:c.tr,back:back||[]}; return res; };
     if(!f.ok) return save(Object.assign(f,{hops:c.hops}));
     const td=N.dev[f.dev];
     if(proto!=="icmp"&&!(isHost(td)&&(td.services||[]).includes(dport))){ T(c,{dev:f.dev,k:"fail",text:f.dev+" не слухає порт "+dport+" — відповідає TCP RST (connection refused)"}); return save({ok:false,refused:true,why:f.dev+" не слухає TCP-порт "+dport+" (connection refused)",hops:c.hops}); }
-    const rp={src:f.pkt.dst,dst:f.pkt.src,proto,dport:f.pkt.sport,sport:f.pkt.dport,reply:true};
+    const rp={src:f.pkt.dst,dst:f.pkt.src,proto,dport:f.pkt.sport,sport:f.pkt.dport,reply:true,ttl:isHost(td)?128:255};
     const c2={hops:[],ttl:16,tr:tr?[]:null}; const b=originate(f.dev,rp,c2);
     if(!b.ok) return save({ok:false,why:"Запит дійшов до "+f.dev+" ("+dst+"), але відповідь не повертається: "+b.why,back:true,hops:c.hops,srcSeen:f.pkt.src},c2.tr);
     if(b.dev!==fromDev) return save({ok:false,why:"Відповідь потрапила на "+b.dev+" замість "+fromDev,back:true,hops:c.hops},c2.tr);
     return save({ok:true,hops:c.hops,dev:f.dev,srcSeen:f.pkt.src},c2.tr);
   };
+  // ---------- IPv6: SLAAC, NDP, пересилання ----------
+  const hostMac=name=>{ const d=N.dev[name]; return d? macOf(name,"Fa0") : null; };
+  function hostV6(h){ if(h.ip6) return h.ip6; if(!h.slaac) return null;
+    const pr=N.peer(h.name,"Fa0"); if(!pr) return null; for(const e of domain({dev:pr.dev,port:pr.port,tag:null})){ if(e.kind==="pc") continue; const d=N.dev[e.dev]; const i=d.ifs[e.ifn]; if(!i||!d.v6routing||ifStatus(d,i)[1]!=="up") continue;
+      const g=(i.v6||[]).find(x=>x.len===64); if(!g) continue; const iid=eui64(hostMac(h.name).replace(/^(..)(..)\.(....)\.(....)$/,"$1$2.$3.$4")); return {addr:v6fmt(v6net(v6parse(g.addr),64)|iid),len:64,gw:i.llStatic||v6ll(d,i),slaac:true,router:e.dev}; }
+    return null; }
+  N.hostV6=name=>hostV6(N.dev[name]); N.hostLL=name=>v6fmt((0xfe80n<<112n)|eui64(hostMac(name)));
+  const v6of=e=>{ const d=N.dev[e.dev]; if(isHost(d)){ const h=hostV6(d); return h?[h.addr,v6fmt((0xfe80n<<112n)|eui64(hostMac(e.dev)))]:[]; } const i=d.ifs[e.ifn]; return i&&ifStatus(d,i)[1]==="up"? v6list(d,i).map(x=>x.addr) : []; };
+  function owns6(dev,a){ const d=N.dev[dev]; if(isHost(d)){ const h=hostV6(d); return !!h&&v6eq(h.addr,a); } return Object.values(d.ifs).some(i=>ifStatus(d,i)[1]==="up"&&v6list(d,i).some(x=>v6eq(x.addr,a))); }
+  function lookup6(d,dst){ const c=[]; for(const i of Object.values(d.ifs)){ if(ifStatus(d,i)[1]!=="up") continue; for(const x of i.v6||[]) if(v6same(x.addr,dst,x.len)) c.push({len:x.len,ad:0,ifn:i.name,code:"C",pfx:v6fmt(v6net(v6parse(x.addr),x.len))+"/"+x.len}); }
+    for(const r of activeStatics6(d)) if(v6same(r.pfx,dst,r.len)) c.push({len:r.len,ad:r.ad,nh:r.nh,ifn:r.ifc,code:"S",pfx:r.pfx+"/"+r.len});
+    c.sort((a,b)=>b.len-a.len||a.ad-b.ad); return c[0]||null; }
+  function ndp(c,from,target,e){ T(c,{dev:from,k:"arp",text:"NDP: Neighbor Solicitation «хто має "+target+"?» (multicast FF02::1:FF"+target.split(":").pop().padStart(4,"0").slice(-2)+":…) → Neighbor Advertisement від "+e.dev+(e.ifn?" "+longIf(e.ifn):"")}); }
+  function l2To6(d,exitIf,target,pkt,c){ const e=fromIface(d,exitIf).find(x=>!(x.dev===d.devName&&x.ifn===exitIf)&&v6of(x).some(a=>v6eq(a,target)));
+    if(!e){ T(c,{dev:d.devName,k:"fail",text:"NDP для "+target+" без відповіді"}); return {ok:false,why:d.devName+": NDP для "+target+" через "+longIf(exitIf)+" без відповіді",arp:true}; }
+    ndp(c,d.devName,target,e); for(const h of e.path||[]) T(c,{dev:h.dev,k:"sw",text:h.dev+": кадр у VLAN "+h.v+" "+h.inp+" → "+h.out+(h.tagOut?" (тег "+h.tagOut+")":"")});
+    const nd=N.dev[e.dev]; if(isHost(nd)) return owns6(e.dev,pkt.dst)? (T(c,{dev:e.dev,k:"ok",text:e.dev+" прийняв IPv6-пакет"}),{ok:true,dev:e.dev,pkt}) : {ok:false,why:"Пакет потрапив на хост "+e.dev};
+    return routerIn6(e.dev,e.ifn,pkt,c); }
+  function routerIn6(dev,inIf,pkt,c){ const d=N.dev[dev]; if(c.ttl--<=0) return {ok:false,why:"Hop Limit вичерпано — петля маршрутизації"};
+    if(owns6(dev,pkt.dst)){ T(c,{dev,k:"ok",text:dev+": адреса "+pkt.dst+" моя — доставлено"}); return {ok:true,dev,pkt}; }
+    if(!d.v6routing){ T(c,{dev,k:"fail",text:dev+": ipv6 unicast-routing вимкнено — маршрутизатор не пересилає IPv6"}); return {ok:false,why:dev+": не увімкнено ipv6 unicast-routing",noroute:true}; }
+    const r=lookup6(d,pkt.dst); if(!r){ T(c,{dev,k:"fail",text:dev+": немає IPv6-маршруту до "+pkt.dst}); return {ok:false,why:dev+": немає IPv6-маршруту до "+pkt.dst+" (show ipv6 route)",noroute:true}; }
+    let exitIf=r.ifn, target=pkt.dst; if(r.nh){ target=r.nh; if(!exitIf){ const i=Object.values(d.ifs).find(i=>ifStatus(d,i)[1]==="up"&&(i.v6||[]).some(x=>v6same(x.addr,r.nh,x.len))); if(!i) return {ok:false,why:dev+": next-hop "+r.nh+" недосяжний"}; exitIf=i.name; } }
+    T(c,{dev,k:"route",text:dev+": найдовший збіг для "+pkt.dst+" — "+r.code+" "+r.pfx+(r.nh?" → next-hop "+r.nh:" (підключена мережа)")+" через "+longIf(exitIf)+"; Hop Limit −1"});
+    if(inIf) c.hops.push((v6list(d,d.ifs[inIf]).find(x=>!x.ll)||{}).addr||"?");
+    return l2To6(d,exitIf,target,pkt,c); }
+  function originate6(dev,pkt,c){ const d=N.dev[dev];
+    if(isHost(d)){ const h=hostV6(d); if(!h) return {ok:false,why:dev+": немає IPv6-адреси"+(d.slaac?" (SLAAC: на шлюзі немає ipv6 unicast-routing або /64 адреси)":"")}; if(v6eq(h.addr,pkt.dst)) return {ok:true,dev,pkt};
+      const onlink=v6same(h.addr,pkt.dst,h.len)||/^fe80/i.test(pkt.dst); const target=onlink?pkt.dst:h.gw; if(!target) return {ok:false,why:dev+": немає IPv6-шлюзу"};
+      T(c,{dev,k:"host",text:dev+": IPv6 "+pkt.src+" → "+pkt.dst+". "+(onlink?"Адресат у моїй мережі /"+h.len:"Шлю на шлюз "+target+(h.slaac?" (дізнався з Router Advertisement)":""))});
+      const pr=N.peer(dev,"Fa0"); const e=(pr?domain({dev:pr.dev,port:pr.port,tag:null}):[]).find(x=>x.dev!==dev&&v6of(x).some(a=>v6eq(a,target)));
+      if(!e) return {ok:false,arp:true,why:"NDP для "+target+" без відповіді"}; ndp(c,dev,target,e);
+      const nd=N.dev[e.dev]; if(isHost(nd)) return owns6(e.dev,pkt.dst)?{ok:true,dev:e.dev,pkt}:{ok:false,why:"?"}; return routerIn6(e.dev,e.ifn,pkt,c); }
+    return routerIn6(dev,null,pkt,c); }
+  function src6(dev,dst){ const d=N.dev[dev]; if(isHost(d)){ const h=hostV6(d); return h&&h.addr; } const r=lookup6(d,dst); let ifn=r&&r.ifn; if(r&&!ifn&&r.nh){ const i=Object.values(d.ifs).find(i=>(i.v6||[]).some(x=>v6same(x.addr,r.nh,x.len))); ifn=i&&i.name; } const i=ifn&&d.ifs[ifn]; const g=i&&(i.v6||[])[0]; return g?g.addr:null; }
+  N.flow6=(from,dst)=>{ const tr=N.counting; const src=src6(from,dst); if(!src) return {ok:false,why:from+": немає IPv6-адреси / маршруту",hops:[]};
+    const c={hops:[],ttl:16,tr:tr?[]:null}; const pkt={src,dst,proto:"icmpv6",v6:true}; const f=originate6(from,pkt,c);
+    const save=(res,back)=>{ if(tr) N.lastFlow={from,dst,proto:"icmp",ok:res.ok,why:res.why,fwd:c.tr,back:back||[]}; return res; };
+    if(!f.ok) return save(Object.assign(f,{hops:c.hops}));
+    const c2={hops:[],ttl:16,tr:tr?[]:null}; const b=originate6(f.dev,{src:dst,dst:src,proto:"icmpv6",reply:true,v6:true},c2);
+    if(!b.ok) return save({ok:false,why:"Запит дійшов до "+f.dev+", але відповідь не повертається: "+b.why,back:true,hops:c.hops},c2.tr);
+    return save({ok:b.dev===from,hops:c.hops,dev:f.dev,why:b.dev===from?null:"Відповідь прийшла не туди"},c2.tr); };
+  N.ping6Cli=(s,dst)=>{ N.counting=true; const r=N.flow6(s.devName,dst); N.counting=false; return "Type escape sequence to abort.\nSending 5, 100-byte ICMP Echos to "+dst+", timeout is 2 seconds:\n"+(r.ok?"!!!!!\nSuccess rate is 100 percent (5/5), round-trip min/avg/max = 1/1/3 ms":(r.noroute?"UUUUU":".....")+"\nSuccess rate is 0 percent (0/5)\n! "+r.why); };
+  // ---------- таблиця MAC, діагностика OSPF ----------
+  N.macTable=s=>{ const rows=[]; const seen=new Set();
+    for(const v of Object.keys(s.vlans).map(Number)){ for(const e of domain({sw:s.devName,v})){ const first=(e.path||[])[0]; if(!first||first.dev!==s.devName||!first.out||String(first.out).startsWith("Vlan")) continue;
+        const mac=e.mac||(isHost(N.dev[e.dev])?macOf(e.dev,"Fa0"):macOf(e.dev,e.ifn)); const k=v+"|"+mac; if(seen.has(k)) continue; seen.add(k); rows.push([v,mac,first.out]); } }
+    rows.sort((a,b)=>a[0]-b[0]||a[2].localeCompare(b[2],undefined,{numeric:true}));
+    return "          Mac Address Table\n-------------------------------------------\n\nVlan    Mac Address       Type        Ports\n----    -----------       --------    -----\n"+rows.map(r=>String(r[0]).padStart(4)+"    "+r[1].padEnd(18)+"DYNAMIC     "+r[2]).join("\n")+"\nTotal Mac Addresses for this criterion: "+rows.length; };
+  N.ospfDebug=s=>{ ospfSegments(); const mine=N.ospfIssues.filter(x=>x.startsWith(s.devName+" ↔ ")); if(!s.ospf) return "OSPF не запущено";
+    if(!mine.length) return "*OSPF-ADJ: Сусідства на "+s.devName+" встановлюються без помилок ("+N.ospfNeighbors(s.devName).length+" сусід(ів))";
+    return mine.map(x=>{ const [pair,why]=x.split(": "); const nb=pair.split(" ↔ ")[1];
+      return why.split("; ").map(w=>/hello|dead/.test(w)?"*OSPF-ADJ: Rcv pkt from "+nb+" : Mismatched hello parameters from neighbor ("+w+")":/області|area/.test(w)?"*OSPF-ADJ: Rcv pkt from "+nb+", area mismatch ("+w+")":/підмереж|mask/.test(w)?"*OSPF-ADJ: Rcv pkt from "+nb+" : Mismatched mask / network ("+w+")":/Router ID/.test(w)?"%OSPF-4-DUP_RTRID_NBR: OSPF detected duplicate router-id ("+w+")":/пасивн/.test(w)?"*OSPF-ADJ: "+w+" — hello не надсилаються":/ACL/.test(w)?"*OSPF-ADJ: Hello від "+nb+" не отримано — "+w:"*OSPF-ADJ: "+w).join("\n"); }).join("\n"); };
   N.ping=(a,b)=>N.flow(a,b,"icmp");
   N.pingCli=(s,dst)=>{ N.counting=true; const r=N.ping(s.devName,dst); N.counting=false; return "Type escape sequence to abort.\nSending 5, 100-byte ICMP Echos to "+dst+", timeout is 2 seconds:\n"+(r.ok?(r.hops.length?".!!!!":"!!!!!")+"\nSuccess rate is "+(r.hops.length?"80 percent (4/5)":"100 percent (5/5)")+", round-trip min/avg/max = 1/2/4 ms":(r.noroute||r.acl?"UUUUU":".....")+"\nSuccess rate is 0 percent (0/5)\n! "+r.why); };
   N.traceCli=(s,dst)=>{ const r=N.ping(s.devName,dst); let o="Type escape sequence to abort.\nTracing the route to "+dst+"\nVRF info: (vrf in name/id, vrf out name/id)\n"; const hops=(r.hops||[]).slice(); if(r.ok) hops.push(dst); hops.forEach((h,k)=>o+="  "+(k+1)+" "+h+" 1 msec 1 msec 1 msec\n"); if(!r.ok) o+="  "+(hops.length+1)+"  *  *  *\n! "+r.why; return o; };
@@ -1044,18 +1158,21 @@ function Net(def){
 function PCSession(pc,N){
   const fail=(r,ip)=>r.arp&&!r.back? "Reply from "+(pc.ip||"0.0.0.0")+": Destination host unreachable." : (r.noroute||r.acl)&&!r.back? "Reply from "+(pc.gw||pc.ip)+": Destination net unreachable." : "Request timed out.";
   const tcp=(ip,port,okText)=>{ N.counting=true; const r=N.flow(pc.name,ip,"tcp",port); N.counting=false; return r.ok? okText : (r.refused? "Connecting to "+ip+"... Could not open connection to the host, on port "+port+": Connect failed\n! "+r.why : "Connecting to "+ip+"... Could not open connection to the host, on port "+port+": Connect failed (timed out)\n! Підказка тренажера: "+r.why); };
-  const HELP="Команди: ipconfig, ipconfig /all, ipconfig /renew, ipconfig /release, ipconfig /static <IP> <маска> [шлюз], ipconfig /dhcp, ping <IP>, tracert <IP>, curl <IP> (HTTP, TCP 80), ssh <IP> (TCP 22), telnet <IP> (TCP 23)";
+  const HELP="Команди: ipconfig, ipconfig /all, ipconfig /renew, ipconfig /release, ipconfig /static <IP> <маска> [шлюз], ipconfig /dhcp, ipconfig /static6 <IPv6>/<len> [шлюз], ipconfig /slaac, ping <IP>, tracert <IP>, curl <IP> (HTTP, TCP 80), ssh <IP> (TCP 22), telnet <IP> (TCP 23)";
   return { state:pc, prompt(){ return "C:\\>"; },
     exec(line){ const t=line.trim(); if(!t) return ""; const a=t.split(/\s+/); const c=a[0].toLowerCase(); const arg=(a[1]||"").replace(/^https?:\/\//i,"").replace(/^.*@/,"").replace(/\/.*$/,"");
       const setStatic=(ip,mask,gw)=>{ if(!ipRe.test(ip)||!ipRe.test(mask)||(gw&&!ipRe.test(gw))) return "Невірні параметри. Приклад: ipconfig /static 192.168.1.10 255.255.255.0 192.168.1.1"; N.release(pc.name); Object.assign(pc,{ip,mask,gw:gw||null,dhcp:false}); return "Ethernet0: статична адреса "+ip+" / "+mask+(gw?", шлюз "+gw:""); };
       if(c==="netsh"&&/set address/i.test(t)){ const m=t.match(/static\s+(\S+)\s+(\S+)(?:\s+(\S+))?/i); if(m) return setStatic(m[1],m[2],m[3]); if(/dhcp/i.test(t)){ pc.dhcp=true; pc.ip=null; return "Ethernet0: DHCP увімкнено (виконайте ipconfig /renew)"; } }
       if(c==="ipconfig"&&(a[1]||"").toLowerCase()==="/static") return setStatic(a[2],a[3],a[4]);
+      if(c==="ipconfig"&&(a[1]||"").toLowerCase()==="/static6"){ const P=v6pfx(a[2]||""); if(!P||(a[3]&&v6parse(a[3])===null)) return "Приклад: ipconfig /static6 2001:db8:acad:2::10/64 fe80::1"; pc.ip6={addr:P.addr,len:P.len,gw:a[3]?v6fmt(v6parse(a[3])):null}; pc.slaac=false; return "Ethernet0: IPv6 "+P.addr+"/"+P.len+(a[3]?", шлюз "+pc.ip6.gw:""); }
+      if(c==="ipconfig"&&(a[1]||"").toLowerCase()==="/slaac"){ pc.ip6=null; pc.slaac=true; const h=N.hostV6(pc.name); return h? "SLAAC: префікс із Router Advertisement → "+h.addr+"/64, шлюз "+h.gw : "SLAAC увімкнено, але Router Advertisement не отримано (на шлюзі потрібні ipv6 unicast-routing і /64 адреса)"; }
+      if(c==="ping"&&v6parse(arg)!==null){ N.counting=true; const r=N.flow6(pc.name,v6fmt(v6parse(arg))); N.counting=false; return "\nPinging "+arg+" with 32 bytes of data:\n"+(r.ok?Array(4).fill("Reply from "+arg+": time<1ms").join("\n")+"\n\nPing statistics for "+arg+":\n    Packets: Sent = 4, Received = 4, Lost = 0 (0% loss)":Array(4).fill(r.arp?"Destination host unreachable.":"Request timed out.").join("\n")+"\n\nPing statistics for "+arg+":\n    Packets: Sent = 4, Received = 0, Lost = 4 (100% loss)\n! Підказка тренажера: "+r.why); }
       if(c==="ipconfig"&&(a[1]||"").toLowerCase()==="/dhcp"){ pc.dhcp=true; pc.ip=null; pc.mask=null; pc.gw=null; return "Ethernet0: DHCP увімкнено. Виконайте ipconfig /renew"; }
       if(c==="ipconfig"){ const f=(a[1]||"").toLowerCase();
         if(f==="/release"){ N.release(pc.name); return "\nEthernet adapter Ethernet0:\n\n   Connection-specific DNS Suffix  . :\n   IPv4 Address. . . . . . . . . . . : —\n   Default Gateway . . . . . . . . . :"; }
         if(f==="/renew"){ const r=N.dhcp(pc.name); if(!r.ok){ return "\nAn error occurred while renewing interface Ethernet0 : unable to contact your DHCP server. Request has timed out.\n! Підказка тренажера: "+r.why; } }
         const all=f==="/all";
-        return "\nEthernet adapter Ethernet0:\n\n"+(all?"   Physical Address. . . . . . . . . : 00-50-79-66-68-"+String(10+pc.name.length).padStart(2,"0")+"\n   DHCP Enabled. . . . . . . . . . . : "+(pc.dhcp?"Yes":"No")+"\n":"")+"   IPv4 Address. . . . . . . . . . . : "+(pc.ip||(pc.dhcp?"169.254.18.77 (APIPA — DHCP не відповів)":"—"))+"\n   Subnet Mask . . . . . . . . . . . : "+(pc.mask||(pc.dhcp?"255.255.0.0":"—"))+"\n   Default Gateway . . . . . . . . . : "+(pc.gw||"")+(all&&pc.dhcpSrv?"\n   DHCP Server . . . . . . . . . . . : "+pc.dhcpSrv:"")+(all&&pc.dns?"\n   DNS Servers . . . . . . . . . . . : "+pc.dns:"")+"\n"; }
+        return "\nEthernet adapter Ethernet0:\n\n"+(all?"   Physical Address. . . . . . . . . : 00-50-79-66-68-"+String(10+pc.name.length).padStart(2,"0")+"\n   DHCP Enabled. . . . . . . . . . . : "+(pc.dhcp?"Yes":"No")+"\n":"")+"   IPv4 Address. . . . . . . . . . . : "+(pc.ip||(pc.dhcp?"169.254.18.77 (APIPA — DHCP не відповів)":"—"))+(()=>{ const h=N.hostV6(pc.name); return h? "\n   IPv6 Address. . . . . . . . . . . : "+h.addr+(h.slaac?" (SLAAC)":"")+"\n   Link-local IPv6 Address . . . . . : "+N.hostLL(pc.name) : ""; })()+"\n   Subnet Mask . . . . . . . . . . . : "+(pc.mask||(pc.dhcp?"255.255.0.0":"—"))+"\n   Default Gateway . . . . . . . . . : "+(pc.gw||"")+(()=>{ const h=N.hostV6(pc.name); return h&&h.gw? "\n                                       "+h.gw : ""; })()+(all&&pc.dhcpSrv?"\n   DHCP Server . . . . . . . . . . . : "+pc.dhcpSrv:"")+(all&&pc.dns?"\n   DNS Servers . . . . . . . . . . . : "+pc.dns:"")+"\n"; }
       if(c==="ping"&&ipRe.test(arg)){ N.counting=true; const r=N.ping(pc.name,arg); N.counting=false; return "\nPinging "+arg+" with 32 bytes of data:\n"+(r.ok?Array(4).fill("Reply from "+arg+": bytes=32 time<1ms TTL="+(128-r.hops.length)).join("\n")+"\n\nPing statistics for "+arg+":\n    Packets: Sent = 4, Received = 4, Lost = 0 (0% loss)":Array(4).fill(fail(r,arg)).join("\n")+"\n\nPing statistics for "+arg+":\n    Packets: Sent = 4, Received = "+(r.arp||r.noroute||r.acl?4:0)+", Lost = "+(r.arp||r.noroute||r.acl?0:4)+" ("+(r.arp||r.noroute||r.acl?"0":"100")+"% loss)\n! Підказка тренажера: "+r.why); }
       if((c==="tracert"||c==="traceroute")&&ipRe.test(arg)){ const r=N.ping(pc.name,arg); const hops=(r.hops||[]).slice(); if(r.ok) hops.push(arg); return "\nTracing route to "+arg+" over a maximum of 30 hops\n\n"+hops.map((h,k)=>"  "+(k+1)+"    <1 ms    <1 ms    <1 ms  "+h).join("\n")+(r.ok?"\n\nTrace complete.":"\n  "+(hops.length+1)+"     *        *        *     Request timed out.\n! "+r.why); }
       if(c==="curl"&&ipRe.test(arg)){ N.counting=true; const r=N.flow(pc.name,arg,"tcp",80); N.counting=false; return r.ok? "<!DOCTYPE html><html><body><h1>Web server "+r.dev+"</h1><p>Your IP as seen by server: "+r.srcSeen+"</p></body></html>" : r.refused? "curl: (7) Failed to connect to "+arg+" port 80: Connection refused\n! "+r.why : "curl: (28) Failed to connect to "+arg+" port 80 after 21046 ms: Timed out\n! Підказка тренажера: "+r.why; }
@@ -1223,6 +1340,24 @@ const NETSCEN=[
     links:[["PC1","Fa0","S1","Fa0/1"],["MGMT","Fa0","S1","Fa0/2"],["S1","Gi0/1","R1","Gi0/0"],["R1","Gi0/1","ISP","Gi0/1"]]}),
   check:N=>{ const v=N.dev.R1.svc||{}; const c=(v.snmp||[]).find(x=>x.name==="MONITOR"); return [[(v.ntp||[]).includes("192.168.1.50")&&v.tsLog,"NTP-сервер 192.168.1.50 і мітки часу в лозі"],[(v.hosts||[]).includes("192.168.1.50")&&v.trap==="warnings","Syslog на 192.168.1.50, logging trap warnings (0–4)"],[!!c&&!c.rw,"SNMP community MONITOR — RO"],[/server room/i.test(v.location||""),"snmp-server location задано"],[N.dev.R1.ifs["Gi0/1"].cdpOff&&v.lldp,"CDP вимкнено на Gi0/1, LLDP увімкнено"],[pass(N,"R1","192.168.1.50"),"R1 бачить сервер керування"]]; },
   sol:"R1:\nenable\nconf t\nntp server 192.168.1.50\nservice timestamps log datetime msec\nlogging host 192.168.1.50\nlogging trap warnings\nsnmp-server community MONITOR RO\nsnmp-server location Server room\nlldp run\ninterface g0/1\n no cdp enable\nend"}
+,
+ {id:"net-ipv6",net:true,t:"SRWE15",title:"IPv6: адреси, SLAAC і статичні маршрути",
+  topo:"PC1 (SLAAC) — R1 Gi0/0 2001:DB8:ACAD:1::1/64\nR1 Gi0/1 2001:DB8:ACAD:12::1/64 ══ R2 Gi0/1 2001:DB8:ACAD:12::2/64\nR2 Gi0/0 2001:DB8:ACAD:2::1/64 — PC2 2001:DB8:ACAD:2::10 (статично, шлюз FE80::2)",
+  task:["Увімкніть маршрутизацію IPv6 на R1 і R2 (без неї маршрутизатор не надсилає RA, і SLAAC не працює).","Задайте IPv6-адреси з топології. На R2 Gi0/0 задайте link-local FE80::2 (на неї вказує шлюз PC2).","R1: статичний маршрут до 2001:DB8:ACAD:2::/64 через 2001:DB8:ACAD:12::2. R2: маршрут за замовчуванням ::/0 через 2001:DB8:ACAD:12::1.","PC1: ipconfig /slaac, потім ping 2001:db8:acad:2::10. Перевірте show ipv6 route і show ipv6 interface brief."],
+  def:()=>({devices:{R1:{type:"router"},R2:{type:"router"},PC1:{type:"pc",slaac:true},PC2:{type:"pc",ip6:{addr:"2001:DB8:ACAD:2::10",len:64,gw:"FE80::2"}}},
+    links:[["PC1","Fa0","R1","Gi0/0"],["R1","Gi0/1","R2","Gi0/1"],["PC2","Fa0","R2","Gi0/0"]]}),
+  check:N=>{ const h=N.hostV6("PC1"); return [[N.dev.R1.v6routing&&N.dev.R2.v6routing,"ipv6 unicast-routing на обох"],[!!h&&v6same(h.addr,"2001:db8:acad:1::",64),"PC1 отримав адресу SLAAC з 2001:DB8:ACAD:1::/64"],[(N.dev.R2.ifs["Gi0/0"].llStatic||"")==="FE80::2","На R2 Gi0/0 link-local FE80::2"],[(N.dev.R2.routes6||[]).some(r=>r.len===0),"На R2 маршрут ::/0"],[N.flow6("PC1","2001:DB8:ACAD:2::10").ok,"PC1 ↔ PC2 по IPv6"]]; },
+  sol:"R1:\nenable\nconf t\nipv6 unicast-routing\ninterface g0/0\n ipv6 address 2001:db8:acad:1::1/64\n no shutdown\ninterface g0/1\n ipv6 address 2001:db8:acad:12::1/64\n no shutdown\nexit\nipv6 route 2001:db8:acad:2::/64 2001:db8:acad:12::2\nend\n\nR2:\nenable\nconf t\nipv6 unicast-routing\ninterface g0/1\n ipv6 address 2001:db8:acad:12::2/64\n no shutdown\ninterface g0/0\n ipv6 address 2001:db8:acad:2::1/64\n ipv6 address fe80::2 link-local\n no shutdown\nexit\nipv6 route ::/0 2001:db8:acad:12::1\nend\n\nPC1:\nipconfig /slaac"},
+ {id:"net-diag",net:true,t:"ENSA12",title:"Діагностика: дуплекс і сусідство OSPF",
+  topo:"PC1 — R1 Gi0/0   R1 Gi0/1 ══ S1 Gi0/1   S1 Gi0/2 ══ R2 Gi0/1   R2 Gi0/0 — PC2\nS1: транзитна VLAN 1, 10.0.12.0/24",
+  task:["Користувачі скаржаться: між мережами PC1 і PC2 немає зв'язку, а канал R1–S1 «гальмує».","Підказки: show interfaces g0/1 (лічильники помилок, дуплекс), debug ip ospf adj, show ip ospf neighbor, лог CDP.","Виправте всі причини. Не змінюйте адреси."],
+  def:()=>({devices:{S1:{type:"switch",setup:s=>{s.ifs["Gi0/1"].duplex="full";}},
+    R1:{type:"router",setup:s=>{IP(s,"Gi0/0","192.168.1.1",M24);IP(s,"Gi0/1","10.0.12.1",M24);OSPF(s,1,"1.1.1.1",[["192.168.1.0","0.0.0.255",0],["10.0.12.0","0.0.0.255",0]],["Gi0/0"]); s.ifs["Gi0/1"].hello=5; s.ifs["Gi0/1"].dead=20;}},
+    R2:{type:"router",setup:s=>{IP(s,"Gi0/0","192.168.2.1",M24);IP(s,"Gi0/1","10.0.12.2",M24);OSPF(s,1,"2.2.2.2",[["192.168.2.0","0.0.0.255",0],["10.0.12.0","0.0.0.255",0]],["Gi0/0"]);}},
+    PC1:{type:"pc",ip:"192.168.1.10",mask:M24,gw:"192.168.1.1"},PC2:{type:"pc",ip:"192.168.2.10",mask:M24,gw:"192.168.2.1"}},
+    links:[["PC1","Fa0","R1","Gi0/0"],["R1","Gi0/1","S1","Gi0/1"],["S1","Gi0/2","R2","Gi0/1"],["PC2","Fa0","R2","Gi0/0"]]}),
+  check:N=>{ N.recompute(); return [[!N.dev.R1.ifs["Gi0/1"]._dupBad&&!N.dev.S1.ifs["Gi0/1"]._dupBad,"Дуплекс R1 Gi0/1 ↔ S1 Gi0/1 узгоджено"],[N.ospfNeighbors("R1").length===1,"R1 і R2 — OSPF-сусіди"],[pass(N,"PC1","192.168.2.10"),"PC1 ↔ PC2"]]; },
+  sol:"S1:\nenable\nconf t\ninterface g0/1\n duplex auto\nend\n\nR1:\nenable\nconf t\ninterface g0/1\n no ip ospf hello-interval\nend\n\n(Альтернатива для дуплексу: вручну full на обох кінцях.)"}
 
 ];
 function startNet(sc){ const N=Net(sc.def()); const ses={}; for(const [k,d] of Object.entries(N.dev)) ses[k]= (d.type==="pc"||d.type==="server")? PCSession(d,N) : Session(d); return {N,ses}; }
@@ -1306,12 +1441,12 @@ function figOf(N,hl,hlLink){
 }
 const dumpState=st=>JSON.parse(JSON.stringify(st,(k,v)=>(k==="net"||k==="_oper")?undefined:v));
 function netFromSaved(sb){ const devices={};
-  for(const [n,d] of Object.entries(sb.devs||{})){ if(d.type==="pc"||d.type==="server") devices[n]={type:d.type,ip:d.ip,mask:d.mask,gw:d.gw,dhcp:d.dhcp,services:d.services};
+  for(const [n,d] of Object.entries(sb.devs||{})){ if(d.type==="pc"||d.type==="server") devices[n]={type:d.type,ip:d.ip,mask:d.mask,gw:d.gw,dhcp:d.dhcp,services:d.services,ip6:d.ip6,slaac:d.slaac};
     else devices[n]={type:d.type==="l3"?"switch":d.type,l3:d.type==="l3",setup:d.state?(s=>{ Object.assign(s,JSON.parse(JSON.stringify(d.state))); for(const i of Object.values(s.ifs)) i.connected=false; }):null}; }
   const N=Net({devices,links:(sb.links||[]).filter(l=>devices[l[0]]&&devices[l[2]])});
   for(const [n,d] of Object.entries(sb.devs||{})) if(d.type==="l3"&&N.dev[n]) N.dev[n].type="switch";
   return N; }
-function saveNet(N,types){ const devs={}; for(const [n,d] of Object.entries(N.dev)){ if(d.type==="pc"||d.type==="server") devs[n]={type:d.type,ip:d.ip,mask:d.mask,gw:d.gw,dhcp:!!d.dhcp,services:d.services}; else devs[n]={type:(types&&types[n])||d.type,state:dumpState(d)}; }
+function saveNet(N,types){ const devs={}; for(const [n,d] of Object.entries(N.dev)){ if(d.type==="pc"||d.type==="server") devs[n]={type:d.type,ip:d.ip,mask:d.mask,gw:d.gw,dhcp:!!d.dhcp,services:d.services,ip6:d.ip6||null,slaac:!!d.slaac}; else devs[n]={type:(types&&types[n])||d.type,state:dumpState(d)}; }
   return {devs,links:N.links.map(l=>[l.a,l.pa,l.b,l.pb])}; }
 function sessionsFor(N){ const ses={}; for(const [k,d] of Object.entries(N.dev)) ses[k]=(d.type==="pc"||d.type==="server")? PCSession(d,N) : Session(d); return ses; }
 function freePorts(N,dev){ const d=N.dev[dev]; if(!d) return []; const used=new Set(N.links.filter(l=>l.a===dev||l.b===dev).map(l=>l.a===dev?l.pa:l.pb));

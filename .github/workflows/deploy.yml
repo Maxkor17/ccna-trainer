@@ -15,7 +15,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Перевірка синтаксису
+        run: for f in public/*.js; do node --check "$f" || exit 1; done
+      - name: Автотести (банки, генератори, лаби, API)
+        run: node tests/run.js
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     environment:
       name: github-pages
