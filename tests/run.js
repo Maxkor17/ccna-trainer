@@ -2,7 +2,7 @@
 // Запуск: node tests/run.js  (exit code 1 при будь-якій помилці)
 const path=require("path"); const P=f=>path.join(__dirname,"..","public",f);
 global.window={}; global.btoa=s=>Buffer.from(s).toString("base64"); global.atob=s=>Buffer.from(s,"base64").toString();
-const files=["wlc","questions-itn","questions-srwe","questions-notes","questions-extra","questions-srwe2","questions-ensa","questions-netacad","questions-figs","questions-en","glossary","cheats","pairs","gen","gen2","gen3","api","cli"];
+const files=["wlc","bash","questions-linux","questions-itn","questions-srwe","questions-notes","questions-extra","questions-srwe2","questions-ensa","questions-netacad","questions-figs","questions-en","glossary","cheats","pairs","gen","gen2","gen3","api","cli"];
 for(const f of files) require(P(f+".js"));
 for(const f of ["questions-en-tr","questions-linux"]) { try{ require(P(f+".js")); }catch(e){ if(e.code!=="MODULE_NOT_FOUND") throw e; } }
 let fails=0, checks=0; const fail=m=>{ fails++; console.error("✗ "+m); }; const ok=(c,m)=>{ checks++; if(!c) fail(m); };
@@ -49,6 +49,8 @@ console.log("Лаб:",C.SCEN.length+C.NETSCEN.length);
 { const A=window.APILAB, st=A.newState(); const r1=A.handle(st,{method:"POST",url:"/dna/system/api/v1/auth/token",headers:"Authorization: Basic "+btoa("devnet:Cisco123!")}); ok(r1.code===200,"API: токен");
   const h="X-Auth-Token: "+st.token+"\nContent-Type: application/json"; ok(A.handle(st,{method:"GET",url:"/dna/intent/api/v1/network-device?role=ACCESS",headers:h}).body.response.length===2,"API: фільтр");
   ok(A.handle(st,{method:"POST",url:"/dna/intent/api/v1/vlan",headers:h,body:'{"vlanId":30,"name":"GUEST"}'}).code===201,"API: POST"); ok(A.handle(st,{method:"DELETE",url:"/dna/intent/api/v1/vlan/99",headers:h}).code===204,"API: DELETE"); }
+// ---- Linux ----
+for(const sc of window.BASH.SCEN){ const ses=window.BASH.start(sc); ok(!sc.check(ses.state).every(x=>x[0]),"bash "+sc.id+" виконана без дій"); for(const l of sc.sol.split("\n")) ses.exec(l); const r=sc.check(ses.state); ok(r.every(x=>x[0]),"bash "+sc.id+": "+r.filter(x=>!x[0]).map(x=>x[1]).join("; ")); }
 // ---- WLC ----
 { const W=window.WLC, st=W.newState(); const vals={}; const $=sel=>{ const id=sel.slice(1); return id in vals? {value:String(vals[id]),type:typeof vals[id]==="boolean"?"checkbox":"text",checked:vals[id]} : null; };
   const go=(op,v,data)=>{ Object.assign(vals,v||{}); W.handle(st,op,{dataset:data||{}},$); };

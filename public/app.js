@@ -15,15 +15,16 @@ const TOPICS = [
  ["ENSA1","ENSA","1","Принципи OSPFv2"],["ENSA2","ENSA","2","Налаштування OSPFv2"],["ENSA3","ENSA","3","Принципи мережевої безпеки"],
  ["ENSA4","ENSA","4","Принципи ACL"],["ENSA5","ENSA","5","Налаштування ACL"],["ENSA6","ENSA","6","NAT для IPv4"],["ENSA7","ENSA","7","Принципи WAN"],
  ["ENSA8","ENSA","8","VPN і IPsec"],["ENSA9","ENSA","9","QoS"],["ENSA10","ENSA","10","Керування мережею"],["ENSA11","ENSA","11","Проєктування мережі"],
- ["ENSA12","ENSA","12","Діагностика мережі"],["ENSA13","ENSA","13","Віртуалізація мережі"],["ENSA14","ENSA","14","Автоматизація мережі"]
+ ["ENSA12","ENSA","12","Діагностика мережі"],["ENSA13","ENSA","13","Віртуалізація мережі"],["ENSA14","ENSA","14","Автоматизація мережі"],
+ ["LNX1","LNX","1","Файли, права, журнали"],["LNX2","LNX","2","Процеси і сервіси systemd"],["LNX3","LNX","3","Мережа в Linux"],["LNX4","LNX","4","Bash-скрипти і cron"],["LNX5","LNX","5","Git"],["LNX6","LNX","6","CI/CD, YAML, Python, контейнери"]
 ].map(([id,g,n,name])=>({id,g,n,name}));
 const TMAP = Object.fromEntries(TOPICS.map(t=>[t.id,t]));
-const QB_BASE = [...(window.QB_ITN||[]), ...(window.QB_SRWE||[]), ...(window.QB_NOTES||[]), ...(window.QB_EXTRA||[]), ...(window.QB_SRWE2||[]), ...(window.QB_ENSA||[]), ...(window.QB_NETACAD||[]), ...(window.QB_FIGS||[]), ...(window.QB_EN||[])];
+const QB_BASE = [...(window.QB_ITN||[]), ...(window.QB_SRWE||[]), ...(window.QB_NOTES||[]), ...(window.QB_EXTRA||[]), ...(window.QB_SRWE2||[]), ...(window.QB_ENSA||[]), ...(window.QB_NETACAD||[]), ...(window.QB_FIGS||[]), ...(window.QB_EN||[]), ...(window.QB_LNX||[])];
 let customQs = [];
 let QB = QB_BASE.slice();
 let QMAP = Object.fromEntries(QB.map(q=>[q.id,q]));
 function rebuildQB(){ QB = QB_BASE.concat(customQs.filter(q=>TMAP[q.t])); QMAP = Object.fromEntries(QB.map(q=>[q.id,q])); }
-const COURSES=[["ITN","Вступ до мереж"],["SRWE","Комутація, маршрутизація, бездротові мережі"],["ENSA","Корпоративні мережі, безпека, автоматизація"]];
+const COURSES=[["ITN","Вступ до мереж"],["SRWE","Комутація, маршрутизація, бездротові мережі"],["ENSA","Корпоративні мережі, безпека, автоматизація"],["LNX","Після CCNA: Linux і DevOps"]];
 const GEN = window.GEN, CLI = window.CLI;
 const TID2GEN = {"g-showstp":"g-showstp","g-showtrunk":"g-showtrunk","g-showec":"g-showec","g-showint":"g-showint","g-lpm":"g-lpm","g-ad":"g-ad","g-wild":"g-wild","g-ospfcost":"g-ospfcost","g-rid":"g-rid","g-bin":"g-bin","g-hex":"g-bin","g-net":"g-subnet","g-bc":"g-subnet","g-range":"g-subnet","g-hosts":"g-subnet","g-vlsm":"g-vlsm","g-ipv6":"g-ipv6","g-eui":"g-eui","g-stproot":"g-stproot","g-stprp":"g-stprp","g-stpcost":"g-stpcost","g-stpprio":"g-stpprio"};
 const INT_DAYS = [0,1,3,7,16,35], DAY = 864e5;
@@ -488,7 +489,7 @@ function pickCcna(n){
 // ---- План до дати екзамену ----
 function planInfo(){
   if(!opts.examDate) return null; const days=Math.ceil((new Date(opts.examDate+"T09:00:00")-Date.now())/864e5);
-  const all=TOPICS.map(t=>Object.assign({id:t.id},topicReady(t.id)||{p:0,n:0,seen:0})).filter(x=>x.n);
+  const all=TOPICS.filter(t=>t.g!=="LNX").map(t=>Object.assign({id:t.id},topicReady(t.id)||{p:0,n:0,seen:0})).filter(x=>x.n);
   const avg=all.reduce((a,x)=>a+x.p*x.n,0)/Math.max(1,all.reduce((a,x)=>a+x.n,0));
   const unseen=all.reduce((a,x)=>a+(x.n-x.seen),0); const due=Object.values(prog).filter(r=>r.d&&r.d<=Date.now()).length;
   const perDay=days>0? Math.ceil(unseen/Math.max(1,days-3))+Math.min(due,40) : due;
@@ -754,7 +755,7 @@ function renderBackup(){
   <div class="card"><h2>Скидання</h2><p class="small muted" style="margin:0 0 8px">Видаляє прогрес по питаннях (денна статистика, лаби та історія екзаменів лишаються).</p><button data-act="reset">Скинути прогрес</button></div>
   <button class="primary" data-act="home">На головну</button>`;
 }
-const ALLSCEN=()=>CLI.SCEN.concat(CLI.NETSCEN||[]);
+const ALLSCEN=()=>CLI.SCEN.concat(CLI.NETSCEN||[],(window.BASH&&BASH.SCEN)||[]);
 function renderLabs(){
   const card=sc=>{const st=labs[sc.id]; return `<div class="card"><div class="row"><div class="grow"><b>${sc.net?"🌐 ":""}${esc(sc.title)}</b><br><span class="small muted">${tlabel(sc.t)} · ${esc(TMAP[sc.t].name)}</span></div><span class="small">${st&&st.ok?"✅ виконано":st?"⏳ спроб: "+(st.tries||0):""}</span><button class="primary mini" data-act="lab" data-id="${sc.id}">Відкрити</button></div></div>`;};
   return `<div class="card"><h2>CLI-лаби</h2><p class="small muted" style="margin:0">Симулятор Cisco IOS: працюють скорочення (<code>sh int tr</code>), підказка <code>?</code>, <code>do show …</code>, стрілки ↑↓ для історії. У 🌐-лабах кілька пристроїв: перемикайтеся між ними вкладками, а з ПК перевіряйте <code>ping</code> і <code>tracert</code>.</p></div>
@@ -766,6 +767,7 @@ function renderLabs(){
   <h3>🌐 SRWE: кілька пристроїв</h3>${(CLI.NETSCEN||[]).filter(s=>/^SRWE/.test(s.t)).map(card).join("")}
   <h3>🌐 ENSA: OSPF, ACL, NAT</h3>${(CLI.NETSCEN||[]).filter(s=>/^ENSA/.test(s.t)).map(card).join("")}
   <h3>Один комутатор</h3>${CLI.SCEN.map(card).join("")}
+  <h3>🐧 Після CCNA: Linux і DevOps</h3>${((window.BASH&&BASH.SCEN)||[]).map(card).join("")}
   <button class="primary" data-act="home">На головну</button>`;
 }
 function renderLab(){
@@ -946,6 +948,7 @@ function openLab(id){
   const sc=ALLSCEN().find(s=>s.id===id); if(!sc) return;
   if(sc.net){ const {N,ses}=CLI.startNet(sc); const outs={}; for(const d of Object.keys(ses)) outs[d]= /^(pc|server)$/.test(N.dev[d].type)? "Microsoft Windows\n\n" : "\nPress RETURN to get started!\n\n";
     LAB={sc,N,ses,outs,cur:Object.keys(ses).find(d=>/^(pc|server)$/.test(N.dev[d].type))||Object.keys(ses)[0],hist:[],hi:0,res:"",showSol:false}; }
+  else if(sc.bash) LAB={sc,N:null,ses:{[sc.hostname]:BASH.start(sc)},outs:{[sc.hostname]:"Ubuntu 24.04 LTS (тренажер). Введіть help для списку команд.\n\n"},cur:sc.hostname,hist:[],hi:0,res:"",showSol:false};
   else LAB={sc,N:null,ses:{[sc.hostname||"S1"]:CLI.startScenario(sc)},outs:{[sc.hostname||"S1"]:"\nPress RETURN to get started!\n\n"},cur:sc.hostname||"S1",hist:[],hi:0,res:"",showSol:false};
   view="lab"; render(); scrollTop();
 }
