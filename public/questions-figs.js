@@ -45,6 +45,16 @@ window.QB_FIGS = [
 {id:"f-e6-1",t:"ENSA6",type:"fill",q:"Динамічний NAT з пулу 209.165.200.241–.246 (/29) для мережі 192.168.0.0/16, без overload.",
  cfg:"R1(config)# ip nat [[pool]] PUB 209.165.200.241 209.165.200.246 netmask [[255.255.255.248]]\nR1(config)# access-list 1 permit 192.168.0.0 [[0.0.255.255]]\nR1(config)# ip nat inside source [[list]] 1 pool PUB",
  e:"Без overload кожен внутрішній хост займає окрему адресу з пулу; коли їх 6 — сьомий хост не вийде в Інтернет."},
+
+{id:"f-e14-1",t:"ENSA14",type:"fill",q:"Python + requests: отримайте список пристроїв із контролера й надрукуйте hostname кожного.",
+ cfg:"import requests\nheaders = {\"X-Auth-Token\": token, \"Accept\": \"application/json\"}\nr = requests.[[get]](BASE + \"/dna/intent/api/v1/network-device\", headers=[[headers]])\nfor dev in r.[[json]]()[\"response\"]:\n    print(dev[\"[[hostname]]\"])",
+ e:"requests.get надсилає GET; r.json() перетворює тіло відповіді на словник Python; дані лежать у ключі response."},
+{id:"f-e14-2",t:"ENSA14",type:"fill",q:"Ansible-плейбук: на всіх комутаторах групи access створити VLAN 30 (модуль cisco.ios.ios_vlans).",
+ cfg:"- name: VLAN для гостей\n  [[hosts]]: access\n  gather_facts: no\n  tasks:\n    - name: Створити VLAN 30\n      cisco.ios.ios_vlans:\n        config:\n          - vlan_id: [[30]]\n            name: GUEST\n        state: [[merged]]",
+ e:"YAML: відступи замість дужок, список починається з «-». state: merged додає конфігурацію до наявної; Ansible — agentless, працює через SSH."},
+{id:"f-e14-3",t:"ENSA14",type:"fill",q:"Netmiko: підключіться до комутатора й виконайте show-команду.",
+ cfg:"from netmiko import ConnectHandler\nsw = {\"device_type\": \"cisco_ios\", \"host\": \"10.10.0.21\", \"username\": \"admin\", \"password\": \"Str0ng!\"}\nconn = [[ConnectHandler]](**sw)\nprint(conn.[[send_command]](\"show ip interface brief\"))\nconn.disconnect()",
+ e:"Netmiko працює через SSH (як людина в CLI), на відміну від REST API контролера."},
 // ---------- Питання зі схемами ----------
 {id:"g-s3-1",t:"SRWE3",q:"PC1 і PC2 у VLAN 10, але не пінгуються. За схемою — що найімовірніше?",
  fig:{h:44,nodes:[PC("PC1",5,30,"VLAN 10"),SW("S1",35,30),SW("S2",65,30),PC("PC2",95,30,"VLAN 10")],links:[{a:"PC1",b:"S1",lb:"Fa0/1"},{a:"S1",b:"S2",la:"Gi0/1 trunk",lb:"Gi0/1 trunk",m:"allowed: 20,30"},{a:"S2",b:"PC2",la:"Fa0/1"}]},

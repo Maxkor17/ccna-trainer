@@ -129,6 +129,31 @@ function gFill(){
   return {id:uid("g-fill"),tid:"g-fill",gen:true,type:"fill",t:"ENSA6",k:"PAT",q:"Налаштуйте PAT: мережа 192.168.1.0/24 (Gi0/0) виходить в Інтернет через адресу Gi0/1.",
     cfg:"R1(config)# access-list 1 permit 192.168.1.0 [[0.0.0.255]]\nR1(config)# ip nat inside source list 1 [[interface]] g0/1 [[overload]]\nR1(config)# interface g0/0\nR1(config-if)# ip nat [[inside]]\nR1(config)# interface g0/1\nR1(config-if)# ip nat [[outside]]",e:"overload вмикає PAT — усі хости ділять одну адресу інтерфейсу, розрізняючись портами. Обов'язково позначити inside і outside."};
 }
+
+// ---------- Автоматизація: HTTP/REST ----------
+function gHttp(){
+  const k=R(0,1);
+  if(k===0){ const c=pick([[200,"OK — успішний GET/PUT"],[201,"Created — ресурс створено (POST)"],[204,"No Content — успішно, без тіла (часто DELETE)"],[400,"Bad Request — помилка в запиті/JSON"],[401,"Unauthorized — немає або недійсна автентифікація"],[403,"Forbidden — автентифіковано, але немає прав"],[404,"Not Found — ресурсу не існує"],[405,"Method Not Allowed — метод не підтримується ресурсом"],[409,"Conflict — конфлікт стану (наприклад, вже існує)"],[500,"Internal Server Error — помилка на сервері"]]);
+    const sit={200:"GET /api/v1/vlan успішно повернув список",201:"POST /api/v1/vlan створив нову VLAN",204:"DELETE /api/v1/vlan/30 виконано, тіла відповіді немає",400:"у тілі POST пропущено кому в JSON",401:"запит без заголовка X-Auth-Token",403:"токен дійсний, але користувач має роль лише для читання і пробує DELETE",404:"GET /api/v1/vlan/777 — такої VLAN немає",405:"POST на ресурс, який підтримує лише GET",409:"POST створює VLAN 30, а вона вже існує",500:"контролер аварійно завершив обробку запиту"}[c[0]];
+    return mc({tid:"g-http",t:"ENSA14",k:"Коди HTTP",q:"Який код відповіді REST API найімовірніший: "+sit+"?"},String(c[0]),c[1]+".",shuf([200,201,204,400,401,403,404,405,409,500].filter(x=>x!==c[0])).slice(0,4).map(x=>[String(x),"Код "+x+" означає інше."])); }
+  const op=pick([["створити новий об'єкт","POST","POST створює ресурс у колекції."],["отримати дані без змін","GET","GET лише читає, безпечний та ідемпотентний."],["повністю замінити існуючий об'єкт","PUT","PUT замінює ресурс цілком і є ідемпотентним."],["частково змінити поле об'єкта","PATCH","PATCH змінює лише передані поля."],["видалити об'єкт","DELETE","DELETE видаляє ресурс."]]);
+  return mc({tid:"g-http",t:"ENSA14",k:"Методи HTTP",q:"Який метод HTTP відповідає дії «"+op[0]+"» у REST API (CRUD)?"},op[1],op[2],[["GET","GET — лише читання."],["POST","POST — створення."],["PUT","PUT — повна заміна."],["PATCH","PATCH — часткова зміна."],["DELETE","DELETE — видалення."]].filter(x=>x[0]!==op[1]));
+}
+function gJson(){
+  const devs=shuf([["R1","10.0.0.1","17.9.4"],["SW1","10.0.0.11","17.6.5"],["SW2","10.0.0.12","16.12.4"],["R2","10.0.0.2","17.3.1"]]).slice(0,3);
+  const i=R(0,2); const field=pick([["hostname",0],["ip",1],["version",2]]);
+  const json='{\n  "response": [\n'+devs.map(d=>'    {"hostname": "'+d[0]+'", "ip": "'+d[1]+'", "version": "'+d[2]+'"}').join(",\n")+'\n  ],\n  "count": '+devs.length+'\n}';
+  if(Math.random()<0.5) return mc({tid:"g-json",t:"ENSA14",k:"Розбір JSON",c:json,q:"Що поверне вираз data[\"response\"]["+i+"][\""+field[0]+"\"] (Python), якщо data — цей JSON?"},devs[i][field[1]],
+    "Індекси списку починаються з 0, тож ["+i+"] — "+(i+1)+"-й елемент; далі береться ключ \""+field[0]+"\".",devs.filter((_,k)=>k!==i).map(d=>[d[field[1]],"Це значення іншого елемента списку — перевірте індекс (рахунок з 0)."]).concat([[String(devs.length),"Це значення ключа count."],["KeyError","Ключ існує, помилки не буде."]]));
+  const bad=pick([["{'hostname': 'R1'}","Одинарні лапки — у JSON рядки й ключі лише в подвійних лапках."],["{\"hostname\": \"R1\",}","Кома після останнього елемента (trailing comma) у JSON заборонена."],["{hostname: \"R1\"}","Ключ без лапок — у JSON ключі завжди рядки в подвійних лапках."],["{\"enabled\": True}","Булеві значення в JSON — true/false з малої літери."]]);
+  return mc({tid:"g-json",t:"ENSA14",k:"Синтаксис JSON",q:"Який із фрагментів — НЕвалідний JSON?"},bad[0],bad[1],[["{\"hostname\": \"R1\", \"vlans\": [10, 20]}","Валідний: об'єкт із рядком і масивом."],["[{\"id\": 1}, {\"id\": 2}]","Валідний: масив об'єктів."],["{\"enabled\": false, \"mtu\": 1500}","Валідний: булеве значення і число."],["{\"descr\": null}","Валідний: null дозволений."]]);
+}
+
+// ---------- Терміни UA ↔ EN ----------
+function gTerm(){ const G=window.GLOSSARY||[]; if(G.length<5) return null; const e=pick(G); const toEn=Math.random()<0.6;
+  const others=shuf(G.filter(x=>x!==e)).slice(0,3);
+  return mc({tid:"g-term",t:e[2],k:"Терміни англійською",q:toEn?"Як англійською (як на іспиті CCNA) називається «"+e[0]+"»?":"What is the Ukrainian equivalent of «"+e[1]+"»?"},toEn?e[1]:e[0],"«"+e[0]+"» = "+e[1]+".",others.map(x=>[toEn?x[1]:x[0],"Це «"+x[0]+"» = "+x[1]+"."]));
+}
 const add=(k,f,name,t,concept)=>{ G.list[k]={f,name,t}; G.conceptOf[k]=concept; G.topicOf[k]=t; };
 add("g-stproles",gStpRoles,"STP: ролі портів (схема)","SRWE5","Ролі портів STP");
 add("g-drbdr",gDrBdr,"OSPF: DR/BDR (схема)","ENSA1","Вибори DR/BDR");
@@ -136,4 +161,7 @@ add("g-ospfpath",gOspfPath,"OSPF: найкращий шлях (схема)","ENS
 add("g-acltrace",gAclTrace,"ACL: який рядок спрацює","ENSA5","Трасування ACL");
 add("g-nat",gNat,"NAT: таблиця трансляцій","ENSA6","Типи та терміни NAT");
 add("g-fill",gFill,"Заповни конфігурацію","ENSA5","Заповнення конфігурації");
+add("g-term",gTerm,"Терміни UA ↔ EN","ITN1","Терміни англійською");
+add("g-http",gHttp,"REST: коди й методи HTTP","ENSA14","REST API");
+add("g-json",gJson,"JSON: розбір і синтаксис","ENSA14","Формати даних");
 })();
