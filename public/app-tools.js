@@ -48,6 +48,31 @@ async function importGithub(){
     say(($("#obmsg")||{}).textContent+" · з GitHub: "+todo.length+" змінених файлів із "+md.length); }
   catch(e){ say("Помилка імпорту з GitHub: "+e.message); } }
 ACTS.ghimport=()=>importGithub();
+// ---- Запис у vault: слабкі місця, картки з помилок і тижневий огляд — комітом у GitHub-репозиторій ----
+function errCardsMd(){ const L=["---","tags: [ccna, flashcards]","updated: "+dkey(),"---","# CCNA — картки з моїх помилок","","> Згенеровано тренажером. Формат плагіна Spaced Repetition: питання::відповідь.","","#flashcards/ccna",""];
+  const clean=t=>String(t).replace(/::/g,":").replace(/\s*\n\s*/g," ").trim();
+  const rows=Object.entries(prog).filter(([id,r])=>r.w>0&&QMAP[id]).sort((a,b)=>(b[1].w-b[1].c*0.3)-(a[1].w-a[1].c*0.3)).slice(0,80);
+  for(const [id,r] of rows){ const q=QMAP[id]; L.push(clean(q.q)+"::"+clean(ansText(q))+" ("+tlabel(q.t)+", помилок: "+r.w+")"); }
+  for(const q of (typeof ccAll==="function"?ccAll():[])){ const r=prog[q.id]; if(r&&r.w>0) L.push(clean(q.q.replace(/^🃏 /,""))+"::"+clean(q.ans[0])); }
+  return L.join("\n")+"\n"; }
+const b64u=t=>{ const b=new TextEncoder().encode(t); let s=""; for(let i=0;i<b.length;i+=0x8000) s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000)); return btoa(s); };
+const unb64u=s=>{ const bin=atob(String(s).replace(/\n/g,"")); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return new TextDecoder().decode(u); };
+async function ghPut(repo,br,path,text,tok){ const url="https://api.github.com/repos/"+repo+"/contents/"+path.split("/").map(encodeURIComponent).join("/");
+  const H={Accept:"application/vnd.github+json",Authorization:"Bearer "+tok}; let sha=null;
+  const g=await fetch(url+"?ref="+encodeURIComponent(br),{headers:H}); if(g.status===200){ const j=await g.json(); sha=j.sha; try{ if(unb64u(j.content).replace(/^updated: .*$/m,"")===text.replace(/^updated: .*$/m,"")) return "same"; }catch(e){} } else if(g.status===401) throw new Error("токен недійсний");
+  const r=await fetch(url,{method:"PUT",headers:Object.assign({"Content-Type":"application/json"},H),body:JSON.stringify({message:"CCNA тренажер: "+path.split("/").pop()+" ("+dkey()+")",content:b64u(text),branch:br,sha:sha||undefined})});
+  if(r.status===403||r.status===404) throw new Error("немає права запису: потрібен токен з Contents: Read and write для "+repo); if(!r.ok) throw new Error("GitHub відповів "+r.status+" для "+path); return sha?"updated":"created"; }
+async function pushVault(silent){ const m=$("#obmsg"); const say=t=>{ if(m) m.textContent=t; };
+  const tok=(()=>{ try{ return localStorage.getItem(GH_TOK)||""; }catch(e){ return ""; } })(); const repo=opts.obRepo; if(!tok||!repo){ if(!silent) say("Спершу вкажіть репозиторій і токен з правом запису (розділ «Імпорт з GitHub»)"); return; }
+  const dir=(opts.obWriteDir||"CCNA/Тренажер").replace(/^\/|\/$/g,""); const wk=typeof reviewWeek==="function"?reviewWeek():null;
+  try{ if(!silent) say("Записую у vault…"); let br=opts.obBranch; if(!br) br=(await ghJson("https://api.github.com/repos/"+repo,tok)).default_branch;
+    const files=[[dir+"/Слабкі місця.md",obsidianMd()],[dir+"/Картки з помилок.md",errCardsMd()]]; if(wk) files.push([dir+"/Тиждень "+wk+".md",weekMd(wk)]);
+    const res=[]; for(const [p,t] of files) res.push(await ghPut(repo,br,p,t,tok));
+    opts.obPushed=Date.now(); lsSet(LS.opts,opts); const ch=res.filter(x=>x!=="same").length; if(!silent) say(ch?"Записано у "+repo+"/"+dir+": змінених файлів "+ch+" з "+res.length:"У vault усе актуально — змін немає"); }
+  catch(e){ if(!silent) say("Помилка запису у vault: "+e.message); } }
+ACTS.ghpush=()=>{ const t=$("#ghtok"); const v=t&&t.value.trim(); if(v&&v!=="••••"){ try{ localStorage.setItem(GH_TOK,v); }catch(e){} } const r=$("#ghrepo"); if(r&&r.value.trim()){ opts.obRepo=r.value.trim(); } const d=$("#ghwdir"); if(d) opts.obWriteDir=d.value.trim()||"CCNA/Тренажер"; lsSet(LS.opts,opts); pushVault(false); };
+ACTS.ghauto=el=>{ opts.obAutoPush=!opts.obAutoPush; lsSet(LS.opts,opts); render(); };
+setTimeout(()=>{ try{ if(opts.obAutoPush&&opts.obRepo&&localStorage.getItem(GH_TOK)&&Date.now()-(opts.obPushed||0)>20*3600e3) pushVault(true); }catch(e){} },15000);
 ACTS.ghforget=()=>{ try{ localStorage.removeItem(GH_TOK); localStorage.removeItem(GH_SHA); }catch(e){} render(); };
 function renderObsidian(){ const fl=customQs.filter(q=>q.type==="flash").length;
   return `<div class="card"><h2>📒 Картки з Obsidian</h2><p class="small muted" style="margin:0 0 8px">Оберіть папку CCNA з вашого vault (або окремі .md). Тренажер знайде картки у форматах <code>питання::відповідь</code>, <code>питання:::відповідь</code>, багаторядкові з рядком <code>?</code> між питанням і відповіддю, а також пари <code>Q:</code>/<code>A:</code>. Тему визначає за назвою файлу (наприклад «SRWE 3 VLAN.md») або ключовими словами. Повторний імпорт додає нові й оновлює змінені картки — прогрес не втрачається.</p>
@@ -58,7 +83,10 @@ function renderObsidian(){ const fl=customQs.filter(q=>q.type==="flash").length;
      <div class="row"><div class="grow"><label class="small muted">Папка (необов'язково)</label><input type="text" id="ghpath" value="${esc(opts.obPath||"")}" placeholder="напр. CCNA"></div><div class="grow"><label class="small muted">Гілка</label><input type="text" id="ghbranch" value="${esc(opts.obBranch||"")}" placeholder="за замовчуванням"></div></div>
      <label class="small muted">Токен для приватного репозиторію (fine-grained, лише Contents: read)</label><input type="password" id="ghtok" autocomplete="off" value="${(()=>{ try{ return localStorage.getItem(GH_TOK)?"••••":""; }catch(e){ return ""; } })()}" placeholder="github_pat_… (зберігається лише на цьому пристрої)">
      <div class="row" style="margin-top:8px"><button class="primary" data-act="ghimport">⬇ Імпортувати з GitHub</button><button class="ghost" data-act="ghforget">Забути токен і кеш</button></div>
-     <p class="small muted" style="margin:6px 0 0">Повторний імпорт завантажує лише змінені файли. Токен не синхронізується в хмару тренажера.</p></div></details>
+     <p class="small muted" style="margin:6px 0 0">Повторний імпорт завантажує лише змінені файли. Токен не синхронізується в хмару тренажера.</p>
+     <h3 style="margin:12px 0 4px">⬆ Запис у vault</h3><p class="small muted" style="margin:0 0 6px">Тренажер комітить у репозиторій три нотатки: «Слабкі місця», «Картки з помилок» (формат питання::відповідь для плагіна Spaced Repetition) і огляд тижня. Потрібен токен з правом Contents: Read and write. Obsidian Git підтягне їх у vault.</p>
+     <label class="small muted">Папка у vault</label><input type="text" id="ghwdir" value="${esc(opts.obWriteDir||"CCNA/Тренажер")}">
+     <div class="row" style="margin-top:8px"><button data-act="ghpush">⬆ Записати у vault</button><label class="small"><input type="checkbox" data-act="ghauto" ${opts.obAutoPush?"checked":""}> автоматично раз на день</label></div>${opts.obPushed?`<p class="small muted" style="margin:4px 0 0">Останній запис: ${new Date(opts.obPushed).toLocaleString("uk-UA")}</p>`:""}</div></details>
     <p class="small muted" id="obmsg" style="margin:8px 0 0">Карток з нотаток: ${fl}${opts.obLast?" · останній імпорт "+new Date(opts.obLast).toLocaleString("uk-UA"):""}</p>${fl?`<button class="mini" data-act="obtrain" style="margin-top:6px">Тренувати картки</button>`:""}</div>`; }
 function renderCustom(){
   const editing=customEdit? customQs.find(x=>x.id===customEdit) : customDraft;

@@ -181,6 +181,18 @@ await step("картки команд: команда з лаби → картк
   await page.evaluate(() => { opts.homeTab = "prac"; view = "home"; render(); }); await has("Картки команд"); await act('[data-act="ccrun"]'); await has("Команда з ваших лаб");
   const q = await page.evaluate(() => S.items.find(x => /access vlan/.test(x.ans[0]))); if (!q || q.ans[0] !== "switchport access vlan 10") throw new Error("немає картки access vlan: " + JSON.stringify(q));
   await page.evaluate(() => { opts.homeTab = "all"; }); await home(); });
+await step("запис у vault через GitHub API (мок)", async () => {
+  const puts = [];
+  await page.route(/api\.github\.com/, async r => { const u = r.request().url(), m = r.request().method();
+    if (/\/repos\/[^/]+\/[^/]+$/.test(u)) return r.fulfill({ contentType: "application/json", body: JSON.stringify({ default_branch: "main" }) });
+    if (m === "GET") return r.fulfill({ status: 404, body: "{}" });
+    if (m === "PUT") { const b = JSON.parse(r.request().postData()); puts.push({ path: decodeURIComponent(u.split("/contents/")[1]), text: Buffer.from(b.content, "base64").toString("utf8"), branch: b.branch, auth: r.request().headers().authorization }); return r.fulfill({ status: 201, contentType: "application/json", body: "{}" }); }
+    return r.fulfill({ status: 404, body: "" }); });
+  await page.evaluate(() => { localStorage.setItem("ccna.ghtoken", "test-token"); opts.obRepo = "test/vault"; opts.obBranch = ""; prog["e1-2"] = Object.assign({}, prog["e1-2"] || {}, { w: 2, c: 0, s: 2, b: 0, d: 0, l: 0, k: 0 }); view = "custom"; render(); });
+  await page.evaluate(() => pushVault(false)); await page.waitForFunction(() => /Записано|актуально|Помилка/.test((document.querySelector("#obmsg") || {}).textContent || ""), null, { timeout: 5000 });
+  const msg = await page.evaluate(() => document.querySelector("#obmsg").textContent); if (!/Записано/.test(msg)) throw new Error(msg);
+  if (puts.length !== 3 || !puts.some(p => /Картки з помилок\.md$/.test(p.path) && /::/.test(p.text)) || !puts.every(p => p.branch === "main" && p.auth === "Bearer test-token")) throw new Error(JSON.stringify(puts.map(p => p.path)));
+  await page.unroute(/api\.github\.com/); await page.evaluate(() => { localStorage.removeItem("ccna.ghtoken"); delete opts.obRepo; }); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));
