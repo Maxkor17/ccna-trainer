@@ -203,6 +203,24 @@ await step("аудіорежим: озвучення питання, відпо�
   await act(`[data-act="audpick"][data-k="${q.a}"]`); await page.waitForTimeout(100);
   const after = await page.evaluate(() => ({ said: window.__said.slice(-2).join(" "), ok: AUD.ok, phase: AUD.phase })); if (after.ok !== 1 || !/Правильно|Correct/.test(after.said)) throw new Error(JSON.stringify(after));
   await act('[data-act="audnext"]'); await act('[data-act="audstop"]'); await page.evaluate(() => { opts.homeTab = "all"; }); });
+await step("Python-лаба (Pyodide): Netmiko, NAPALM, RESTCONF, NETCONF", async () => {
+  const PYD = path.join(path.dirname(fileURLToPath(import.meta.url)), "node_modules", "pyodide");
+  await page.route(/cdn\.jsdelivr\.net\/npm\/pyodide@/, r => { const f = path.join(PYD, new URL(r.request().url()).pathname.split("/").pop()); if (!fs.existsSync(f)) return r.fulfill({ status: 404, body: "" });
+    const ct = f.endsWith(".wasm") ? "application/wasm" : /\.m?js$/.test(f) ? "text/javascript" : f.endsWith(".json") ? "application/json" : "application/octet-stream"; return r.fulfill({ status: 200, contentType: ct, headers: { "access-control-allow-origin": "*" }, body: fs.readFileSync(f) }); });
+  await page.evaluate(() => { view = "labs"; render(); }); await act('[data-act="pylab"]'); await has("script.py");
+  await page.evaluate(() => { document.querySelector("#pysrc").value = `from netmiko import ConnectHandler
+from napalm import get_network_driver
+import requests
+for ip in ["10.0.0.1","10.0.0.11","10.0.0.12"]:
+    with ConnectHandler(device_type="cisco_ios", host=ip, username="admin", password="Cisco123!") as c:
+        print(c.find_prompt())
+d = get_network_driver("ios")("10.0.0.1","admin","Cisco123!"); d.open(); d.load_merge_candidate(config="ntp server 10.1.1.123"); print(d.compare_config()); d.commit_config()
+r = requests.get("https://10.0.0.1/restconf/data/ietf-interfaces:interfaces", headers={"Accept":"application/yang-data+json"}, auth=("admin","Cisco123!"))
+print("REST", r.status_code)`; });
+  await act('[data-act="pyrun"]'); await page.waitForFunction(() => PYL && !PYL.busy && PYL.out, null, { timeout: 90000 });
+  const out = await page.evaluate(() => PYL.out); if (!/R1#[\s\S]*S2#[\s\S]*\+ntp server 10\.1\.1\.123[\s\S]*REST 200/.test(out)) throw new Error(out.slice(0, 400));
+  const done = await page.evaluate(() => PYLAB.TASKS.filter(t => t.ok(PYL.lab)).map(t => t.id)); if (!done.includes("loop") || !done.includes("napalm") || !done.includes("rget")) throw new Error("завдання: " + done);
+  await page.unroute(/cdn\.jsdelivr\.net\/npm\/pyodide@/); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));

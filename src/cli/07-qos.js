@@ -83,3 +83,17 @@ function showRouteIp(s,ip){ if(!s.net||!s.ipRouting) return "% Network not in ta
   const src=r.ospf?{k:"ospf "+(s.ospf?s.ospf.pid:1),ad:110,m:(s.net.ospfRoutes(s.devName).find(x=>x.net+"/"+maskLen(x.mask)===r.pfx)||{}).cost||0}:r.conn?{k:"connected",ad:0,m:0}:{k:"static",ad:r.ad,m:0};
   return "Routing entry for "+r.pfx+"\n  Known via \""+src.k+"\", distance "+src.ad+", metric "+src.m+(r.conn?" (connected, via interface)":"")+"\n  Routing Descriptor Blocks:\n  * "+(r.conn?"directly connected, via "+longIf(r.ifn):r.nh+(r.ifn?", via "+longIf(r.ifn):""))+"\n      Route metric is "+src.m+", traffic share count is 1"; }
 for(const m of ["user","exec"]) add(m,"show ip route <ip>",(s,a)=>showRouteIp(s,a[0]));
+// ---------- Харденінг за CIS: source-route, proxy-arp, redirects/unreachables, keepalives, bootp, ssh timers ----------
+const CIS=s=>(s.cis=s.cis||{});
+add(C,"no ip source-route",s=>{ CIS(s).noSrcRoute=true; }); add(C,"ip source-route",s=>{ CIS(s).noSrcRoute=false; });
+add(C,"service tcp-keepalives-in",s=>{ CIS(s).keepIn=true; }); add(C,"no service tcp-keepalives-in",s=>{ CIS(s).keepIn=false; });
+add(C,"service tcp-keepalives-out",s=>{ CIS(s).keepOut=true; }); add(C,"no service tcp-keepalives-out",s=>{ CIS(s).keepOut=false; });
+add(C,"no ip bootp server",s=>{ CIS(s).noBootp=true; }); add(C,"ip bootp server",s=>{ CIS(s).noBootp=false; });
+add(C,"no service pad",()=>{}); add(C,"no ip finger",()=>{}); add(C,"no service dhcp",s=>{ CIS(s).noDhcpSvc=true; }); add(C,"service dhcp",s=>{ CIS(s).noDhcpSvc=false; });
+add(C,"ip ssh time-out <n>",(s,a)=>{ if(a[0]<1||a[0]>120) return INV; CIS(s).sshTimeout=a[0]; });
+add(C,"ip ssh authentication-retries <n>",(s,a)=>{ if(a[0]<0||a[0]>5) return INV; CIS(s).sshRetries=a[0]; });
+add("if","no ip proxy-arp",F(i=>{ i.noProxyArp=true; })); add("if","ip proxy-arp",F(i=>{ i.noProxyArp=false; }));
+add("if","no ip redirects",F(i=>{ i.noRedirects=true; })); add("if","ip redirects",F(i=>{ i.noRedirects=false; }));
+add("if","no ip unreachables",F(i=>{ i.noUnreach=true; })); add("if","ip unreachables",F(i=>{ i.noUnreach=false; }));
+function cisRunGlobal(s){ const c=s.cis||{}; const L=[]; if(c.noSrcRoute) L.push("no ip source-route"); if(c.keepIn) L.push("service tcp-keepalives-in"); if(c.keepOut) L.push("service tcp-keepalives-out"); if(c.noBootp) L.push("no ip bootp server"); if(c.noDhcpSvc) L.push("no service dhcp"); if(c.sshTimeout) L.push("ip ssh time-out "+c.sshTimeout); if(c.sshRetries!=null) L.push("ip ssh authentication-retries "+c.sshRetries); return L; }
+function cisRunIf(i){ const L=[]; if(i.noRedirects) L.push(" no ip redirects"); if(i.noUnreach) L.push(" no ip unreachables"); if(i.noProxyArp) L.push(" no ip proxy-arp"); return L; }

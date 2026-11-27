@@ -231,6 +231,7 @@ function renderLabs(){
     <div class="row"><button class="primary" data-act="tsstart" data-n="1">Одна поломка</button><button data-act="tsstart" data-n="2">Дві поломки</button><button data-act="tsstart" data-n="1" data-tk="1">🎫 Тікет від користувача</button><span class="small muted">Розв'язано: ${Object.keys(labs).filter(k=>k.startsWith("ts-")&&labs[k].ok).reduce((a,k)=>a+(labs[k].solved||1),0)}${(()=>{ const t=Object.values(labs).filter(x=>x&&x.tk); const n=t.reduce((a,x)=>a+x.tk.n,0); return n?` · тікетів: ${n}, середня оцінка ${Math.round(t.reduce((a,x)=>a+x.tk.sum,0)/n)}, найкраща ${Math.max(...t.map(x=>x.tk.best))}`:""; })()}</span></div>
     <p class="small muted" style="margin:8px 0 0">Тікет — як на реальній роботі: ви бачите лише скаргу користувача, а не список вимог. Оцінка залежить від часу, кількості команд і невдалих перевірок.</p></div>
   <div class="card"><h2>📶 Бездротовий контролер (GUI)</h2><p class="small muted" style="margin:0 0 8px">Інтерфейс у стилі Cisco WLC: динамічний інтерфейс, RADIUS, WLAN із WPA2-PSK і WPA2-Enterprise. ${labs.wlc&&labs.wlc.ok?"✅ виконано":labs.wlc?"⏳ "+(labs.wlc.n||0)+"/5":""}</p><button class="primary" data-act="wlclab">Відкрити</button></div>
+  <div class="card"><h2>🐍 Python для мереж</h2><p class="small muted" style="margin:0 0 8px">Справжній Python у браузері: Netmiko, NAPALM, RESTCONF (requests) і NETCONF (ncclient) на пристроях симулятора. Гайд для Cisco DevNet Sandbox. ${labs.pylab&&labs.pylab.ok?"✅ виконано":labs.pylab?"⏳ "+(labs.pylab.n||0)+"/"+PYLAB.TASKS.length:""}</p><button class="primary" data-act="pylab">Відкрити</button></div>
   <div class="card"><h2>🤖 Автоматизація: Ansible</h2><p class="small muted" style="margin:0 0 8px">YAML-плейбуки з модулями ios_command і ios_config на пристроях симулятора: змінні, loop, register, ідемпотентність, save_when. ${labs.ansible&&labs.ansible.ok?"✅ виконано":labs.ansible?"⏳ "+(labs.ansible.n||0)+"/"+ANSIBLE.TASKS.length:""}</p><button class="primary" data-act="ansible">Відкрити</button></div>
   <div class="card"><h2>🤖 Автоматизація: REST API</h2><p class="small muted" style="margin:0 0 8px">Токен, GET/POST/PUT/DELETE, заголовки, JSON і коди відповідей — на навчальному контролері. ${labs.api&&labs.api.ok?"✅ виконано":labs.api?"⏳ "+(labs.api.n||0)+"/7":""}</p><button class="primary" data-act="api">Відкрити</button></div>
   <div class="card"><h2>🧪 Пісочниця</h2><p class="small muted" style="margin:0 0 8px">Будуйте власну мережу без завдання: комутатори, L3-комутатори, маршрутизатори, ПК, сервери. Конфігурація зберігається й синхронізується.</p><button class="primary" data-act="sandbox">Відкрити пісочницю</button></div>
@@ -238,7 +239,7 @@ function renderLabs(){
   <h3>🌐 SRWE: кілька пристроїв</h3>${(CLI.NETSCEN||[]).filter(s=>/^SRWE/.test(s.t)).map(card).join("")}
   <h3>🌐 ENSA: OSPF, ACL, NAT, WAN, QoS, дизайн</h3>${(CLI.NETSCEN||[]).filter(s=>/^ENSA/.test(s.t)).map(card).join("")}
   <h3>Один комутатор</h3>${CLI.SCEN.map(card).join("")}
-  <h3>🐧 Після CCNA: Linux і DevOps</h3>${((window.BASH&&BASH.SCEN)||[]).map(card).join("")}
+  <h3>🐧 Після CCNA: Linux, DevOps і безпека</h3>${((window.BASH&&BASH.SCEN)||[]).map(card).join("")}${(CLI.NETSCEN||[]).filter(s=>/^LNX/.test(s.t)).map(card).join("")}
   <button class="primary" data-act="home">На головну</button>`;
 }
 function renderLab(){

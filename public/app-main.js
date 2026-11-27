@@ -65,10 +65,10 @@ document.addEventListener("click", async ev=>{
   if(act==="wlclab"){ if(!window._wlc) window._wlc=lsGet("ccna.wlc.v1",null)||WLC.newState(); view="wlc"; render(); scrollTop(); return; }
   if(act==="wlc"){ const op=el.dataset.op; if(op==="reset"){ window._wlc=WLC.newState(); } else WLC.handle(window._wlc,op,el,$); lsSet("ccna.wlc.v1",window._wlc); const d=WLC.done(window._wlc); const n=Object.values(d).filter(Boolean).length; const prev=labs.wlc||{}; if(n!==prev.n){ const rec={ok:n===WLC.TASKS.length||!!prev.ok,n,ts:Date.now()}; if(n===WLC.TASKS.length&&!prev.ok) rec.done=Date.now(); labs.wlc=rec; patch({labs:{wlc:rec}}); } ev.preventDefault(); render(); return; }
   if(act==="api"){ view="api"; render(); scrollTop(); return; }
-  if(act==="apisend"){ apiSync(); API.res=APILAB.handle(API.st,API.req); apiDone(); render(); return; }
-  if(act==="apitok"){ apiSync(); API.req.headers=API.req.headers.split("\n").filter(l=>!/^x-auth-token/i.test(l.trim())&&!/^authorization/i.test(l.trim())).concat(["X-Auth-Token: "+API.st.token]).join("\n"); render(); return; }
-  if(act==="apireset"){ API=null; render(); return; }
-  if(act==="apians"){ apiSync(); API.ans=$("#apians").value.trim(); if(API.ans===APILAB.TASKS.find(t=>t.id==="answer").ans) API.st.done.answer=true; else alert("Ні. Знайдіть пристрій із reachabilityStatus = Unreachable у відповіді GET /network-device."); apiDone(); render(); return; }
+  if(act==="apisend"){ apiSync(); APIL.res=APILAB.handle(APIL.st,APIL.req); apiDone(); render(); return; }
+  if(act==="apitok"){ apiSync(); APIL.req.headers=APIL.req.headers.split("\n").filter(l=>!/^x-auth-token/i.test(l.trim())&&!/^authorization/i.test(l.trim())).concat(["X-Auth-Token: "+APIL.st.token]).join("\n"); render(); return; }
+  if(act==="apireset"){ APIL=null; render(); return; }
+  if(act==="apians"){ apiSync(); APIL.ans=$("#apians").value.trim(); if(APIL.ans===APILAB.TASKS.find(t=>t.id==="answer").ans) APIL.st.done.answer=true; else alert("Ні. Знайдіть пристрій із reachabilityStatus = Unreachable у відповіді GET /network-device."); apiDone(); render(); return; }
   if(act==="sbadd"){ const t=el.dataset.t; const pre={switch:"S",l3:"MLS",router:"R",pc:"PC",server:"SRV"}[t]; let k=1; while(LAB.N.dev[pre+k]) k++; sbMutate(d=>{ d.devs[pre+k]= t==="pc"||t==="server"? {type:t,services:t==="server"?[80,22,23]:[]} : {type:t}; }); return; }
   if(act==="sblink"){ const a=$("#sbA").value,b=$("#sbB").value,pa=$("#sbPA").value,pb=$("#sbPB").value; if(!pa||!pb||a===b){ alert("Оберіть два різні пристрої з вільними портами"); return; } sbMutate(d=>d.links.push([a,pa,b,pb])); return; }
   if(act==="sbunlink"){ const k=Number(el.dataset.k); sbMutate(d=>d.links.splice(k,1)); return; }

@@ -45,9 +45,9 @@ function renderSpeed(){
     ${SP.last?`<p class="small" style="margin:8px 0 0">${SP.last.ok?"✅ Правильно":"❌ Було: <b>"+esc(SP.last.ans)+"</b>"}</p>`:""}</div>
   <button class="ghost" data-act="speedquit">Перервати</button>`; }
 // ---- Лаба автоматизації (REST API) ----
-let API=null;
-function renderApi(){ if(!API) API={st:APILAB.newState(),req:{method:"POST",url:APILAB.BASE+"/dna/system/api/v1/auth/token",headers:"Authorization: Basic \nContent-Type: application/json",body:""},res:null,ans:""};
-  const A=API, done=A.st.done, n=APILAB.TASKS.filter(t=>done[t.id]).length;
+let APIL=null;
+function renderApi(){ if(!APIL) APIL={st:APILAB.newState(),req:{method:"POST",url:APILAB.BASE+"/dna/system/api/v1/auth/token",headers:"Authorization: Basic \nContent-Type: application/json",body:""},res:null,ans:""};
+  const A=APIL, done=A.st.done, n=APILAB.TASKS.filter(t=>done[t.id]).length;
   const r=A.res; const col=r? (r.code<300?"--ok":r.code<500?"--bad":"--warn") : "--muted";
   return `<div class="card"><h2>🤖 Автоматизація: REST API контролера</h2><p class="small muted" style="margin:0 0 6px">Навчальний контролер на кшталт Cisco Catalyst Center. Виконуйте завдання HTTP-запитами: метод, URL, заголовки, тіло JSON. Виконано ${n}/${APILAB.TASKS.length}.</p>
     <ol class="checklist" style="padding-left:20px">${APILAB.TASKS.map(t=>`<li>${done[t.id]?"✅":"⬜"} ${esc(t.t)}${t.h&&!done[t.id]?`<div class="small muted">${esc(t.h)}</div>`:""}</li>`).join("")}</ol></div>
@@ -59,8 +59,8 @@ function renderApi(){ if(!API) API={st:APILAB.newState(),req:{method:"POST",url:
   ${r?`<div class="card"><h2>Відповідь <span style="color:var(${col})">${r.code} ${esc(r.status||"")}</span></h2><pre>${esc(r.body===null?"(порожнє тіло)":JSON.stringify(r.body,null,2))}</pre><p class="small muted" style="margin:0">${r.code===201?"201 — ресурс створено.":r.code===204?"204 — успішно, тіла немає (типово для DELETE).":r.code===401?"401 — немає або недійсна автентифікація.":r.code===404?"404 — неправильний шлях або ресурс не існує.":r.code===405?"405 — метод не підтримується для цього ресурсу.":r.code===409?"409 — конфлікт: ресурс уже існує.":r.code===415?"415 — сервер не розуміє формат тіла (потрібен Content-Type).":r.code===400?"400 — помилка в запиті (JSON або поля).":""}</p></div>`:""}
   <div class="card"><h2>Відповідь на завдання 4</h2><div class="row"><input id="apians" value="${esc(A.ans)}" placeholder="версія ПЗ" class="grow"><button data-act="apians">Перевірити</button></div></div>
   <button class="ghost" data-act="labs">← До списку лаб</button>`; }
-function apiSync(){ API.req={method:$("#apim").value,url:$("#apiu").value,headers:$("#apih").value,body:$("#apib").value}; }
-function apiDone(){ const n=APILAB.TASKS.filter(t=>API.st.done[t.id]).length; const prev=labs["api"]||{}; const rec={ok:n===APILAB.TASKS.length||!!prev.ok,tries:(prev.tries||0)+1,ts:Date.now(),n:Math.max(n,prev.n||0)}; labs["api"]=rec; patch({labs:{api:rec}}); }
+function apiSync(){ APIL.req={method:$("#apim").value,url:$("#apiu").value,headers:$("#apih").value,body:$("#apib").value}; }
+function apiDone(){ const n=APILAB.TASKS.filter(t=>APIL.st.done[t.id]).length; const prev=labs["api"]||{}; const rec={ok:n===APILAB.TASKS.length||!!prev.ok,tries:(prev.tries||0)+1,ts:Date.now(),n:Math.max(n,prev.n||0)}; labs["api"]=rec; patch({labs:{api:rec}}); }
 // ---- Анімований шлях пакета ----
 let walkTimer=null;
 function walkSteps(){ const f=LAB.N.lastFlow; return f.fwd.concat(f.back&&f.back.length?[{sep:true,text:"↩ Відповідь"}].concat(f.back):[]); }

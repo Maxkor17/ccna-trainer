@@ -764,7 +764,7 @@ function v2RunIf(s,i){ const L=[]; if(i.stpGuard) L.push(" spanning-tree guard "
   if(i.raGuard) L.push(i.raGuard==="(default)"?" ipv6 nd raguard":" ipv6 nd raguard attach-policy "+i.raGuard); return L.concat(qosRunIf(i)); }
 function v2RunL3(i){ const L=[]; for(const [g,v] of Object.entries(i.vrrp||{})){ if(v.desc) L.push(" vrrp "+g+" description "+v.desc); if(v.ip) L.push(" vrrp "+g+" ip "+v.ip); if(v.prio!==100) L.push(" vrrp "+g+" priority "+v.prio); if(!v.preempt) L.push(" no vrrp "+g+" preempt"); }
   if(i.ospf6) L.push(" ipv6 ospf "+i.ospf6.pid+" area "+i.ospf6.area); if(i.ospf6Cost) L.push(" ipv6 ospf cost "+i.ospf6Cost); if(i.ospf6Prio!=null) L.push(" ipv6 ospf priority "+i.ospf6Prio);
-  if(i.tunSrc) L.push(" tunnel source "+(i.tunSrc.includes(".")?i.tunSrc:longIf(i.tunSrc))); if(i.tunDst) L.push(" tunnel destination "+i.tunDst); return L.concat(qosRunIf(i)); }
+  if(i.tunSrc) L.push(" tunnel source "+(i.tunSrc.includes(".")?i.tunSrc:longIf(i.tunSrc))); if(i.tunDst) L.push(" tunnel destination "+i.tunDst); return L.concat(qosRunIf(i),cisRunIf(i)); }
 function v2RunGlobal(s){ const L=[]; if(s.aaa&&s.aaa.on){ L.push("aaa new-model"); for(const [n,m] of Object.entries(s.aaa.login)) L.push("aaa authentication login "+n+" "+m.map(x=>x==="tacacs+"||x==="radius"?"group "+x:x).join(" ")); for(const [n,m] of Object.entries(s.aaa.authz)) L.push("aaa authorization exec "+n+" "+m.map(x=>x==="tacacs+"||x==="radius"?"group "+x:x).join(" ")); for(const [n,v] of Object.entries(s.aaa.acct)) L.push("aaa accounting exec "+n+" "+v); L.push("!"); }
   for(const [n,t] of Object.entries(s.tacacs||{})){ L.push("tacacs server "+n); if(t.ip) L.push(" address ipv4 "+t.ip); if(t.key) L.push(" key 7 "+hmac(t.key).replace(/\./g,"").toUpperCase()); if(t.port!==49) L.push(" port "+t.port); L.push("!"); }
   for(const [n,t] of Object.entries(s.radius||{})){ L.push("radius server "+n); if(t.ip) L.push(" address ipv4 "+t.ip+" auth-port "+t.auth+" acct-port "+t.acct); if(t.key) L.push(" key 7 "+hmac(t.key).replace(/\./g,"").toUpperCase()); L.push("!"); }
@@ -859,6 +859,20 @@ function showRouteIp(s,ip){ if(!s.net||!s.ipRouting) return "% Network not in ta
   const src=r.ospf?{k:"ospf "+(s.ospf?s.ospf.pid:1),ad:110,m:(s.net.ospfRoutes(s.devName).find(x=>x.net+"/"+maskLen(x.mask)===r.pfx)||{}).cost||0}:r.conn?{k:"connected",ad:0,m:0}:{k:"static",ad:r.ad,m:0};
   return "Routing entry for "+r.pfx+"\n  Known via \""+src.k+"\", distance "+src.ad+", metric "+src.m+(r.conn?" (connected, via interface)":"")+"\n  Routing Descriptor Blocks:\n  * "+(r.conn?"directly connected, via "+longIf(r.ifn):r.nh+(r.ifn?", via "+longIf(r.ifn):""))+"\n      Route metric is "+src.m+", traffic share count is 1"; }
 for(const m of ["user","exec"]) add(m,"show ip route <ip>",(s,a)=>showRouteIp(s,a[0]));
+// ---------- Харденінг за CIS: source-route, proxy-arp, redirects/unreachables, keepalives, bootp, ssh timers ----------
+const CIS=s=>(s.cis=s.cis||{});
+add(C,"no ip source-route",s=>{ CIS(s).noSrcRoute=true; }); add(C,"ip source-route",s=>{ CIS(s).noSrcRoute=false; });
+add(C,"service tcp-keepalives-in",s=>{ CIS(s).keepIn=true; }); add(C,"no service tcp-keepalives-in",s=>{ CIS(s).keepIn=false; });
+add(C,"service tcp-keepalives-out",s=>{ CIS(s).keepOut=true; }); add(C,"no service tcp-keepalives-out",s=>{ CIS(s).keepOut=false; });
+add(C,"no ip bootp server",s=>{ CIS(s).noBootp=true; }); add(C,"ip bootp server",s=>{ CIS(s).noBootp=false; });
+add(C,"no service pad",()=>{}); add(C,"no ip finger",()=>{}); add(C,"no service dhcp",s=>{ CIS(s).noDhcpSvc=true; }); add(C,"service dhcp",s=>{ CIS(s).noDhcpSvc=false; });
+add(C,"ip ssh time-out <n>",(s,a)=>{ if(a[0]<1||a[0]>120) return INV; CIS(s).sshTimeout=a[0]; });
+add(C,"ip ssh authentication-retries <n>",(s,a)=>{ if(a[0]<0||a[0]>5) return INV; CIS(s).sshRetries=a[0]; });
+add("if","no ip proxy-arp",F(i=>{ i.noProxyArp=true; })); add("if","ip proxy-arp",F(i=>{ i.noProxyArp=false; }));
+add("if","no ip redirects",F(i=>{ i.noRedirects=true; })); add("if","ip redirects",F(i=>{ i.noRedirects=false; }));
+add("if","no ip unreachables",F(i=>{ i.noUnreach=true; })); add("if","ip unreachables",F(i=>{ i.noUnreach=false; }));
+function cisRunGlobal(s){ const c=s.cis||{}; const L=[]; if(c.noSrcRoute) L.push("no ip source-route"); if(c.keepIn) L.push("service tcp-keepalives-in"); if(c.keepOut) L.push("service tcp-keepalives-out"); if(c.noBootp) L.push("no ip bootp server"); if(c.noDhcpSvc) L.push("no service dhcp"); if(c.sshTimeout) L.push("ip ssh time-out "+c.sshTimeout); if(c.sshRetries!=null) L.push("ip ssh authentication-retries "+c.sshRetries); return L; }
+function cisRunIf(i){ const L=[]; if(i.noRedirects) L.push(" no ip redirects"); if(i.noUnreach) L.push(" no ip unreachables"); if(i.noProxyArp) L.push(" no ip proxy-arp"); return L; }
 // ---------- Розбір рядка ----------
 function tokenize(line){
   let t=line.trim().split(/\s+/).filter(Boolean);
@@ -1056,7 +1070,7 @@ function showRun(s){
   if(s.noDomainLookup) L.push("no ip domain-lookup"); if(s.domain) L.push("ip domain-name "+s.domain); if(s.ipRouting) L.push("ip routing"); if(s.sshVer) L.push("ip ssh version "+s.sshVer);
   for(const [a,b] of s.dhcp.excl) L.push("ip dhcp excluded-address "+a+(b!==a?" "+b:""));
   for(const p of Object.values(s.dhcp.pools)){ L.push("!","ip dhcp pool "+p.name); if(p.net) L.push(" network "+p.net+" "+p.mask); if(p.gw) L.push(" default-router "+p.gw); if(p.opt43) L.push(" option 43 hex "+p.opt43.replace(/(.{4})(?=.)/g,"$1.")); if(p.dns) L.push(" dns-server "+p.dns); if(p.domain) L.push(" domain-name "+p.domain); }
-  { const g=secRunGlobal(s).concat(v2RunGlobal(s),qosRunGlobal(s)); if(g.length) L.push("!",...g); }
+  { const g=secRunGlobal(s).concat(v2RunGlobal(s),qosRunGlobal(s),cisRunGlobal(s)); if(g.length) L.push("!",...g); }
   if(!s.router) L.push("!","spanning-tree mode "+s.stpMode); else L.push("!"); if(s.portfastDefault) L.push("spanning-tree portfast default"); if(s.bpduguardDefault) L.push("spanning-tree portfast bpduguard default"); L.push("spanning-tree extend system-id");
   for(const [v,p] of Object.entries(s.stpPrio)) L.push("spanning-tree vlan "+v+" priority "+p);
   if(s.lb!=="src-mac") L.push("port-channel load-balance "+s.lb);
@@ -2522,6 +2536,32 @@ const NETSCEN=[
   autoSol:N=>{ N._map=discoverTruth(N).text; },
   sol:"(карта будується автоматично)"},
  // ===================== Після CCNA: безпека і автоматизація =====================
+ {id:"net-cis",net:true,t:"LNX12",title:"Аудит і харденінг маршрутизатора за CIS Benchmark",
+  topo:"Admin 192.168.1.10 — R1 Gi0/0 192.168.1.1 (внутрішня мережа)\nR1 Gi0/1 203.0.113.2/30 — ISP 203.0.113.1 (Інтернет)\nNTP/syslog-сервер 192.168.1.50",
+  task:["R1 — граничний маршрутизатор «з коробки»: Telnet із паролем на лінії, немає enable secret, CDP і проксі-ARP дивляться в Інтернет. Проведіть аудит (show running-config) і виправте за рекомендаціями CIS — кожна вимога нижче відповідає пункту бенчмарка.",
+   "Площина управління: enable secret; користувач admin із secret; SSH v2 з ключем 2048 (ip domain-name lab.local), ip ssh time-out 60 і authentication-retries 3; на vty — transport input ssh, login local, exec-timeout 10 0 і access-class зі стандартним ACL 10, що дозволяє лише 192.168.1.0/24; login block-for; banner motd.",
+   "Площина керування: service tcp-keepalives-in; logging buffered 16384, service timestamps log datetime msec, logging host 192.168.1.50; ntp server 192.168.1.50; CDP вимкнено на зовнішньому Gi0/1.",
+   "Площина даних: no ip source-route; на Gi0/1 — no ip proxy-arp, no ip redirects, no ip unreachables.",
+   "Перевірка: з Admin — ssh -l admin 192.168.1.1 працює, telnet — ні."],
+  def:()=>({devices:{
+    R1:{type:"router",setup:s=>{ IP(s,"Gi0/0","192.168.1.1",M24); IP(s,"Gi0/1","203.0.113.2",M30); addRoute(s,"0.0.0.0","0.0.0.0","203.0.113.1",null,1); s.vty.password="cisco"; s.vty.login="line"; }},
+    ISP:{type:"router",setup:s=>{ IP(s,"Gi0/1","203.0.113.1",M30); addRoute(s,"192.168.1.0",M24,"203.0.113.2",null,1); }},
+    Admin:{type:"pc",ip:"192.168.1.10",mask:M24,gw:"192.168.1.1"},NTP:{type:"server",ip:"192.168.1.50",mask:M24,gw:"192.168.1.1",services:[123,514]}},
+    links:[["Admin","Fa0","R1","Gi0/0"],["R1","Gi0/1","ISP","Gi0/1"],["NTP","Fa0","R1","Gi0/2"]]}),
+  check:N=>{ const r=N.dev.R1, v=r.vty, c=r.cis||{}, sv=r.svc||{}, o=r.ifs["Gi0/1"]; const acl=r.acls&&r.acls[v.acl];
+    const aclOk=!!acl&&JSON.stringify(acl).includes("192.168.1.0")&&JSON.stringify(acl).includes("0.0.0.255");
+    return [[!!r.enableSecret&&!!r.users.admin&&r.users.admin.secret,"1.1 enable secret і локальний користувач із secret"],
+      [r.sshVer===2&&r.rsaBits>=2048&&c.sshTimeout===60&&c.sshRetries===3,"1.2 SSH v2, ключ ≥ 2048, time-out 60, authentication-retries 3"],
+      [v.transport==="ssh"&&v.login==="local"&&!!v.execTimeout&&v.execTimeout[0]===10,"1.3 vty: лише SSH, login local, exec-timeout 10"],
+      [aclOk&&v.acl!=null,"1.4 access-class на vty дозволяє лише 192.168.1.0/24"],
+      [!!r.loginBlock&&!!r.motd,"1.5 login block-for і банер"],
+      [!!c.keepIn,"2.1 service tcp-keepalives-in"],
+      [!!sv.buffered&&!!sv.tsLog&&(sv.hosts||[]).includes("192.168.1.50")&&(sv.ntp||[]).includes("192.168.1.50"),"2.2 журнал (buffered, timestamps, syslog-сервер) і NTP"],
+      [!!o.cdpOff,"2.3 CDP вимкнено на зовнішньому інтерфейсі"],
+      [!!c.noSrcRoute,"3.1 no ip source-route"],
+      [!!o.noProxyArp&&!!o.noRedirects&&!!o.noUnreach,"3.2 на Gi0/1: no ip proxy-arp, no ip redirects, no ip unreachables"],
+      [N.flow("Admin","192.168.1.1","tcp",22).ok&&!N.flow("Admin","192.168.1.1","tcp",23).ok,"Admin входить по SSH, Telnet закрито"]]; },
+  sol:"R1:\nenable\nconf t\nenable secret Cis-Adm1n-2026\nusername admin privilege 15 secret Adm1nPa55!\nip domain-name lab.local\ncrypto key generate rsa modulus 2048\nip ssh version 2\nip ssh time-out 60\nip ssh authentication-retries 3\naccess-list 10 permit 192.168.1.0 0.0.0.255\nline vty 0 15\n transport input ssh\n login local\n exec-timeout 10 0\n access-class 10 in\nexit\nlogin block-for 120 attempts 3 within 60\nbanner motd #Authorized access only#\nservice tcp-keepalives-in\nlogging buffered 16384\nservice timestamps log datetime msec\nlogging host 192.168.1.50\nntp server 192.168.1.50\nno ip source-route\ninterface g0/1\n no cdp enable\n no ip proxy-arp\n no ip redirects\n no ip unreachables\nend"},
 ];
 function startNet(sc){ const def=sc.def(); const N=Net(def); N._start=def.start||null; const ses={}; for(const [k,d] of Object.entries(N.dev)) if(d.type!=="hub") ses[k]= (d.type==="pc"||d.type==="server")? PCSession(d,N) : Session(d); return {N,ses}; }
 
@@ -2633,5 +2673,5 @@ function freePorts(N,dev){ const d=N.dev[dev]; if(!d) return []; const used=new 
   if(d.type==="pc"||d.type==="server") return used.has("Fa0")?[]:["Fa0"]; return Object.keys(d.ifs).filter(p=>isPhys(p)&&!used.has(p)); }
 
 function canonOf(mode,line){ const r=matchMode(mode,line); if(!r||!r.hit) return null; const p=r.hit.c.p; let j=0; const full=p.map(t=>{ if(!t.startsWith("<")) return t; const a=r.hit.args[j++]; return t==="<if>"?(normIf(String(a))||a):String(a); }).join(" "); return {pat:p.join(" "),full,mode}; }
-window.CLI={canonOf,discoverTruth,discoverParse,figOf,netFromSaved,saveNet,sessionsFor,freePorts,Net,SCEN,NETSCEN,startNet,solveNet,troubleshoot,startScenario,Session,newState,normIf,parseList};
+window.CLI={longIf,canonOf,discoverTruth,discoverParse,figOf,netFromSaved,saveNet,sessionsFor,freePorts,Net,SCEN,NETSCEN,startNet,solveNet,troubleshoot,startScenario,Session,newState,normIf,parseList};
 })();
