@@ -117,3 +117,8 @@ textarea.jt{min-height:64px;font:inherit;font-size:14px;background:var(--card);m
 .cath{width:100%;font-weight:600;font-size:14px}
 .catpool{min-height:40px}
 .tok.on{outline:2px solid var(--accent);background:var(--accent-soft)}
+.audgrid{display:grid;gap:8px;margin:10px 0}
+.audbtn{display:flex;gap:12px;align-items:center;text-align:left;padding:16px;font-size:1.05em;min-height:64px}
+.audbtn b{font-size:1.4em;min-width:1.4em}
+.audbtn.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 15%,transparent)}
+.audbtn.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 15%,transparent)}

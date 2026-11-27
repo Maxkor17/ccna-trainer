@@ -193,6 +193,16 @@ await step("запис у vault через GitHub API (мок)", async () => {
   const msg = await page.evaluate(() => document.querySelector("#obmsg").textContent); if (!/Записано/.test(msg)) throw new Error(msg);
   if (puts.length !== 3 || !puts.some(p => /Картки з помилок\.md$/.test(p.path) && /::/.test(p.text)) || !puts.every(p => p.branch === "main" && p.auth === "Bearer test-token")) throw new Error(JSON.stringify(puts.map(p => p.path)));
   await page.unroute(/api\.github\.com/); await page.evaluate(() => { localStorage.removeItem("ccna.ghtoken"); delete opts.obRepo; }); await home(); });
+await step("аудіорежим: озвучення питання, відповідь, пояснення", async () => {
+  await page.evaluate(() => { window.__said = []; const fake = { getVoices: () => [], cancel() {}, speak(u) { window.__said.push(u.text); setTimeout(() => u.onend && u.onend(), 5); }, onvoiceschanged: null };
+    Object.defineProperty(window, "speechSynthesis", { value: fake, configurable: true }); window.SpeechSynthesisUtterance = function (t) { this.text = t; };
+    localStorage.setItem("ccna.audio", JSON.stringify({ rate: 1, auto: false })); opts.homeTab = "prac"; view = "home"; render(); });
+  await act('[data-act="audstart"]'); await page.waitForTimeout(150);
+  const q = await page.evaluate(() => ({ q: AUD.items[0].q, a: AUD.items[0].a[0], said: window.__said.join(" | ") }));
+  if (!q.said.includes(q.q.slice(0, 20).replace(/\s+/g, " "))) throw new Error("питання не озвучено: " + q.said.slice(0, 200));
+  await act(`[data-act="audpick"][data-k="${q.a}"]`); await page.waitForTimeout(100);
+  const after = await page.evaluate(() => ({ said: window.__said.slice(-2).join(" "), ok: AUD.ok, phase: AUD.phase })); if (after.ok !== 1 || !/Правильно|Correct/.test(after.said)) throw new Error(JSON.stringify(after));
+  await act('[data-act="audnext"]'); await act('[data-act="audstop"]'); await page.evaluate(() => { opts.homeTab = "all"; }); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));
