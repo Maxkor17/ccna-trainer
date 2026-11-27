@@ -66,7 +66,9 @@ function renderHome(){
   ${Object.keys(prog).length>=20?forecastCard(true):""}
   <div class="card"><h2>🎯 Симуляція CCNA 200-301 <span class="small muted">${esc(bpVer())}</span></h2>
     <p class="small muted" style="margin:0 0 8px">Як справжній іспит: питання з усіх курсів за вагами доменів Cisco ${esc(bpVer())} (${SIM_DOMAINS[bpVer()].map(([n,w])=>n.toLowerCase()+" "+Math.round(w*100)+"%").join(", ")}), без повернення назад, бал за шкалою 300–1000 (прохідний ≈ 825).</p>
-    <div class="row"><button class="primary" data-act="ccna" data-n="120">Повна: 120 питань / 120 хв</button><button data-act="ccna" data-n="40">Коротка: 40 / 40 хв</button></div></div>
+    <div class="row"><button class="primary" data-act="ccna" data-n="120">Повна: 120 питань / 120 хв</button><button data-act="ccna" data-n="40">Коротка: 40 / 40 хв</button></div>
+    <div class="row" style="margin-top:6px"><button data-act="ccna" data-n="120" data-en="1">🇬🇧 Повна англійською</button><button data-act="ccna" data-n="40" data-en="1">🇬🇧 Коротка англійською</button></div>
+    <p class="small muted" style="margin:6px 0 0">Справжній іспит — лише англійською. В англійському режимі питання й варіанти англійські, а в результатах видно час на кожне питання.</p></div>
   <div class="card"><h2>Екзамен</h2>
     <p class="small muted" style="margin:0 0 8px">Без підказок, 1 хв на питання, розбір наприкінці.</p>
     <div class="row">${seg("exam",[20,40,60],v=>v)}<span class="grow"></span><button class="primary" data-act="exam" ${selQ?"":"disabled"}>Почати</button></div></div>
@@ -99,13 +101,13 @@ const DOMAINS=[["Основи мереж",0.20,["ITN1","ITN3","ITN4","ITN5","ITN
  ["Основи безпеки",0.15,["ITN16","ITN17","SRWE10","SRWE11","ENSA3","ENSA4","ENSA5","ENSA8"]],
  ["Автоматизація",0.10,["ENSA13","ENSA14"]]];
 const domainOf=(t,ver)=>{ const D=(typeof SIM_DOMAINS!=="undefined"&&SIM_DOMAINS[ver||"v1.1"])||DOMAINS; const d=D.find(x=>x[2].includes(t)); return d?d[0]:"Інше"; };
-function pickCcna(n){
-  const out=[]; const used=new Set();
+function pickCcna(n,en){
+  const out=[]; const used=new Set(); const trOk=q=>!en||q.src==="en"||!!(window.QB_TR&&window.QB_TR[q.id]);
   for(const [name,w,ts] of (SIM_DOMAINS[bpVer()]||DOMAINS)){ const want=Math.round(n*w); const set=new Set(ts);
-    const gk=GEN.forTopics(set); const ng=gk.length?Math.round(want*0.15):0;
-    const qs=shuffle(QB.filter(q=>set.has(q.t)&&!used.has(q.id)&&qtype(q)!=="flash")).slice(0,want-ng); qs.forEach(q=>used.add(q.id)); out.push(...qs);
+    const gk=en?[]:GEN.forTopics(set); const ng=gk.length?Math.round(want*0.15):0;
+    const qs=shuffle(QB.filter(q=>set.has(q.t)&&!used.has(q.id)&&qtype(q)!=="flash"&&trOk(q))).slice(0,want-ng); qs.forEach(q=>used.add(q.id)); out.push(...qs);
     for(let i=0;i<ng;i++){ const g=GEN.make(gk[i%gk.length]); if(g) out.push(g); } }
-  const sims=shuffle(SIM_POOL).slice(0,n>=100?3:1).map(simQ).filter(Boolean);
+  const sims=en?[]:shuffle(SIM_POOL).slice(0,n>=100?3:1).map(simQ).filter(Boolean);
   return shuffle(out).slice(0,n-sims.length).concat(sims);
 }
 // ---- План до дати екзамену ----

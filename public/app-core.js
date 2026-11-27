@@ -20,7 +20,7 @@ const TOPICS = [
  ["LNX1","LNX","1","Файли, права, журнали"],["LNX2","LNX","2","Процеси і сервіси systemd"],["LNX3","LNX","3","Мережа в Linux"],["LNX4","LNX","4","Bash-скрипти і cron"],["LNX5","LNX","5","Git"],["LNX6","LNX","6","CI/CD, YAML, Python, контейнери"]
 ].map(([id,g,n,name])=>({id,g,n,name}));
 const TMAP = Object.fromEntries(TOPICS.map(t=>[t.id,t]));
-const QB_BASE = [...(window.QB_ITN||[]), ...(window.QB_SRWE||[]), ...(window.QB_NOTES||[]), ...(window.QB_EXTRA||[]), ...(window.QB_SRWE2||[]), ...(window.QB_ENSA||[]), ...(window.QB_NETACAD||[]), ...(window.QB_FIGS||[]), ...(window.QB_EN||[]), ...(window.QB_LNX||[]), ...(window.QB_ENSA2||[]), ...(window.QB_V2||[]), ...(window.QB_SIM||[]), ...(window.QB_PRACT||[])];
+const QB_BASE = [...(window.QB_ITN||[]), ...(window.QB_SRWE||[]), ...(window.QB_NOTES||[]), ...(window.QB_EXTRA||[]), ...(window.QB_SRWE2||[]), ...(window.QB_ENSA||[]), ...(window.QB_NETACAD||[]), ...(window.QB_FIGS||[]), ...(window.QB_EN||[]), ...(window.QB_LNX||[]), ...(window.QB_ENSA2||[]), ...(window.QB_V2||[]), ...(window.QB_SIM||[]), ...(window.QB_PRACT||[]), ...(window.QB_MORE||[])];
 let customQs = [];
 let QB = QB_BASE.slice();
 let QMAP = Object.fromEntries(QB.map(q=>[q.id,q]));

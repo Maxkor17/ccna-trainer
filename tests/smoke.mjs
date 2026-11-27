@@ -124,6 +124,12 @@ await step("тікет: скарга, таймер, оцінка після ви
 await step("Ansible: запуск плейбука, PLAY RECAP, прогрес", async () => {
   await page.evaluate(() => { view = "labs"; render(); }); await act('[data-act="ansible"]'); await has("site.yml");
   await act('[data-act="ansrun"]'); await has("PLAY RECAP"); await has("ok=1"); await home(); });
+await step("CCNA англійською: англійські питання, час на питання, мова відновлюється", async () => {
+  const before = await page.evaluate(() => opts.lang);
+  await page.evaluate(() => { view = "home"; render(); }); await act('[data-act="ccna"][data-n="40"][data-en="1"]');
+  const cyr = await page.evaluate(() => S.items.filter(q => /[а-яіїєґ]/i.test(q.q)).length); if (cyr) throw new Error("питань з кирилицею: " + cyr);
+  await page.waitForTimeout(1100); await page.evaluate(() => { S.i = 1; render(); finishExam(); }); await has("Час на питання");
+  const after = await page.evaluate(() => opts.lang); if (after !== before) throw new Error("мова не відновилась: " + after); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));

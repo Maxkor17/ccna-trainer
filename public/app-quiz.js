@@ -97,12 +97,15 @@ function startSession(mode, list, title){
 function tick(){ if(!S||S.mode!=="exam"||view!=="quiz") return; const left=S.deadline-Date.now(); const el=$("#timer"); if(el) el.textContent=fmtLeft(left); if(left<=0){finishExam();return;} setTimeout(tick,1000); }
 function fmtLeft(ms){ms=Math.max(0,ms);const m=Math.floor(ms/60000),s=Math.floor(ms%60000/1000);return m+":"+String(s).padStart(2,"0");}
 function scrollTop(){try{window.scrollTo(0,0);}catch(e){}}
+function examLangRestore(){ if(S&&S.en&&S.enPrev!=null){ const p=S.enPrev; S.enPrev=null; if(opts.lang!==p){ opts.lang=p; rebuildQB(); } } }
+function qtMark(){ if(!S||S.mode!=="exam") return; const now=Date.now(); S.tq=S.tq||{}; if(S.tk!=null) S.tq[S.tk]=(S.tq[S.tk]||0)+(now-S.tt); S.tk=S.i; S.tt=now; }
 function finishExam(){
-  if(!S) return; const per={}; let ok=0;
+  if(!S) return; qtMark(); const per={}; let ok=0;
   S.items.forEach((q,k)=>{ const a=S.ans[k]; const good=isCorrect(q,a); if(good) ok++; per[q.t]=per[q.t]||[0,0]; per[q.t][1]++; if(good) per[q.t][0]++; if(hasAnswer(q,a)) record(recId(q),good); });
   const e={ts:Date.now(), n:S.items.length, correct:ok, pct:Math.round(ok/S.items.length*100), dur:Math.round((Date.now()-S.start)/1000), per, ccna:!!S.ccna, bp:S.bp||null,
+    en:!!S.en, tq:S.items.map((_,k)=>Math.round(((S.tq||{})[k]||0)/1000)), tok:S.items.map((q,k)=>isCorrect(q,S.ans[k])?1:0), tt:S.items.map(q=>q.t),
     ids:S.items.map(q=>q.gen?null:q.id), ans:Object.fromEntries(Object.entries(S.ans).filter(([k])=>!S.items[k].gen).map(([k,v])=>[S.items[k].id,v]))};
-  saveExam(e); S.result=e; view="result"; render(); scrollTop();
+  saveExam(e); S.result=e; examLangRestore(); view="result"; render(); scrollTop();
 }
 
 // ================= Рендеринг: питання =================
@@ -201,7 +204,7 @@ function renderBody(q, k, ans, checked, interactive){
   if(checked && q.n) h+=`<div class="note">${esc(q.n)}</div>`;
   return h;
 }
-function renderQuiz(){
+function renderQuiz(){ qtMark();
   const k=S.i, q=S.items[k], ans=S.ans[k];
   const checked = S.mode!=="exam" && S.checked[k];
   const modeName=S.title||{train:"Тренування",review:"Повтор помилок",exam:"Екзамен",gen:"Розрахунки",module:"Тест модуля"}[S.mode];

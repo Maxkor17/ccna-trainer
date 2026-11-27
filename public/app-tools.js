@@ -47,9 +47,19 @@ function renderResult(){
     <p class="${e.ccna?"":"big"}" style="color:var(${e.pct>=80?"--ok":e.pct>=70?"--warn":"--bad"})">${e.pct}%</p>
     <p class="muted" style="margin:0">${e.correct} з ${e.n} · час ${Math.floor(e.dur/60)} хв ${e.dur%60} с</p>
     <table style="margin-top:10px"><tr><th>Тема</th><th class="num">Вірно</th><th class="num">%</th></tr>${rows}</table></div>
+  ${timeCard(e)}
   <div class="card"><h2>Розбір</h2>${S.items.map((q,k)=>reviewItem(q,S.ans[k]===undefined?(qtype(q)==="cmd"?"":[]):S.ans[k])).join("")}</div>
   <button class="primary" data-act="home">На головну</button>`;
 }
+function timeCard(e){ if(!e.tq||!e.tq.length) return ""; const T=e.tq, n=T.length, sum=T.reduce((a,b)=>a+b,0); if(!sum) return "";
+  const avg=Math.round(sum/n), med=T.slice().sort((a,b)=>a-b)[Math.floor(n/2)], slow=T.filter(x=>x>120).length; const fmt=s=>s>=60?Math.floor(s/60)+" хв "+(s%60)+" с":s+" с";
+  const okT=T.filter((_,k)=>e.tok&&e.tok[k]), badT=T.filter((_,k)=>e.tok&&!e.tok[k]); const av=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):0;
+  const top=T.map((s,k)=>[s,k]).sort((a,b)=>b[0]-a[0]).slice(0,5);
+  return `<div class="card"><h2>⏱ Час на питання${e.en?" · English":""}</h2>
+    <div class="kv"><span>Середній</span><b>${fmt(avg)}</b></div><div class="kv"><span>Медіана</span><span>${fmt(med)}</span></div>
+    <div class="kv"><span>Правильні / помилкові</span><span>${fmt(av(okT))} / ${fmt(av(badT))}</span></div><div class="kv"><span>Довше 2 хв</span><span>${slow}</span></div>
+    <p class="small muted" style="margin:6px 0">Орієнтир для CCNA: ~120 хв на 100–120 завдань, тобто ≈ 1 хв на питання з запасом на симуляції. ${avg>75?"Ви витрачаєте більше — тренуйте швидкість на коротких сесіях.":"Темп у нормі."}${e.en&&avg>75?" Частина часу йде на читання англійською: корисні 🇬🇧 сесії й англійські терміни в налаштуваннях.":""}</p>
+    <table><tr><th>Найдовші</th><th>Тема</th><th class="num">Час</th><th class="num"></th></tr>${top.map(([s,k])=>`<tr><td>№${k+1}</td><td>${e.tt&&TMAP[e.tt[k]]?tlabel(e.tt[k]):"—"}</td><td class="num">${fmt(s)}</td><td class="num">${e.tok[k]?"✅":"❌"}</td></tr>`).join("")}</table></div>`; }
 function weakConcepts(){
   const m={};
   for(const [id,r] of Object.entries(prog)){ const t=topicOfId(id); if(!t) continue; const c=conceptOf(id); const key=t+"|"+c;
