@@ -2,7 +2,7 @@
 // Запуск: node tests/run.js  (exit code 1 при будь-якій помилці)
 const path=require("path"); const P=f=>path.join(__dirname,"..","public",f);
 global.window={}; global.btoa=s=>Buffer.from(s).toString("base64"); global.atob=s=>Buffer.from(s,"base64").toString();
-const files=["wlc","bash","questions-linux","questions-itn","questions-srwe","questions-notes","questions-extra","questions-srwe2","questions-ensa","questions-netacad","questions-ensa2","questions-v2","questions-simlet","questions-practice","questions-figs","questions-en","glossary","cheats","pairs","gen","gen2","gen3","api","cli"];
+const files=["wlc","bash","questions-linux","questions-itn","questions-srwe","questions-notes","questions-extra","questions-srwe2","questions-ensa","questions-netacad","questions-ensa2","questions-v2","questions-simlet","questions-more","questions-practice","questions-figs","questions-en","glossary","cheats","pairs","gen","gen2","gen3","api","cli"];
 for(const f of files) require(P(f+".js"));
 for(const f of require("fs").readdirSync(path.join(__dirname,"..","public")).filter(f=>/^tr-.*\.js$/.test(f))) require(P(f));
 let fails=0, checks=0; const fail=m=>{ fails++; console.error("✗ "+m); }; const ok=(c,m)=>{ checks++; if(!c) fail(m); };
@@ -64,6 +64,16 @@ for(const sc of window.BASH.SCEN){ const ses=window.BASH.start(sc); ok(!sc.check
   go("newwlan"); go("savewlan",{w_id:2,w_prof:"GUEST",w_ssid:"Guest-WiFi",w_en:true,w_if:"guest",w_l2:"WPA2",w_ci:"AES",w_akm:"PSK",w_psk:"Welcome2026",w_aaa:""});
   go("newwlan"); go("savewlan",{w_id:3,w_prof:"CORP",w_ssid:"Corp",w_en:true,w_if:"management",w_l2:"WPA2",w_ci:"AES",w_akm:"802.1X",w_psk:"",w_aaa:"10.0.0.50"});
   go("delwlan",null,{v:"1"}); const d=W.done(st); ok(Object.values(d).every(Boolean),"WLC: "+JSON.stringify(d)); }
+// ---- Ansible ----
+{ global.CLI=window.CLI; require(P("ansible.js")); const A=window.ANSIBLE; const L=A.newLab();
+  ok(A.TASKS.every(t=>!t.ok(L)),"Ansible: завдання виконані без плейбуків");
+  const Y=A.parseYaml("- a: 1\n  b: [x, 'y z']\n  c:\n    - {id: 3, n: q}\n    - k: v\n      m: true\n"); ok(JSON.stringify(Y)==='[{"a":1,"b":["x","y z"],"c":[{"id":3,"n":"q"},{"k":"v","m":true}]}]',"YAML: "+JSON.stringify(Y));
+  let bad=false; try{ A.parseYaml("- a: 1\n   b: 2"); }catch(e){ bad=true; } ok(bad,"YAML: неправильний відступ має давати помилку");
+  const vl="- hosts: switches\n  gather_facts: false\n  vars:\n    vlans:\n      - {id: 30, name: GUEST}\n      - {id: 40, name: VOICE}\n  tasks:\n    - cisco.ios.ios_config:\n        parents: \"vlan {{ item.id }}\"\n        lines: \"name {{ item.name }}\"\n      loop: \"{{ vlans }}\"\n";
+  const runs=[A.SAMPLE,vl,vl,"- hosts: all\n  gather_facts: false\n  tasks:\n    - cisco.ios.ios_config:\n        lines: ntp server 10.1.1.123\n        save_when: modified\n- hosts: switches\n  gather_facts: false\n  tasks:\n    - cisco.ios.ios_command:\n        commands: show vlan brief\n      register: vlans_out\n    - debug:\n        var: vlans_out.stdout_lines\n"].map(src=>A.run(L,src));
+  ok(runs.every(r=>r.ok),"Ansible: плейбуки без помилок"); ok(runs[1].changed===2&&runs[2].changed===0,"Ansible: ідемпотентність ("+runs[1].changed+"/"+runs[2].changed+")");
+  const r=A.TASKS.filter(t=>!t.ok(L)).map(t=>t.id); ok(!r.length,"Ansible: не виконано "+r.join(","));
+  ok(!A.run(L,"- hosts: S1\n  gather_facts: false\n  tasks:\n    - ios_command:\n        commands: configure terminal\n").ok,"Ansible: ios_command не має приймати conf t"); }
 // ---- злиття денних записів (журнал і час між пристроями) ----
 { const src=app.match(/function mergeDay\(o,v\)\{[\s\S]*?\n  return r; \}/); ok(!!src,"mergeDay не знайдено в app-*.js");
   if(src){ const mergeDay=new Function(src[0]+"; return mergeDay;")(); const r=mergeDay({n:5,c:4,m:10,log:[{ts:1,min:30,k:"pt"}],note:"a",jts:5},{n:3,c:3,m:12,log:[{ts:1,min:30,k:"pt"},{ts:2,min:15,k:"na"}],note:"b",jts:9});

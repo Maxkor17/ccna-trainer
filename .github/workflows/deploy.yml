@@ -25,7 +25,7 @@ jobs:
       - name: Перевірка синтаксису
         run: for f in public/*.js; do node --check "$f" || exit 1; done
       - name: Автотести (банки, генератори, лаби, API)
-        run: node tests/run.js
+        run: node scripts/build-cli.mjs --check && node tests/run.js && node tests/cli-unit.js
       - name: Браузерний smoke-тест (Playwright)
         run: |
           npm install --prefix tests --no-audit --no-fund

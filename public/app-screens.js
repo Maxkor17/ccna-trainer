@@ -25,8 +25,8 @@ function renderHome(){
       <span class="name"><b>${t.n}.</b>${esc(t.name)}${st.gen?" 🎲":""}<br><span class="small muted">${st.seen}/${st.n} пройдено${st.acc!=null?" · точність "+p+"%":""}</span></span>
       <span class="bar"><i style="width:${st.n?Math.round(st.mast/st.n*100):0}%"></i></span></label>`;}).join(""); };
   const labsDone=ALLSCEN().filter(s=>labs[s.id]&&labs[s.id].ok).length;
-  return `${authCard()}
-  ${dayCard()}
+  const T={
+   today:()=>`${dayCard()}
   <div class="card">
     <div class="row"><h2 class="grow" style="margin:0">Денна норма${si.done?" ✅":""}</h2><span class="small">${si.streak?`🔥 ${si.streak} ${si.streak===1?"день":si.streak<5?"дні":"днів"} поспіль`:"Серія ще не почалась"}</span></div>
     <div class="bar wide"><i style="width:${pct}%"></i></div>
@@ -38,35 +38,33 @@ function renderHome(){
   </div>
   ${checkinCard()}
   ${weekCard()}${pomoCard()}
-  ${readinessCard()}
-  <div class="card"><h2>Тест модуля</h2>
+  <div class="card"><h2>Повтор помилок <span class="muted">(${rq})</span></h2>
+    <p class="small muted" style="margin:0 0 8px">Питання з помилками повертаються через 1, 3, 7, 16 і 35 днів.</p>
+    <button class="primary" data-act="review" ${rq?"":"disabled"}>${rq?"Повторити":"Немає питань на сьогодні"}</button></div>
+  ${(()=>{ const pi=planInfo(); return `<div class="card"><h2>🗓 План до екзамену</h2>${pi?`<p style="margin:0 0 6px">${pi.days>0?`До екзамену <b>${pi.days}</b> дн. (${esc(new Date(opts.examDate).toLocaleDateString("uk-UA"))})`:pi.days===0?"Екзамен сьогодні — успіху!":"Дата екзамену минула"} · готовність <b>${Math.round(pi.avg*100)}%</b></p>
+    <p class="small muted" style="margin:0 0 6px">Нових питань лишилося: ${pi.unseen}, до повторення сьогодні: ${pi.due}. Щоб устигнути, робіть ≈ <b>${pi.perDay}</b> питань на день${pi.days>3?" (останні 3 дні — лише повторення й симуляції)":""}.</p>
+    ${pi.weak.length?`<p class="small" style="margin:0 0 8px">Найслабші теми: ${pi.weak.map(w=>`${tlabel(w.id)} ${esc(TMAP[w.id].name)} — ${Math.round(w.p*100)}%`).join("; ")}</p>`:""}
+    <div class="row"><button class="primary" data-act="plan">Почати план на сьогодні</button><input type="date" id="examdate" value="${esc(opts.examDate)}" style="width:auto"></div>`
+    :`<p class="small muted" style="margin:0 0 8px">Вкажіть дату екзамену — тренажер щодня складатиме набір із повторень і найслабших тем і покаже, чи встигаєте.</p><input type="date" id="examdate" style="width:auto">`}</div>`; })()}
+`,
+   prac:()=>`<div class="card"><h2>Тест модуля</h2>
     <p class="small muted" style="margin:0 0 8px">20 питань по одному модулю: спершу 🎓 NetAcad і слабкі місця, потім нові та розрахунки.</p>
     <select class="full" id="modsel">${COURSES.map(([g])=>`<optgroup label="${g}">${TOPICS.filter(t=>t.g===g).map(t=>`<option value="${t.id}" ${opts.modTopic===t.id?"selected":""}>${g} ${t.n}. ${esc(t.name)} (${QB.filter(q=>q.t===t.id).length})</option>`).join("")}</optgroup>`).join("")}</select>
     <div class="row" style="margin-top:8px"><button data-act="cheat">📄 Шпаргалка</button><span class="grow"></span><button class="primary" data-act="module">Почати тест модуля</button></div></div>
   <div class="card"><h2>Тренування</h2>
-    <p class="small muted" style="margin:0 0 8px">Розбір одразу. Спершу питання з помилками й нові${gk.length?", плюс розрахунки з генератора":""}.</p>
+    <p class="small muted" style="margin:0 0 8px">Розбір одразу. Спершу питання з помилками й нові${gk.length?", плюс розрахунки з генератора":""}. Складність адаптивна: у темах, де точність понад 85%, першими йдуть симлети, порядок кроків і питання з кількома відповідями.</p>
     <div class="row">${seg("train",[10,20,0],v=>v?v:"Усі")}<span class="grow"></span><button class="primary" data-act="train" ${selQ?"":"disabled"}>Почати</button></div></div>
-  <div class="card"><h2>Повтор помилок <span class="muted">(${rq})</span></h2>
-    <p class="small muted" style="margin:0 0 8px">Питання з помилками повертаються через 1, 3, 7, 16 і 35 днів.</p>
-    <button class="primary" data-act="review" ${rq?"":"disabled"}>${rq?"Повторити":"Немає питань на сьогодні"}</button></div>
   <div class="card"><h2>Розрахунки 🎲</h2>
     <p class="small muted" style="margin:0 0 8px">Щоразу нові числа — відповіді не завчиш.</p>
     <div class="chips">${Object.entries(GEN.list).map(([k,g])=>`<button class="seg" data-act="gen" data-k="${k}">${esc(g.name)}</button>`).join("")}</div></div>
   <div class="card"><div class="row"><h2 class="grow" style="margin:0">CLI-лаби</h2><span class="small muted">виконано ${labsDone}/${ALLSCEN().length}</span></div>
     <p class="small muted" style="margin:6px 0 8px">Налаштовуйте пристрої командами IOS: від одного комутатора до мережі з маршрутизатором і ПК (ping, tracert).</p>
     <button class="primary" data-act="labs">Відкрити лаби</button></div>
-  ${installCard()}
-  <div class="card"><h2>Інструменти</h2><div class="tools"><button data-act="speedmenu">⚡ Швидкісні тренування</button><button data-act="confuse">🧠 Що я плутаю</button><button data-act="glossary">🇬🇧 Терміни EN</button><button data-act="progress">🏆 Активність і досягнення</button><button data-act="stpviz">🌳 STP покроково</button><button data-act="bpview">🗺 Карта покриття CCNA</button><button data-act="weekview">🗓 Тижневий огляд</button><button data-act="msview">🎯 Віхи</button><button data-act="issues">🛠 На виправлення${(()=>{ const n=issuesList().length; return n?" ("+n+")":""; })()}</button><button data-act="obsexport">📒 Експорт в Obsidian</button><button data-act="labs">🌐 Лаби й пісочниця</button></div></div>
-  ${(()=>{ const pi=planInfo(); return `<div class="card"><h2>🗓 План до екзамену</h2>${pi?`<p style="margin:0 0 6px">${pi.days>0?`До екзамену <b>${pi.days}</b> дн. (${esc(new Date(opts.examDate).toLocaleDateString("uk-UA"))})`:pi.days===0?"Екзамен сьогодні — успіху!":"Дата екзамену минула"} · готовність <b>${Math.round(pi.avg*100)}%</b></p>
-    <p class="small muted" style="margin:0 0 6px">Нових питань лишилося: ${pi.unseen}, до повторення сьогодні: ${pi.due}. Щоб устигнути, робіть ≈ <b>${pi.perDay}</b> питань на день${pi.days>3?" (останні 3 дні — лише повторення й симуляції)":""}.</p>
-    ${pi.weak.length?`<p class="small" style="margin:0 0 8px">Найслабші теми: ${pi.weak.map(w=>`${tlabel(w.id)} ${esc(TMAP[w.id].name)} — ${Math.round(w.p*100)}%`).join("; ")}</p>`:""}
-    <div class="row"><button class="primary" data-act="plan">Почати план на сьогодні</button><input type="date" id="examdate" value="${esc(opts.examDate)}" style="width:auto"></div>`
-    :`<p class="small muted" style="margin:0 0 8px">Вкажіть дату екзамену — тренажер щодня складатиме набір із повторень і найслабших тем і покаже, чи встигаєте.</p><input type="date" id="examdate" style="width:auto">`}</div>`; })()}
-  ${milesCard()}
-  ${Object.keys(prog).length>=20?forecastCard(true):""}
   <div class="card"><h2>🎯 Симуляція CCNA 200-301 <span class="small muted">${esc(bpVer())}</span></h2>
     <p class="small muted" style="margin:0 0 8px">Як справжній іспит: питання з усіх курсів за вагами доменів Cisco ${esc(bpVer())} (${SIM_DOMAINS[bpVer()].map(([n,w])=>n.toLowerCase()+" "+Math.round(w*100)+"%").join(", ")}), без повернення назад, бал за шкалою 300–1000 (прохідний ≈ 825).</p>
-    <div class="row"><button class="primary" data-act="ccna" data-n="120">Повна: 120 питань / 120 хв</button><button data-act="ccna" data-n="40">Коротка: 40 / 40 хв</button></div></div>
+    <div class="row"><button class="primary" data-act="ccna" data-n="120">Повна: 120 питань / 120 хв</button><button data-act="ccna" data-n="40">Коротка: 40 / 40 хв</button></div>
+    <div class="row" style="margin-top:6px"><button data-act="ccna" data-n="120" data-en="1">🇬🇧 Повна англійською</button><button data-act="ccna" data-n="40" data-en="1">🇬🇧 Коротка англійською</button></div>
+    <p class="small muted" style="margin:6px 0 0">Справжній іспит — лише англійською. В англійському режимі питання й варіанти англійські, а в результатах видно час на кожне питання.</p></div>
   <div class="card"><h2>Екзамен</h2>
     <p class="small muted" style="margin:0 0 8px">Без підказок, 1 хв на питання, розбір наприкінці.</p>
     <div class="row">${seg("exam",[20,40,60],v=>v)}<span class="grow"></span><button class="primary" data-act="exam" ${selQ?"":"disabled"}>Почати</button></div></div>
@@ -74,15 +72,26 @@ function renderHome(){
     <div class="row" style="margin:8px 0 4px"><span class="small muted">Джерело:</span>${[["all","Усі"],["n","📒 Нотатки"],["na","🎓 NetAcad"],["my","✍ Мої"],["en","🇬🇧 English"]].map(([v,l])=>`<button class="seg ${opts.src===v?"on":""}" data-act="src" data-v="${v}">${l}${v!=="all"?" ("+QB.filter(q=>q.src===v).length+")":""}</button>`).join("")}</div>
     ${grp("ITN")}${grp("SRWE")}${grp("ENSA")}
     <p class="small muted" style="margin:10px 0 0">Смужка — частка засвоєних питань (3+ правильні поспіль). 🎲 — є генератор.</p></div>
+`,
+   prog:()=>`${readinessCard()}
+  ${milesCard()}
+  ${Object.keys(prog).length>=20?forecastCard(true):""}
+  <div class="row"><button class="ghost grow" data-act="stats">📊 Статистика</button><button class="ghost grow" data-act="progress">📅 Активність і досягнення</button><button class="ghost grow" data-act="issues">🛠 На виправлення</button></div>`,
+   tools:()=>`<div class="card"><h2>Інструменти</h2><div class="tools"><button data-act="speedmenu">⚡ Швидкісні тренування</button><button data-act="confuse">🧠 Що я плутаю</button><button data-act="glossary">🇬🇧 Терміни EN</button><button data-act="progress">🏆 Активність і досягнення</button><button data-act="stpviz">🌳 STP покроково</button><button data-act="bpview">🗺 Карта покриття CCNA</button><button data-act="weekview">🗓 Тижневий огляд</button><button data-act="msview">🎯 Віхи</button><button data-act="issues">🛠 На виправлення${(()=>{ const n=issuesList().length; return n?" ("+n+")":""; })()}</button><button data-act="obsexport">📒 Експорт в Obsidian</button><button data-act="labs">🌐 Лаби й пісочниця</button></div></div>
+  ${installCard()}
   <div class="row">
     <button class="ghost grow" data-act="stats">📊 Статистика</button><button class="ghost grow" data-act="search">🔎 Пошук</button><button class="ghost grow" data-act="custom">✍ Мої питання</button>
   </div>
   <div class="row" style="margin-top:8px">
     <button class="ghost grow" data-act="settings">⚙ Налаштування</button><button class="ghost grow" data-act="backup">💾 Копія</button>
   </div>
-  ${store.mode==="local"?`<div class="note">Хмарне сховище недоступне: прогрес зберігається лише в цьому браузері. Зробіть резервну копію.</div>`:""}`;
+  ${store.mode==="local"?`<div class="note">Хмарне сховище недоступне: прогрес зберігається лише в цьому браузері. Зробіть резервну копію.</div>`:""}`};
+  const tab=T[opts.homeTab]?opts.homeTab:(opts.homeTab==="all"?"all":"today");
+  const TB=[["today","☀ Сьогодні"],["prac","🧪 Практика"],["prog","📈 Прогрес"],["tools","🧰 Інструменти"],["all","☰ Усе"]];
+  return `${authCard()}
+  <div class="hometabs" role="tablist">${TB.map(([k,l])=>`<button class="seg ${tab===k?"on":""}" role="tab" aria-selected="${tab===k}" data-act="hometab" data-v="${k}">${l}</button>`).join("")}</div>
+  ${tab==="all"?T.today()+T.prac()+T.prog()+T.tools():T[tab]()}`;
 }
-
 // ================= Тест модуля =================
 function cheatHTML(tid){ const c=(window.CHEATS||{})[tid]; if(!c) return `<p class="small muted">Для цієї теми шпаргалки ще немає.</p>`;
   return (c.t?`<div style="overflow-x:auto"><table class="cheat"><tr>${c.t[0].map(h=>`<th>${esc(h)}</th>`).join("")}</tr>${c.t.slice(1).map(r=>`<tr>${r.map(x=>`<td>${esc(x)}</td>`).join("")}</tr>`).join("")}</table></div>`:"")+
@@ -99,13 +108,13 @@ const DOMAINS=[["Основи мереж",0.20,["ITN1","ITN3","ITN4","ITN5","ITN
  ["Основи безпеки",0.15,["ITN16","ITN17","SRWE10","SRWE11","ENSA3","ENSA4","ENSA5","ENSA8"]],
  ["Автоматизація",0.10,["ENSA13","ENSA14"]]];
 const domainOf=(t,ver)=>{ const D=(typeof SIM_DOMAINS!=="undefined"&&SIM_DOMAINS[ver||"v1.1"])||DOMAINS; const d=D.find(x=>x[2].includes(t)); return d?d[0]:"Інше"; };
-function pickCcna(n){
-  const out=[]; const used=new Set();
+function pickCcna(n,en){
+  const out=[]; const used=new Set(); const trOk=q=>!en||q.src==="en"||!!(window.QB_TR&&window.QB_TR[q.id]);
   for(const [name,w,ts] of (SIM_DOMAINS[bpVer()]||DOMAINS)){ const want=Math.round(n*w); const set=new Set(ts);
-    const gk=GEN.forTopics(set); const ng=gk.length?Math.round(want*0.15):0;
-    const qs=shuffle(QB.filter(q=>set.has(q.t)&&!used.has(q.id)&&qtype(q)!=="flash")).slice(0,want-ng); qs.forEach(q=>used.add(q.id)); out.push(...qs);
+    const gk=en?[]:GEN.forTopics(set); const ng=gk.length?Math.round(want*0.15):0;
+    const qs=shuffle(QB.filter(q=>set.has(q.t)&&!used.has(q.id)&&qtype(q)!=="flash"&&trOk(q))).slice(0,want-ng); qs.forEach(q=>used.add(q.id)); out.push(...qs);
     for(let i=0;i<ng;i++){ const g=GEN.make(gk[i%gk.length]); if(g) out.push(g); } }
-  const sims=shuffle(SIM_POOL).slice(0,n>=100?3:1).map(simQ).filter(Boolean);
+  const sims=en?[]:shuffle(SIM_POOL).slice(0,n>=100?3:1).map(simQ).filter(Boolean);
   return shuffle(out).slice(0,n-sims.length).concat(sims);
 }
 // ---- План до дати екзамену ----
@@ -230,3 +239,4 @@ function deleteCustom(id){
   if(store.mode==="db") queueWrite(()=>store.db.doc("custom/"+id).delete());
   if(customEdit===id) customEdit=null; render();
 }
+ACTS.hometab = el => { opts.homeTab = el.dataset.v; lsSet(LS.opts, opts); render(); scrollTop(); };

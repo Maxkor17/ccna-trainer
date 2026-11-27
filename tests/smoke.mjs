@@ -43,6 +43,11 @@ await page.goto(BASE + "index.html");
 await page.waitForTimeout(800);
 
 await step("головна відкривається", async () => { await has("Денна норма"); await has("Чек-ін дня"); });
+await step("вкладки головної: Практика, Прогрес, Інструменти, Усе", async () => {
+  await act('[data-act="hometab"][data-v="prac"]'); await has("Тест модуля"); await has("Симуляція CCNA");
+  await act('[data-act="hometab"][data-v="prog"]'); await has("Статистика");
+  await act('[data-act="hometab"][data-v="tools"]'); await has("Інструменти");
+  await act('[data-act="hometab"][data-v="all"]'); await has("Денна норма"); await has("Тест модуля"); });
 await step("тренування: відповідь і перевірка", async () => {
   await act('[data-act="train"]'); await page.waitForSelector('[data-act="pick"], #cmdin, .fillin, [data-act="flashshow"]', { timeout: 3000 });
   const pick = page.locator('[data-act="pick"]'); if (await pick.count()) await pick.first().click();
@@ -117,6 +122,37 @@ await step("віхи: пропозиції від дати іспиту і ст�
   await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() + 90); opts.examDate = dkey(d); view = "miles"; render(); });
   await act('[data-act="mssuggest"]'); const n = await page.evaluate(() => msList().length); if (n < 5) throw new Error("віх: " + n);
   await page.locator('[data-act="msdone"]').first().click(); await home(); await has("🎯 Віхи"); await page.evaluate(() => { opts.examDate = ""; }); });
+await step("тікет: скарга, таймер, оцінка після виправлення", async () => {
+  await page.evaluate(() => { view = "labs"; render(); }); await act('[data-act="tsstart"][data-tk="1"]'); await has("Скарга"); await has("⏱");
+  const sc = await page.evaluate(() => { const sol = CLI.solveNet(LAB.sc); LAB.N = sol; LAB.ses = CLI.sessionsFor(sol); LAB.hist = ["show run"]; checkLab(); return LAB.ts.tk.score; });
+  if (!(sc > 0)) throw new Error("немає оцінки: " + sc); await has("закрито"); await home(); });
+await step("Ansible: запуск плейбука, PLAY RECAP, прогрес", async () => {
+  await page.evaluate(() => { view = "labs"; render(); }); await act('[data-act="ansible"]'); await has("site.yml");
+  await act('[data-act="ansrun"]'); await has("PLAY RECAP"); await has("ok=1"); await home(); });
+await step("CCNA англійською: англійські питання, час на питання, мова відновлюється", async () => {
+  const before = await page.evaluate(() => opts.lang);
+  await page.evaluate(() => { view = "home"; render(); }); await act('[data-act="ccna"][data-n="40"][data-en="1"]');
+  const cyr = await page.evaluate(() => S.items.filter(q => /[а-яіїєґ]/i.test(q.q)).length); if (cyr) throw new Error("питань з кирилицею: " + cyr);
+  await page.waitForTimeout(1100); await page.evaluate(() => { S.i = 1; render(); finishExam(); }); await has("Час на питання");
+  const after = await page.evaluate(() => opts.lang); if (after !== before) throw new Error("мова не відновилась: " + after); await home(); });
+await step("повторення лаб: через 7 днів лаба повертається в сесію дня", async () => {
+  const r = await page.evaluate(() => { const id = CLI.NETSCEN[0].id; const keep = labs[id]; labs[id] = { ok: true, done: Date.now() - 8 * 864e5, last: Date.now() - 8 * 864e5, reps: 0, tries: 1 };
+    const d = daySession(); const due = labDue(id); const rec = labNext(id, labs[id], true); labs[id] = rec; const after = labDue(id); if (keep) labs[id] = keep; else delete labs[id];
+    return { lab: d.lab && d.lab.id, rep: d.rep, due, reps: rec.reps, after, id }; });
+  if (r.lab !== r.id || !r.rep || !r.due || r.reps !== 1 || r.after) throw new Error(JSON.stringify(r)); });
+await step("імпорт карток з GitHub-репозиторію vault (мок API)", async () => {
+  await page.route(/api\.github\.com|raw\.githubusercontent\.com/, r => { const u = r.request().url();
+    if (/\/git\/trees\//.test(u)) return r.fulfill({ contentType: "application/json", body: JSON.stringify({ tree: [{ path: "CCNA/SRWE/VLAN.md", type: "blob", sha: "a1" }, { path: "Daily/2026.md", type: "blob", sha: "b2" }, { path: ".obsidian/x.md", type: "blob", sha: "c3" }] }) });
+    if (/\/repos\/[^/]+\/[^/]+$/.test(u)) return r.fulfill({ contentType: "application/json", body: JSON.stringify({ default_branch: "main" }) });
+    if (/VLAN\.md/.test(u)) return r.fulfill({ contentType: "text/plain", body: "# VLAN\nЯкий діапазон нормальних VLAN?::1–1005\n" });
+    return r.fulfill({ status: 404, body: "" }); });
+  await page.evaluate(() => { view = "custom"; render(); }); await has("Імпорт з GitHub");
+  await page.evaluate(() => { document.querySelector("#ghrepo").closest("details").open = true; }); await page.fill("#ghrepo", "test/vault"); await page.fill("#ghpath", "CCNA"); await act('[data-act="ghimport"]');
+  await page.waitForFunction(() => customQs.some(q => /нормальних VLAN/.test(q.q || "")), null, { timeout: 4000 });
+  await page.unroute(/api\.github\.com|raw\.githubusercontent\.com/); await home(); });
+await step("моніторинг помилок: запис і показ у «На виправлення»", async () => {
+  await page.evaluate(() => { ERRMON.capture({ message: "TypeError: x is undefined", src: location.origin + "/app-quiz.js", line: 42, col: 9, stack: "at f (app-quiz.js:42:9)" }); view = "issues"; render(); });
+  await has("Помилки в роботі тренажера"); await has("x is undefined"); await page.evaluate(() => ERRMON.clear()); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));

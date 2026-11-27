@@ -28,7 +28,8 @@ document.addEventListener("click", async ev=>{
   if(act==="obtrain"){ startSession("train", shuffle(customQs.filter(q=>q.type==="flash")).slice(0,opts.train), "Картки з нотаток"); return; }
   if(act==="install"){ if(installEvt){ installEvt.prompt(); installEvt.userChoice.finally(()=>{ installEvt=null; render(); }); } return; }
   if(act==="installhide"){ opts.installHide=true; lsSet(LS.opts,opts); render(); return; }
-  if(act==="ccna"){ const n=Number(el.dataset.n)||120; startSession("exam", pickCcna(n), (n>=100?"CCNA 200-301 ":"CCNA (коротка) ")+bpVer()); S.ccna=true; S.bp=bpVer(); render(); return; }
+  if(act==="ccna"){ const n=Number(el.dataset.n)||120; const en=el.dataset.en==="1"; const prev=opts.lang; if(en&&prev!=="en"){ opts.lang="en"; rebuildQB(); }
+    startSession("exam", pickCcna(n,en), (n>=100?"CCNA 200-301 ":"CCNA (коротка) ")+bpVer()+(en?" · English":"")); S.ccna=true; S.bp=bpVer(); if(en){ S.en=true; S.enPrev=prev; } render(); return; }
   if(act==="plan"){ startPlan(); return; }
   if(act==="exam"){ const gk=genKeysFor(sel); const n=opts.exam; const ng=gk.length?Math.round(n*0.15):0; const list=shuffle(qsFor(sel).filter(q=>qtype(q)!=="flash")).slice(0,n-ng); for(let i=0;i<ng;i++){const g=GEN.make(gk[i%gk.length]); if(g) list.push(g);} startSession("exam", shuffle(list)); return; }
   if(act==="gen"){ const list=[]; for(let i=0;i<10;i++){ const g=GEN.make(el.dataset.k); if(g) list.push(g);} startSession("gen", list); return; }
@@ -75,11 +76,11 @@ document.addEventListener("click", async ev=>{
   if(act==="sbshare"){ const d=CLI.saveNet(LAB.N,LAB.types); packSb(d).then(async code=>{ const url=location.origin+location.pathname+"#sb="+code; try{ if(navigator.share) await navigator.share({title:"Топологія CCNA",url}); else { await navigator.clipboard.writeText(url); alert("Посилання скопійовано ("+url.length+" символів)"); } }catch(e){ prompt("Скопіюйте посилання:",url); } }); return; }
   if(act==="sbexport"){ saveDownload("ccna-topology-"+dkey()+".json",JSON.stringify(CLI.saveNet(LAB.N,LAB.types),null,1),"application/json"); return; }
   if(act==="sbreset"){ if(!confirm("Видалити всі пристрої з пісочниці?")) return; LAB.outs={}; sbMutate(d=>{ d.devs={}; d.links=[]; }); return; }
-  if(act==="tsstart"){ startTs(Number(el.dataset.n)||1); return; }
+  if(act==="tsstart"){ startTs(Number(el.dataset.n)||1,el.dataset.tk==="1"); return; }
   if(act==="tsgive"){ LAB.showSol=!LAB.showSol; render(); return; }
   if(act==="labsol"){ LAB.showSol=!LAB.showSol; render(); return; }
   if(act==="labreset"){ openLab(LAB.sc.id); return; }
-  if(act==="home"||act==="quit"){ view="home"; S=null; render(); scrollTop(); return; }
+  if(act==="home"||act==="quit"){ examLangRestore(); view="home"; S=null; render(); scrollTop(); return; }
   if(act==="flag"){ const id=el.dataset.id; const f=flags[id]&&flags[id].on&&flags[id].kind!=="err"; const rec=f?{on:false,ts:Date.now()}:{on:true,ts:Date.now(),snip:el.dataset.snip,note:""}; flags[id]=rec; patch({flags:{[id]:rec}}); rerenderInPlace(); return; }
   if(act==="flagnote"){ const id=el.dataset.id; const inp=el.parentElement.querySelector("input"); const rec=Object.assign({},flags[id],{note:inp.value.slice(0,500),ts:Date.now()}); flags[id]=rec; patch({flags:{[id]:rec}}); el.textContent="Збережено"; return; }
   if(act==="unflag"){ const id=el.dataset.id; const rec={on:false,ts:Date.now()}; flags[id]=rec; patch({flags:{[id]:rec}}); render(); return; }
@@ -95,7 +96,7 @@ document.addEventListener("click", async ev=>{
   if(act==="check"){ doCheck(); return; }
   if(act==="end2"){ finishExam(); return; }
   if(act==="simdev"){ const st=simState(S.i); st.cur=el.dataset.d; render(); return; }
-  if(act==="simdone"){ const st=simState(S.i); const res= st.N? st.sc.check(st.N) : st.sc.check(st.ses[st.cur].state); const ok=res.every(x=>x[0]); S.ans[S.i]={done:true,ok,res}; if(S.mode!=="exam"){ doCheck(); } else render(); return; }
+  if(act==="simdone"){ const st=simState(S.i); const res= st.N? st.sc.check(st.N) : st.sc.check(st.ses[st.cur].state); const ok=res.every(x=>x[0]); S.ans[S.i]={done:true,ok,res}; if(st.sc&&st.sc.id&&!String(st.sc.id).startsWith("ts-")&&S.mode!=="exam") labRecord(st.sc.id,ok); if(S.mode!=="exam"){ doCheck(); } else render(); return; }
   if(act==="next"){ if(S.mode!=="exam" && S.i>=S.items.length-1){ showSummary(); return; } S.i=Math.min(S.i+1,S.items.length-1); S.confirmEnd=false; render(); scrollTop(); return; }
   if(act==="prev"){ S.i=Math.max(0,S.i-1); S.confirmEnd=false; render(); scrollTop(); return; }
   if(act==="jump"){ S.i=Number(el.dataset.k); S.confirmEnd=false; render(); return; }

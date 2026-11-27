@@ -117,10 +117,25 @@ function openLab(id){
   else LAB={sc,N:null,ses:{[sc.hostname||"S1"]:CLI.startScenario(sc)},outs:{[sc.hostname||"S1"]:"\nPress RETURN to get started!\n\n"},cur:sc.hostname||"S1",hist:[],hi:0,res:"",showSol:false};
   view="lab"; render(); scrollTop();
 }
-function startTs(n){
+const TK_WHO=["Олена, бухгалтерія","Ігор, відділ продажів","Марта, HR","Сервіс-деск (моніторинг)","Андрій, склад","Черговий NOC"];
+function tkScore(tk,cmds,checks,gave){ const min=(Date.now()-tk.t0)/60000; if(gave) return 0;
+  return Math.max(10,Math.round(100-Math.max(0,min-5)*3-Math.max(0,cmds-20)*0.7-Math.max(0,checks-1)*5)); }
+// ---- Інтервальне повторення лаб: 7 → 21 → 60 днів після успішного виконання ----
+const LAB_INT=[7,21,60];
+function labDue(id,now){ const r=labs[id]; if(!r||!r.ok||String(id).startsWith("ts-")) return false; const last=r.last||r.done||r.ts||0; return (now||Date.now())-last>=LAB_INT[Math.min(r.reps||0,LAB_INT.length-1)]*864e5; }
+function labNext(id,prev,ok){ const now=Date.now(); const rec=Object.assign({},prev,{ok:ok||!!prev.ok, tries:(prev.tries||0)+1, ts:now}); if(ok&&!prev.ok){ rec.done=now; rec.last=now; rec.reps=0; }
+  else if(ok&&prev.ok){ if(labDue(id,now)) rec.reps=(prev.reps||0)+1; rec.last=now; } return rec; }
+function labsDue(){ return ALLSCEN().filter(s=>!s.bash&&!s.sb&&TMAP[s.t]&&TMAP[s.t].g!=="LNX"&&labDue(s.id)).sort((a,b)=>(labs[a.id].last||labs[a.id].done||0)-(labs[b.id].last||labs[b.id].done||0)); }
+function labRecord(id,ok){ const prev=labs[id]||{tries:0}; const rec=labNext(id,prev,ok); labs[id]=rec; patch({labs:{[id]:rec}}); }
+function startTs(n,ticket){
   const pool=(CLI.NETSCEN||[]); let t=null, base=null;
   for(let k=0;k<10&&!t;k++){ base=pool[Math.floor(Math.random()*pool.length)]; t=CLI.troubleshoot(base,n); }
   if(!t){ alert("Не вдалося згенерувати поломку, спробуйте ще раз"); return; }
+  if(ticket){ const fail=base.check(t.N).filter(x=>!x[0]).map(x=>x[1]); const id=1000+Math.floor(Math.random()*9000); const who=TK_WHO[Math.floor(Math.random()*TK_WHO.length)]; const pr=fail.length>2?"P1 — критичний":fail.length>1?"P2 — високий":"P3 — середній";
+    const sc=Object.assign({},base,{id:"ts-"+base.id,title:"🎫 Тікет #"+id+": "+base.title,task:["Від: "+who+" · Пріоритет: "+pr,"Скарга: «Після вчорашніх робіт у мережі перестало працювати:»"].concat(fail.map(x=>"• "+x)).concat(["Усе інше, що працювало, має працювати і далі. Час іде від відкриття тікета; на оцінку впливають час, кількість команд і невдалі перевірки.","Почніть з відтворення проблеми (ping/tracert з ПК), потім звужуйте: фізичний рівень → L2 → L3 → політики."])});
+    const outs={}; for(const d of Object.keys(t.ses)) outs[d]= /^(pc|server)$/.test(t.N.dev[d].type)? "Microsoft Windows\n\n" : "\nPress RETURN to get started!\n\n";
+    LAB={sc,N:t.N,ses:t.ses,outs,cur:Object.keys(t.ses).find(d=>/^(pc|server)$/.test(t.N.dev[d].type))||Object.keys(t.ses)[0],hist:[],hi:0,res:"",showSol:false,ts:{n,faults:t.faults,tk:{id,t0:Date.now(),checks:0}}};
+    view="lab"; render(); scrollTop(); return; }
   const sc=Object.assign({},base,{id:"ts-"+base.id,title:"🛠 Знайди поломку: "+base.title,task:["Ця мережа була повністю налаштована й працювала. Потім щось зламали ("+(n>1?"кілька змін":"одна зміна")+").","Вимоги, які мають знову виконуватися:"].concat(base.check(CLI.solveNet(base)).map(x=>"• "+x[1])).concat(["Діагностуйте: ping/tracert з ПК, show ip interface brief, show run, show vlan brief, show interfaces trunk, show ip route, show ip ospf neighbor, show access-lists…"])});
   const outs={}; for(const d of Object.keys(t.ses)) outs[d]= /^(pc|server)$/.test(t.N.dev[d].type)? "Microsoft Windows\n\n" : "\nPress RETURN to get started!\n\n";
   LAB={sc,N:t.N,ses:t.ses,outs,cur:Object.keys(t.ses).find(d=>/^(pc|server)$/.test(t.N.dev[d].type))||Object.keys(t.ses)[0],hist:[],hi:0,res:"",showSol:false,ts:{n,faults:t.faults}};
@@ -129,7 +144,35 @@ function startTs(n){
 function checkLab(){
   const r= LAB.sc.net? LAB.sc.check(LAB.N) : LAB.sc.check(LAB.ses[LAB.cur].state); const ok=r.every(x=>x[0]);
   LAB.res=`<div class="card"><h2>${ok?"✅ Усе виконано!":"Ще не все"}</h2><ul class="checklist">${r.map(([v,t])=>`<li>${v?"✅":"❌"} ${esc(t)}</li>`).join("")}</ul></div>`;
-  const prev=labs[LAB.sc.id]||{tries:0}; const rec={ok:ok||!!prev.ok, tries:(prev.tries||0)+1, ts:Date.now()}; if(ok&&!prev.ok) rec.done=Date.now();
-  if(LAB.ts){ rec.solved=(prev.solved||0)+(ok&&!LAB.ts.done&&!LAB.showSol?1:0); if(ok) LAB.ts.done=true; }
+  const prev=labs[LAB.sc.id]||{tries:0}; const rec=labNext(LAB.sc.id,prev,ok);
+  if(LAB.ts){ rec.solved=(prev.solved||0)+(ok&&!LAB.ts.done&&!LAB.showSol?1:0);
+    const tk=LAB.ts.tk; if(tk&&!LAB.ts.done){ tk.checks++; if(ok){ const sc=tkScore(tk,LAB.hist.length,tk.checks,LAB.showSol); tk.score=sc; tk.min=Math.round((Date.now()-tk.t0)/6000)/10; const p=prev.tk||{n:0,best:0,sum:0}; rec.tk={n:p.n+1,best:Math.max(p.best||0,sc),sum:(p.sum||0)+sc,last:sc}; } }
+    else if(prev.tk) rec.tk=prev.tk;
+    if(ok) LAB.ts.done=true; }
+  const tk=LAB.ts&&LAB.ts.tk; if(tk&&ok&&tk.score!=null) LAB.res=`<div class="card"><h2>🎫 Тікет #${tk.id} закрито</h2><div class="kv"><span>Оцінка</span><b>${tk.score}/100</b></div><div class="kv"><span>Час</span><span>${tk.min} хв</span></div><div class="kv"><span>Команд</span><span>${LAB.hist.length}</span></div><div class="kv"><span>Перевірок</span><span>${tk.checks}</span></div><p class="small muted" style="margin:6px 0 0">Що було зламано: ${LAB.ts.faults.map(esc).join("; ")}</p></div>`+LAB.res;
   labs[LAB.sc.id]=rec; patch({labs:{[LAB.sc.id]:rec}}); $("#labres").innerHTML=LAB.res;
 }
+
+// ---------- Лаба Ansible (ENSA14) ----------
+let ANS=null;
+function ansInit(){ if(!ANS) ANS={lab:ANSIBLE.newLab(),src:lsGet("ccna.ansible.src",ANSIBLE.SAMPLE),out:"",dev:"S1"}; return ANS; }
+function ansProgress(){ const A=ansInit(); const done=ANSIBLE.TASKS.filter(t=>t.ok(A.lab)).map(t=>t.id); const prev=labs.ansible||{};
+  const all=[...new Set((prev.ids||[]).concat(done))]; const rec={ok:all.length===ANSIBLE.TASKS.length||!!prev.ok,n:all.length,ids:all,tries:(prev.tries||0)+1,ts:Date.now()}; if(rec.ok&&!prev.ok) rec.done=Date.now();
+  labs.ansible=rec; patch({labs:{ansible:rec}}); }
+VIEWS.ansible={ html:()=>{ const A=ansInit(); const ids=new Set((labs.ansible||{}).ids||[]);
+  return `<div class="card"><h2>🤖 Ansible: плейбуки для Cisco IOS</h2><p class="small muted" style="margin:0 0 8px">Ansible — агентless: керуючий вузол підключається до пристроїв по SSH (network_cli) і виконує завдання з YAML-плейбука. Тут плейбук виконується на маршрутизаторі R1 і комутаторах S1, S2 симулятора. Модулі: <code>cisco.ios.ios_command</code> (show-команди), <code>cisco.ios.ios_config</code> (<code>lines</code>, <code>parents</code>, <code>save_when</code>), <code>debug</code>; є <code>vars</code>, <code>loop</code>, <code>register</code> і <code>{{ змінні }}</code>.</p>
+   <ul class="checklist">${ANSIBLE.TASKS.map(t=>`<li>${t.ok(A.lab)||ids.has(t.id)?"✅":"⬜"} ${esc(t.t)}</li>`).join("")}</ul>
+   <details><summary class="small muted">Інвентар (inventory.ini)</summary><pre>${esc(ANSIBLE.INVENTORY)}</pre></details></div>
+  <div class="card"><h2>site.yml</h2><textarea id="ansrc" rows="18" spellcheck="false" style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;white-space:pre">${esc(A.src)}</textarea>
+   <div class="row" style="margin-top:8px"><button class="primary" data-act="ansrun">▶ ansible-playbook -i inventory.ini site.yml</button><button data-act="anssample">Приклад</button><button data-act="ansreset">Скинути мережу</button></div>
+   <p class="small muted" style="margin:6px 0 0">Відступи — лише пробіли (2 на рівень). Списки — через «- », словники — «ключ: значення».</p></div>
+  ${A.out?`<div class="term" id="ansout" style="height:auto;min-height:0;max-height:70vh">${esc(A.out)}</div>`:""}
+  <div class="card"><h2>Стан пристроїв</h2><div class="chips">${ANSIBLE.GROUPS.all.map(d=>`<button class="seg ${A.dev===d?"on":""}" data-act="ansdev" data-d="${d}">${d}</button>`).join("")}</div><pre style="max-height:260px;overflow:auto">${esc(ansShowRun(A))}</pre></div>
+  <button class="ghost" data-act="labs">← До списку лаб</button>`; } };
+function ansShowRun(A){ const s=A.lab.ses[A.dev]; s.exec("end"); s.exec("enable"); return s.exec("show running-config"); }
+const ansSync=()=>{ const t=$("#ansrc"); if(t&&ANS){ ANS.src=t.value; lsSet("ccna.ansible.src",ANS.src); } };
+ACTS.ansible=()=>{ view="ansible"; render(); scrollTop(); };
+ACTS.ansrun=()=>{ ansSync(); const r=ANSIBLE.run(ANS.lab,ANS.src); ANS.out="$ ansible-playbook -i inventory.ini site.yml\n\n"+r.text; ansProgress(); render(); const o=$("#ansout"); if(o) o.scrollIntoView({block:"start"}); };
+ACTS.anssample=()=>{ if(!confirm("Замінити плейбук прикладом?")) return; ANS.src=ANSIBLE.SAMPLE; lsSet("ccna.ansible.src",ANS.src); render(); };
+ACTS.ansreset=()=>{ ansSync(); ANS.lab=ANSIBLE.newLab(); ANS.out=""; render(); };
+ACTS.ansdev=el=>{ ansSync(); ANS.dev=el.dataset.d; render(); };
