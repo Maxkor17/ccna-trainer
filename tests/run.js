@@ -2,7 +2,7 @@
 // Запуск: node tests/run.js  (exit code 1 при будь-якій помилці)
 const path=require("path"); const P=f=>path.join(__dirname,"..","public",f);
 global.window={}; global.btoa=s=>Buffer.from(s).toString("base64"); global.atob=s=>Buffer.from(s,"base64").toString();
-const files=["wlc","bash","questions-linux","questions-itn","questions-srwe","questions-notes","questions-extra","questions-srwe2","questions-ensa","questions-netacad","questions-ensa2","questions-v2","questions-simlet","questions-more","questions-practice","questions-figs","questions-en","glossary","cheats","pairs","gen","gen2","gen3","api","cli"];
+const files=["wlc","bash","questions-linux","questions-itn","questions-srwe","questions-notes","questions-extra","questions-srwe2","questions-ensa","questions-netacad","questions-ensa2","questions-v2","questions-simlet","questions-more","questions-dnd","questions-practice","questions-figs","questions-en","glossary","cheats","pairs","gen","gen2","gen3","api","cli"];
 for(const f of files) require(P(f+".js"));
 for(const f of require("fs").readdirSync(path.join(__dirname,"..","public")).filter(f=>/^tr-.*\.js$/.test(f))) require(P(f));
 let fails=0, checks=0; const fail=m=>{ fails++; console.error("✗ "+m); }; const ok=(c,m)=>{ checks++; if(!c) fail(m); };
@@ -18,6 +18,7 @@ for(const b of banks) for(const q of window[b]){ total++;
   if(t==="mc"){ ok(Array.isArray(q.o)&&q.o.length>=2,q.id+": мало варіантів"); ok(Array.isArray(q.a)&&q.a.length&&q.a.every(i=>i>=0&&i<q.o.length),q.id+": хибний індекс відповіді"); ok(q.o.every(o=>Array.isArray(o)&&o[0]),q.id+": порожній варіант"); }
   else if(t==="order") ok(Array.isArray(q.items)&&q.items.length>=3,q.id+": order без items");
   else if(t==="match") ok(Array.isArray(q.pairs)&&q.pairs.length>=2,q.id+": match без pairs");
+  else if(t==="cat") ok(Array.isArray(q.cats)&&q.cats.length>=2&&Array.isArray(q.items)&&q.items.length>=q.cats.length&&q.items.every(x=>Array.isArray(x)&&x[1]>=0&&x[1]<q.cats.length)&&q.cats.every((_,ci)=>q.items.some(x=>x[1]===ci)),q.id+": некоректний cat");
   else if(t==="cmd") ok(Array.isArray(q.ans)&&q.ans.length,q.id+": cmd без ans");
   else if(t==="fill") ok(/\[\[.+?\]\]/.test(q.cfg||""),q.id+": fill без пропусків");
   else if(t==="simlet") ok(Array.isArray(q.ex)&&q.ex.length&&q.ex.every(x=>x[0]&&x[1])&&Array.isArray(q.parts)&&q.parts.length>=2&&q.parts.every(p=>p.q&&p.o.length>=2&&p.a.length&&p.a.every(i=>i>=0&&i<p.o.length)),q.id+": некоректний simlet");

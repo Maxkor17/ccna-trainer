@@ -45,7 +45,7 @@ function topicStats(tid){
 }
 // Адаптивна складність: теми з точністю > 85% (≥ 10 відповідей) отримують спершу складніші формати,
 // слабкі (< 60%) — спершу прості питання з однією відповіддю.
-function qHard(q){ const t=qtype(q); return t==="simlet"?3:(t==="cmd"||t==="fill")?2.5:(t==="order"||t==="match")?2:(Array.isArray(q.a)&&q.a.length>1)?1.5:q.fig?1:t==="flash"?-1:0; }
+function qHard(q){ const t=qtype(q); return t==="simlet"?3:(t==="cmd"||t==="fill")?2.5:(t==="order"||t==="match"||t==="cat")?2:(Array.isArray(q.a)&&q.a.length>1)?1.5:q.fig?1:t==="flash"?-1:0; }
 function topicLevel(tid){ const st=topicStats(tid); const ans=Object.entries(prog).filter(([id])=>topicOfId(id)===tid).reduce((a,[,r])=>a+(r.c||0)+(r.w||0),0);
   if(st.acc==null||ans<10) return 0; return st.acc>0.85?1:st.acc<0.6?-1:0; }
 function pickTraining(topics, n){
@@ -67,6 +67,7 @@ function isCorrect(q, ans){
   if(t==="mc"){ const ch=ans||[]; const cs=correctSet(q); return ch.length===cs.size && ch.every(i=>cs.has(i)); }
   if(t==="order") return Array.isArray(ans) && ans.length===q.items.length && ans.every((v,i)=>v===i);
   if(t==="match") return Array.isArray(ans) && q.pairs.every((p,i)=>ans[i]===p[1]);
+  if(t==="cat") return Array.isArray(ans) && q.items.every((x,i)=>ans[i]===x[1]);
   if(t==="cmd") return typeof ans==="string" && q.ans.some(c=>cmdMatch(ans,c));
   if(t==="sim") return !!(ans&&ans.ok);
   if(t==="simlet") return Array.isArray(ans) && q.parts.every((p,i)=>{ const c=ans[i]||[]; return c.length===p.a.length && c.every(x=>p.a.includes(x)); });
@@ -76,7 +77,7 @@ function isCorrect(q, ans){
 }
 function fillBlanks(q){ return [...q.cfg.matchAll(/\[\[(.+?)\]\]/g)].map(m=>m[1].split("|")); }
 function fillEq(u,c){ u=(u||"").trim(); if(!u) return false; if(/^[\d.\/]+$/.test(c)) return u===c; return u.toLowerCase()===c.toLowerCase() || cmdMatch(u,c); }
-function hasAnswer(q,ans){ const t=qtype(q); if(t==="sim") return !!(ans&&ans.done); if(t==="simlet") return Array.isArray(ans)&&q.parts.every((p,i)=>(ans[i]||[]).length===p.a.length); if(t==="flash") return ans==="yes"||ans==="no"; if(t==="fill") return Array.isArray(ans)&&fillBlanks(q).every((_,i)=>ans[i]&&ans[i].trim()); if(t==="cmd") return !!(ans&&ans.trim()); if(t==="match") return Array.isArray(ans)&&ans.filter(Boolean).length===q.pairs.length; if(t==="order") return Array.isArray(ans)&&ans.length===q.items.length; return Array.isArray(ans)&&ans.length===q.a.length; }
+function hasAnswer(q,ans){ const t=qtype(q); if(t==="cat") return Array.isArray(ans)&&q.items.every((_,i)=>ans[i]!=null); if(t==="sim") return !!(ans&&ans.done); if(t==="simlet") return Array.isArray(ans)&&q.parts.every((p,i)=>(ans[i]||[]).length===p.a.length); if(t==="flash") return ans==="yes"||ans==="no"; if(t==="fill") return Array.isArray(ans)&&fillBlanks(q).every((_,i)=>ans[i]&&ans[i].trim()); if(t==="cmd") return !!(ans&&ans.trim()); if(t==="match") return Array.isArray(ans)&&ans.filter(Boolean).length===q.pairs.length; if(t==="order") return Array.isArray(ans)&&ans.length===q.items.length; return Array.isArray(ans)&&ans.length===q.a.length; }
 function cmdMatch(input, canon){
   const norm=s=>s.trim().toLowerCase().replace(/\s*,\s*/g,",").replace(/\s+-\s+/g," - ");
   let u=norm(input).split(/\s+/), c=norm(canon).split(/\s+/);
@@ -97,6 +98,7 @@ function startSession(mode, list, title){
     if(t==="simlet") S.order[k]=q.parts.map(p=>opts.shuffle? shuffle(p.o.map((_,i)=>i)) : p.o.map((_,i)=>i));
     if(t==="order"){ let o=shuffle(q.items.map((_,i)=>i)); if(o.every((v,i)=>v===i)) o.reverse(); S.order[k]=o; }
     if(t==="match") S.order[k]=q.choices? q.choices.slice() : shuffle([...new Set(q.pairs.map(p=>p[1]))]);
+    if(t==="cat") S.order[k]=shuffle(q.items.map((_,i)=>i));
   });
   view="quiz"; render(); scrollTop(); if(mode==="exam") tick();
 }
@@ -188,6 +190,11 @@ function renderBody(q, k, ans, checked, interactive){
       h+=`<div class="small muted">Правильний порядок:</div><div class="seq">${q.items.map((x,p)=>`<div class="tok"><span class="n">${p+1}.</span>${esc(x)}</div>`).join("")}</div>`;
     }
   }
+  if(t==="cat"){ const a=ans||[]; const ord=(S&&S.order[k])||q.items.map((_,i)=>i); const sel=S&&S.catSel;
+    if(!checked&&interactive){ const pool=ord.filter(i=>a[i]==null);
+      h+=`<div class="small muted">Перетягніть кожен елемент у категорію (або торкніться елемента, потім категорії).</div><div class="chips catpool" data-catdrop="-1">${pool.map(i=>`<button class="tok ${sel===i?"on":""}" draggable="true" data-act="catpick" data-i="${i}">${esc(q.items[i][0])}</button>`).join("")||`<span class="small muted">Усі елементи розкладено ✔</span>`}</div>
+        <div class="catgrid">${q.cats.map((c,ci)=>`<div class="catbox ${sel!=null?"ready":""}" data-act="catdrop" data-c="${ci}" data-catdrop="${ci}"><div class="cath">${esc(c)}</div>${ord.filter(i=>a[i]===ci).map(i=>`<button class="tok" draggable="true" data-act="catback" data-i="${i}" title="Повернути">${esc(q.items[i][0])} ✕</button>`).join("")}</div>`).join("")}</div>`; }
+    else h+=`<div class="catgrid">${q.cats.map((c,ci)=>`<div class="catbox"><div class="cath">${esc(c)}</div>${ord.filter(i=>a[i]===ci).map(i=>{ const ok=q.items[i][1]===ci; return `<div class="tok" style="border-color:var(${ok?"--ok":"--bad"})">${ok?"✅":"❌"} ${esc(q.items[i][0])}${ok?"":`<span class="small" style="color:var(--ok)"> → ${esc(q.cats[q.items[i][1]])}</span>`}</div>`; }).join("")}</div>`).join("")}</div>${ord.some(i=>a[i]==null)?`<div class="small muted">Не розкладено: ${ord.filter(i=>a[i]==null).map(i=>esc(q.items[i][0])+" → "+esc(q.cats[q.items[i][1]])).join("; ")}</div>`:""}`; }
   if(t==="match"){
     const rights=(S&&S.order[k])||q.choices||[...new Set(q.pairs.map(p=>p[1]))]; const a=ans||[];
     h+=q.pairs.map((p,i)=>{ const v=a[i]||"";
@@ -245,3 +252,11 @@ function reviewItem(q, ans, open){
 ACTS.spick = el => { const k=S.i; if(S.mode!=="exam"&&S.checked[k]) return; const q=S.items[k]; const pi=Number(el.dataset.p), i=Number(el.dataset.i);
   const A=Array.from({length:q.parts.length},(_,j)=>((S.ans[k]||[])[j]||[]).slice()); let ch=A[pi]; const need=q.parts[pi].a.length;
   if(need>1){ ch=ch.includes(i)?ch.filter(x=>x!==i):ch.concat(i); if(ch.length>need) ch.shift(); } else ch=[i]; A[pi]=ch; S.ans[k]=A; S.confirmEnd=false; render(); };
+// ---- Перетягування в категорії (тип cat): тап або drag-and-drop ----
+const catSet=(i,c)=>{ const k=S.i; const q=S.items[k]; if(S.mode!=="exam"&&S.checked[k]) return; const a=(S.ans[k]||Array(q.items.length).fill(null)).slice(); while(a.length<q.items.length) a.push(null); a[i]=c; S.ans[k]=a; S.catSel=null; S.confirmEnd=false; render(); };
+ACTS.catpick=el=>{ const i=Number(el.dataset.i); S.catSel=S.catSel===i?null:i; render(); };
+ACTS.catdrop=(el,ev)=>{ if(ev&&ev.target&&ev.target.closest("[data-act='catback']")) return; if(S.catSel==null) return; catSet(S.catSel,Number(el.dataset.c)); };
+ACTS.catback=el=>{ const box=el.closest("[data-catdrop]"); if(S.catSel!=null&&box) return catSet(S.catSel,Number(box.dataset.catdrop)); catSet(Number(el.dataset.i),null); };
+document.addEventListener("dragstart",ev=>{ const t=ev.target.closest&&ev.target.closest("[data-act='catpick'],[data-act='catback']"); if(t&&ev.dataTransfer){ ev.dataTransfer.setData("text/plain",t.dataset.i); ev.dataTransfer.effectAllowed="move"; } });
+document.addEventListener("dragover",ev=>{ if(ev.target.closest&&ev.target.closest("[data-catdrop]")) ev.preventDefault(); });
+document.addEventListener("drop",ev=>{ const box=ev.target.closest&&ev.target.closest("[data-catdrop]"); if(!box||!S) return; ev.preventDefault(); const i=Number(ev.dataTransfer.getData("text/plain")); if(isNaN(i)) return; const c=Number(box.dataset.catdrop); catSet(i,c<0?null:c); });

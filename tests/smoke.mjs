@@ -49,7 +49,7 @@ await step("вкладки головної: Практика, Прогрес, �
   await act('[data-act="hometab"][data-v="tools"]'); await has("Інструменти");
   await act('[data-act="hometab"][data-v="all"]'); await has("Денна норма"); await has("Тест модуля"); });
 await step("тренування: відповідь і перевірка", async () => {
-  await act('[data-act="train"]'); await page.waitForSelector('[data-act="pick"], #cmdin, .fillin, [data-act="flashshow"]', { timeout: 3000 });
+  await act('[data-act="train"]'); await page.waitForSelector('[data-act="pick"], #cmdin, .fillin, [data-act="flashshow"], [data-act="catpick"], [data-act="ord"], [data-act="match"], [data-act="spick"], #tin', { timeout: 3000 });
   const pick = page.locator('[data-act="pick"]'); if (await pick.count()) await pick.first().click();
   const chk = page.locator("#checkbtn"); if (await chk.count() && await chk.isEnabled()) await chk.click();
   await home();
@@ -166,6 +166,14 @@ await step("невідома мережа: CDP відкриває сусідів
 await step("debug: OSPF-сусідство і DHCP у консолі", async () => {
   const r = await page.evaluate(() => { const sc = CLI.NETSCEN.find(s => s.id === "net-debug"); const { N, ses } = CLI.startNet(sc); ses.R1.exec("enable"); ses.R1.exec("debug ip ospf adj"); const m = N.recompute().map(x => x[1]).join("\n"); return m; });
   if (!/Mismatched hello/.test(r)) throw new Error("немає Mismatched hello: " + r.slice(0, 200)); });
+await step("перетягни в категорію: тап і drag-and-drop, перевірка", async () => {
+  await page.evaluate(() => { startSession("train", [QMAP["dd-ec"]], "DnD"); });
+  const items = await page.evaluate(() => QMAP["dd-ec"].items.map(x => x[1]));
+  const first = await page.evaluate(() => S.order[0][0]);
+  await page.locator(`[data-act="catpick"][data-i="${first}"]`).dragTo(page.locator(`[data-catdrop="${items[first]}"]`).first());
+  for (let i = 0; i < items.length; i++) { if (await page.evaluate(i => (S.ans[0] || [])[i] != null, i)) continue; await act(`[data-act="catpick"][data-i="${i}"]`); const sel = await page.evaluate(() => S.catSel); await act(`[data-act="catdrop"][data-c="${items[i]}"]`); if (sel !== i) throw new Error("catSel=" + sel + " i=" + i + " view=" + await page.evaluate(() => view)); if (await page.evaluate(i => (S.ans[0] || [])[i] == null, i)) throw new Error("drop не спрацював для " + i + ": " + await page.evaluate(c => { const b = document.querySelector(`[data-catdrop="${c}"]`); const r = b.getBoundingClientRect(); const e = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return e.outerHTML.slice(0, 150) + " | sel=" + S.catSel; }, items[i])); }
+  const ok = await page.evaluate(() => isCorrect(S.items[0], S.ans[0])); if (!ok) throw new Error("відповідь не зарахована: " + JSON.stringify(await page.evaluate(() => S.ans[0])));
+  await page.evaluate(() => doCheck()); await has("✅"); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));
