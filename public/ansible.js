@@ -76,7 +76,7 @@ function run(lab,src){
             for(const c of [].concat(cmds)){ const cs=String(c); if(/^\s*(conf|configure)\b/i.test(cs)){ fail="ios_command не виконує конфігураційні команди — використайте ios_config"; break; } const r=ses.exec(cs); if(/% Invalid|% Incomplete|% Ambiguous/.test(r)){ fail="command "+cs+": "+r.trim().split("\n")[0]; break; } stdout.push(r.replace(/^\n+/,"")); }
             if(fail) break; results.push({stdout,stdout_lines:stdout.map(x=>x.split("\n")),changed:false}); lines.push(`ok: [${h}]${it}`); continue; }
           // ios_config
-          const L0=args&&args.lines!=null?[].concat(args.lines).map(String):[]; const parents=args&&args.parents!=null?[].concat(args.parents).map(String):[];
+          const L0=args&&args.lines!=null?[].concat(args.lines).flatMap(x=>String(x).split("\n")).map(x=>x.trim()).filter(Boolean):[]; const parents=args&&args.parents!=null?[].concat(args.parents).map(String):[];
           if(!L0.length&&!(args&&args.save_when)){ fail="ios_config: потрібен параметр lines"; break; }
           const before=snap(d); ses.exec("conf t"); let err=null;
           for(const c of parents.concat(L0)){ const r=ses.exec(c); if(/^%\s/m.test(r)){ err=c+": "+r.split("\n").find(x=>/^%\s/.test(x)).trim(); break; } }

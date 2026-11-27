@@ -21,6 +21,8 @@ jobs:
         run: node tests/run.js
       - name: Модульні тести симулятора (розбір, DTP, EtherChannel, STP, ACL)
         run: node tests/cli-unit.js
+      - name: Фазинг симулятора
+        run: node tests/fuzz.js
       - name: Браузерні тести (smoke і сховище)
         run: |
           npm install --prefix tests --no-audit --no-fund

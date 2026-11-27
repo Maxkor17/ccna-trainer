@@ -153,6 +153,9 @@ await step("імпорт карток з GitHub-репозиторію vault (м
 await step("моніторинг помилок: запис і показ у «На виправлення»", async () => {
   await page.evaluate(() => { ERRMON.capture({ message: "TypeError: x is undefined", src: location.origin + "/app-quiz.js", line: 42, col: 9, stack: "at f (app-quiz.js:42:9)" }); view = "issues"; render(); });
   await has("Помилки в роботі тренажера"); await has("x is undefined"); await page.evaluate(() => ERRMON.clear()); await home(); });
+await step("кожна лаба є в списку лаб", async () => {
+  const miss = await page.evaluate(() => { view = "labs"; render(); const have = new Set([...document.querySelectorAll('[data-act="lab"]')].map(b => b.dataset.id)); return ALLSCEN().filter(s => !s.sb && !have.has(s.id)).map(s => s.id); });
+  if (miss.length) throw new Error("немає в списку: " + miss.join(", ")); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));

@@ -206,8 +206,9 @@ function renderLabs(){
   <div class="card"><h2>🤖 Автоматизація: Ansible</h2><p class="small muted" style="margin:0 0 8px">YAML-плейбуки з модулями ios_command і ios_config на пристроях симулятора: змінні, loop, register, ідемпотентність, save_when. ${labs.ansible&&labs.ansible.ok?"✅ виконано":labs.ansible?"⏳ "+(labs.ansible.n||0)+"/"+ANSIBLE.TASKS.length:""}</p><button class="primary" data-act="ansible">Відкрити</button></div>
   <div class="card"><h2>🤖 Автоматизація: REST API</h2><p class="small muted" style="margin:0 0 8px">Токен, GET/POST/PUT/DELETE, заголовки, JSON і коди відповідей — на навчальному контролері. ${labs.api&&labs.api.ok?"✅ виконано":labs.api?"⏳ "+(labs.api.n||0)+"/7":""}</p><button class="primary" data-act="api">Відкрити</button></div>
   <div class="card"><h2>🧪 Пісочниця</h2><p class="small muted" style="margin:0 0 8px">Будуйте власну мережу без завдання: комутатори, L3-комутатори, маршрутизатори, ПК, сервери. Конфігурація зберігається й синхронізується.</p><button class="primary" data-act="sandbox">Відкрити пісочницю</button></div>
+  ${(CLI.NETSCEN||[]).some(s=>/^ITN/.test(s.t))?`<h3>🌐 ITN: прикладний рівень і діагностика</h3>${CLI.NETSCEN.filter(s=>/^ITN/.test(s.t)).map(card).join("")}`:""}
   <h3>🌐 SRWE: кілька пристроїв</h3>${(CLI.NETSCEN||[]).filter(s=>/^SRWE/.test(s.t)).map(card).join("")}
-  <h3>🌐 ENSA: OSPF, ACL, NAT</h3>${(CLI.NETSCEN||[]).filter(s=>/^ENSA/.test(s.t)).map(card).join("")}
+  <h3>🌐 ENSA: OSPF, ACL, NAT, WAN, QoS, дизайн</h3>${(CLI.NETSCEN||[]).filter(s=>/^ENSA/.test(s.t)).map(card).join("")}
   <h3>Один комутатор</h3>${CLI.SCEN.map(card).join("")}
   <h3>🐧 Після CCNA: Linux і DevOps</h3>${((window.BASH&&BASH.SCEN)||[]).map(card).join("")}
   <button class="primary" data-act="home">На головну</button>`;
