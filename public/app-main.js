@@ -75,7 +75,7 @@ document.addEventListener("click", async ev=>{
   if(act==="sbshare"){ const d=CLI.saveNet(LAB.N,LAB.types); packSb(d).then(async code=>{ const url=location.origin+location.pathname+"#sb="+code; try{ if(navigator.share) await navigator.share({title:"Топологія CCNA",url}); else { await navigator.clipboard.writeText(url); alert("Посилання скопійовано ("+url.length+" символів)"); } }catch(e){ prompt("Скопіюйте посилання:",url); } }); return; }
   if(act==="sbexport"){ saveDownload("ccna-topology-"+dkey()+".json",JSON.stringify(CLI.saveNet(LAB.N,LAB.types),null,1),"application/json"); return; }
   if(act==="sbreset"){ if(!confirm("Видалити всі пристрої з пісочниці?")) return; LAB.outs={}; sbMutate(d=>{ d.devs={}; d.links=[]; }); return; }
-  if(act==="tsstart"){ startTs(Number(el.dataset.n)||1); return; }
+  if(act==="tsstart"){ startTs(Number(el.dataset.n)||1,el.dataset.tk==="1"); return; }
   if(act==="tsgive"){ LAB.showSol=!LAB.showSol; render(); return; }
   if(act==="labsol"){ LAB.showSol=!LAB.showSol; render(); return; }
   if(act==="labreset"){ openLab(LAB.sc.id); return; }

@@ -117,6 +117,10 @@ await step("віхи: пропозиції від дати іспиту і ст�
   await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() + 90); opts.examDate = dkey(d); view = "miles"; render(); });
   await act('[data-act="mssuggest"]'); const n = await page.evaluate(() => msList().length); if (n < 5) throw new Error("віх: " + n);
   await page.locator('[data-act="msdone"]').first().click(); await home(); await has("🎯 Віхи"); await page.evaluate(() => { opts.examDate = ""; }); });
+await step("тікет: скарга, таймер, оцінка після виправлення", async () => {
+  await page.evaluate(() => { view = "labs"; render(); }); await act('[data-act="tsstart"][data-tk="1"]'); await has("Скарга"); await has("⏱");
+  const sc = await page.evaluate(() => { const sol = CLI.solveNet(LAB.sc); LAB.N = sol; LAB.ses = CLI.sessionsFor(sol); LAB.hist = ["show run"]; checkLab(); return LAB.ts.tk.score; });
+  if (!(sc > 0)) throw new Error("немає оцінки: " + sc); await has("закрито"); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));
