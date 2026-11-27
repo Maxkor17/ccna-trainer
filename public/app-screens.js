@@ -139,7 +139,7 @@ function pickModule(tid){
   const ng=gk.length?Math.min(4,Math.max(2,20-qs.length)):0;
   let list=[...na,...weak,...fresh,...rest].slice(0,20-ng);
   for(let i=0;i<ng;i++){ const g=GEN.make(gk[i%gk.length]); if(g) list.push(g); }
-  const lab=shuffle(ALLSCEN().filter(x=>x.t===tid)).map(x=>simQ(x.id)).filter(Boolean)[0];
+  const lab=shuffle(ALLSCEN().filter(x=>x.t===tid&&!x.discover)).map(x=>simQ(x.id)).filter(Boolean)[0];
   list=shuffle(list); if(lab){ list=list.slice(0,19); list.push(lab); }
   return list;
 }

@@ -216,17 +216,17 @@ function renderLabs(){
 function renderLab(){
   const sc=LAB.sc;
   const ico=d=>{ const t=LAB.N&&LAB.N.dev[d]&&LAB.N.dev[d].type; return t==="pc"?"💻":t==="server"?"🗄":t==="router"?"🔀":"🔁"; };
-  const tabs= sc.net? `<div class="chips" style="margin-top:8px">${Object.keys(LAB.ses).map(d=>`<button class="seg ${LAB.cur===d?"on":""}" data-act="labdev" data-d="${d}">${ico(d)} ${d}</button>`).join("")}</div>` : "";
-  const fig=LAB.N&&!LAB.walk? CLI.figOf(LAB.N,[LAB.cur]) : null;
+  const tabs= sc.net? `<div class="chips" style="margin-top:8px">${Object.keys(LAB.ses).filter(d=>!sc.discover||LAB.known.has(d)).map(d=>`<button class="seg ${LAB.cur===d?"on":""}" data-act="labdev" data-d="${d}">${ico(d)} ${d}</button>`).join("")}</div>` : "";
+  const fig=LAB.N&&!LAB.walk&&!sc.discover? CLI.figOf(LAB.N,[LAB.cur]) : null;
   return `<div class="card"><h2>${sc.net?"🌐 ":""}${esc(sc.title)}</h2>${fig?topoSVG(fig):""}${sc.topo&&!sc.sb?`<details><summary class="small muted">Текстова схема</summary><pre>${esc(sc.topo)}</pre></details>`:""}<ol class="small" style="margin:0;padding-left:20px">${sc.task.map(t=>`<li>${esc(t)}</li>`).join("")}</ol></div>
-  ${sc.sb?sandboxEditor():""}
+  ${sc.sb?sandboxEditor():""}${sc.discover?discoverCard():""}
   <div id="walk">${LAB.walk?renderWalk():""}</div>
   ${tabs}
   ${LAB.ses[LAB.cur]?`<div class="term" id="term">${esc(LAB.outs[LAB.cur]||"")}</div>
   <div class="termin"><span id="tprompt">${esc(LAB.ses[LAB.cur].prompt())}</span><input id="tin" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" aria-label="Команда"></div>`:`<p class="small muted">Додайте пристрій, щоб відкрити його консоль.</p>`}
   <div class="row" style="margin-top:8px">${LAB.N?`<button data-act="walk" id="walkbtn" ${LAB.N.lastFlow?"":"disabled"}>🔍 Шлях пакета</button>`:""}${sc.sb?`<button data-act="sbreset">Очистити пісочницю</button>`:`<button class="primary" data-act="labcheck">Перевірити</button>`}${sc.sb?"":LAB.ts?`<button data-act="tsgive">${LAB.showSol?"Сховати поломки":"Здатися — показати поломки"}</button><button data-act="tsstart" data-n="${LAB.ts.n}" data-tk="${LAB.ts.tk?1:0}">${LAB.ts.tk?"Новий тікет":"Нова поломка"}</button>${LAB.ts.tk&&!LAB.ts.done?`<span class="small muted" id="tktimer">⏱ 0:00 · команд: ${LAB.hist.length}</span>`:""}`:`<button data-act="labsol">${LAB.showSol?"Сховати рішення":"Показати рішення"}</button><button data-act="labreset">Скинути</button>`}</div>
   <div id="labres">${LAB.res||""}</div>
-  ${LAB.showSol&&!LAB.ts?`<div class="card"><h2>Рішення</h2><pre>${esc(sc.sol)}</pre></div>`:""}
+  ${LAB.showSol&&!LAB.ts&&!sc.discover?`<div class="card"><h2>Рішення</h2><pre>${esc(sc.sol)}</pre></div>`:""}
   ${LAB.showSol&&LAB.ts?`<div class="card"><h2>Що було зламано</h2><ul class="checklist">${LAB.ts.faults.map(f=>`<li>🔧 ${esc(f)}</li>`).join("")}</ul><p class="small muted">Перевірте, як ці поломки виглядали в show-командах, і виправте їх.</p></div>`:""}
   <button class="ghost" data-act="labs">← До списку лаб</button>`;
 }
@@ -238,6 +238,7 @@ function bindLab(){
       let hint=""; if(/Invalid|Incomplete/.test(out) && /^\s*(sh|show|ping)\b/i.test(line) && /\(config/.test(pr)) hint="(Підказка: у режимі конфігурації використовуйте do "+line.trim()+")";
       LAB.outs[LAB.cur]+=pr+line+"\n"+(out?out+"\n":"")+hint+(hint?"\n":"");
       if(LAB.N){ for(const [d,m] of LAB.N.recompute()) LAB.outs[d]+=m+"\n"; }
+      if(discoverLearn(line)){ const t=$("#dmap"); if(t) LAB.mapText=t.value; LAB.hist.push(line); LAB.hi=LAB.hist.length; render(); return; }
       LAB.hist.push(line); LAB.hi=LAB.hist.length; tin.value="";
       if(LAB.sc.sb) sbSave(); const wb=$("#walkbtn"); if(wb&&LAB.N&&LAB.N.lastFlow) wb.disabled=false;
       term.textContent=LAB.outs[LAB.cur]; term.scrollTop=term.scrollHeight; $("#tprompt").textContent=LAB.ses[LAB.cur].prompt(); e.preventDefault(); }

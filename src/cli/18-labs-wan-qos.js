@@ -97,6 +97,3 @@
   check:N=>{ const s=N.dev.S1, i=s.ifs["Fa0/10"]; return [[!!s.vlans[10]&&!!s.vlans[20],"VLAN 10 і 20 створено на S1"],[i.mode==="trunk"&&JSON.stringify(i.allowed)==="[10,20]","Fa0/10 — trunk лише з VLAN 10, 20"],
       [pass(N,"PC1","192.168.10.10")&&N.flow("PC1","192.168.10.10","tcp",80).ok,"PC1 → VM-Web (ping і HTTP)"],[pass(N,"PC1","192.168.20.20"),"PC1 → VM-DB"]]; },
   sol:"S1:\nenable\nconf t\nvlan 10\n name WEB\nvlan 20\n name DB\nexit\ninterface fa0/10\n switchport mode trunk\n switchport trunk allowed vlan 10,20\nend"},
-];
-function startNet(sc){ const N=Net(sc.def()); const ses={}; for(const [k,d] of Object.entries(N.dev)) if(d.type!=="hub") ses[k]= (d.type==="pc"||d.type==="server")? PCSession(d,N) : Session(d); return {N,ses}; }
-

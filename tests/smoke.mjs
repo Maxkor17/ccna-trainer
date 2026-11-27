@@ -156,6 +156,16 @@ await step("моніторинг помилок: запис і показ у «�
 await step("кожна лаба є в списку лаб", async () => {
   const miss = await page.evaluate(() => { view = "labs"; render(); const have = new Set([...document.querySelectorAll('[data-act="lab"]')].map(b => b.dataset.id)); return ALLSCEN().filter(s => !s.sb && !have.has(s.id)).map(s => s.id); });
   if (miss.length) throw new Error("немає в списку: " + miss.join(", ")); await home(); });
+await step("невідома мережа: CDP відкриває сусідів, карта перевіряється", async () => {
+  await page.evaluate(() => { view = "labs"; render(); }); await act('[data-act="lab"][data-id="net-discover"]');
+  const n0 = await page.locator('[data-act="labdev"]').count(); if (n0 !== 1) throw new Error("на старті видно вкладок: " + n0);
+  await page.fill("#tin", "enable"); await page.press("#tin", "Enter"); await page.fill("#tin", "show cdp neighbors"); await page.press("#tin", "Enter"); await page.waitForTimeout(100);
+  const n1 = await page.locator('[data-act="labdev"]').count(); if (n1 < 2) throw new Error("CDP не відкрив сусідів");
+  await page.evaluate(() => { document.querySelector("#dmap").value = CLI.discoverTruth(LAB.N).text; }); await act('[data-act="labcheck"]');
+  const bad = await page.evaluate(() => [...document.querySelectorAll("#labres li")].filter(li => li.textContent.startsWith("❌")).length); if (bad) throw new Error("правильна карта не зарахована"); await home(); });
+await step("debug: OSPF-сусідство і DHCP у консолі", async () => {
+  const r = await page.evaluate(() => { const sc = CLI.NETSCEN.find(s => s.id === "net-debug"); const { N, ses } = CLI.startNet(sc); ses.R1.exec("enable"); ses.R1.exec("debug ip ospf adj"); const m = N.recompute().map(x => x[1]).join("\n"); return m; });
+  if (!/Mismatched hello/.test(r)) throw new Error("немає Mismatched hello: " + r.slice(0, 200)); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));

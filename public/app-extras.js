@@ -112,7 +112,8 @@ function sandboxEditor(){ const N=LAB.N; const names=Object.keys(N.dev);
 function openLab(id){
   const sc=ALLSCEN().find(s=>s.id===id); if(!sc) return;
   if(sc.net){ const {N,ses}=CLI.startNet(sc); const outs={}; for(const d of Object.keys(ses)) outs[d]= /^(pc|server)$/.test(N.dev[d].type)? "Microsoft Windows\n\n" : "\nPress RETURN to get started!\n\n";
-    LAB={sc,N,ses,outs,cur:Object.keys(ses).find(d=>/^(pc|server)$/.test(N.dev[d].type))||Object.keys(ses)[0],hist:[],hi:0,res:"",showSol:false}; }
+    LAB={sc,N,ses,outs,cur:Object.keys(ses).find(d=>/^(pc|server)$/.test(N.dev[d].type))||Object.keys(ses)[0],hist:[],hi:0,res:"",showSol:false};
+    if(sc.discover){ LAB.known=new Set([N._start]); LAB.cur=N._start; LAB.mapText=""; } }
   else if(sc.bash) LAB={sc,N:null,ses:{[sc.hostname]:BASH.start(sc)},outs:{[sc.hostname]:"Ubuntu 24.04 LTS (тренажер). Введіть help для списку команд.\n\n"},cur:sc.hostname,hist:[],hi:0,res:"",showSol:false};
   else LAB={sc,N:null,ses:{[sc.hostname||"S1"]:CLI.startScenario(sc)},outs:{[sc.hostname||"S1"]:"\nPress RETURN to get started!\n\n"},cur:sc.hostname||"S1",hist:[],hi:0,res:"",showSol:false};
   view="lab"; render(); scrollTop();
@@ -125,10 +126,10 @@ const LAB_INT=[7,21,60];
 function labDue(id,now){ const r=labs[id]; if(!r||!r.ok||String(id).startsWith("ts-")) return false; const last=r.last||r.done||r.ts||0; return (now||Date.now())-last>=LAB_INT[Math.min(r.reps||0,LAB_INT.length-1)]*864e5; }
 function labNext(id,prev,ok){ const now=Date.now(); const rec=Object.assign({},prev,{ok:ok||!!prev.ok, tries:(prev.tries||0)+1, ts:now}); if(ok&&!prev.ok){ rec.done=now; rec.last=now; rec.reps=0; }
   else if(ok&&prev.ok){ if(labDue(id,now)) rec.reps=(prev.reps||0)+1; rec.last=now; } return rec; }
-function labsDue(){ return ALLSCEN().filter(s=>!s.bash&&!s.sb&&TMAP[s.t]&&TMAP[s.t].g!=="LNX"&&labDue(s.id)).sort((a,b)=>(labs[a.id].last||labs[a.id].done||0)-(labs[b.id].last||labs[b.id].done||0)); }
+function labsDue(){ return ALLSCEN().filter(s=>!s.bash&&!s.sb&&!s.discover&&TMAP[s.t]&&TMAP[s.t].g!=="LNX"&&labDue(s.id)).sort((a,b)=>(labs[a.id].last||labs[a.id].done||0)-(labs[b.id].last||labs[b.id].done||0)); }
 function labRecord(id,ok){ const prev=labs[id]||{tries:0}; const rec=labNext(id,prev,ok); labs[id]=rec; patch({labs:{[id]:rec}}); }
 function startTs(n,ticket){
-  const pool=(CLI.NETSCEN||[]); let t=null, base=null;
+  const pool=(CLI.NETSCEN||[]).filter(s=>!s.discover); let t=null, base=null;
   for(let k=0;k<10&&!t;k++){ base=pool[Math.floor(Math.random()*pool.length)]; t=CLI.troubleshoot(base,n); }
   if(!t){ alert("Не вдалося згенерувати поломку, спробуйте ще раз"); return; }
   if(ticket){ const fail=base.check(t.N).filter(x=>!x[0]).map(x=>x[1]); const id=1000+Math.floor(Math.random()*9000); const who=TK_WHO[Math.floor(Math.random()*TK_WHO.length)]; const pr=fail.length>2?"P1 — критичний":fail.length>1?"P2 — високий":"P3 — середній";
@@ -141,7 +142,14 @@ function startTs(n,ticket){
   LAB={sc,N:t.N,ses:t.ses,outs,cur:Object.keys(t.ses).find(d=>/^(pc|server)$/.test(t.N.dev[d].type))||Object.keys(t.ses)[0],hist:[],hi:0,res:"",showSol:false,ts:{n,faults:t.faults}};
   view="lab"; render(); scrollTop();
 }
-function checkLab(){
+function discoverLearn(line){ if(!LAB||!LAB.sc.discover||!LAB.N) return false; if(!/^\s*(do\s+)?sh\w*\s+(cdp|lldp)\s+(nei|ent)/i.test(line)) return false; const s=LAB.N.dev[LAB.cur];
+  if(/lldp/i.test(line)&&!(s.svc&&s.svc.lldp)) return false; let added=false; for(const n of LAB.N.cdpNbrs(LAB.cur)) if(!LAB.known.has(n.dev)){ LAB.known.add(n.dev); LAB.outs[n.dev]=LAB.outs[n.dev]||"\nPress RETURN to get started!\n\n"; added=true; } return added; }
+function discoverCard(){ const T=LAB.showSol?CLI.discoverTruth(LAB.N):null; const total=Object.values(LAB.N.dev).filter(d=>d.type==="switch"||d.type==="router").length;
+  return `<div class="card"><h2>🗺 Ваша карта <span class="small muted">відкрито пристроїв: ${LAB.known.size}</span></h2>
+   <textarea id="dmap" rows="8" spellcheck="false" placeholder="SW1 Gi0/1 — SW2 Fa0/3&#10;SW1 10.99.0.11" style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px">${esc(LAB.mapText||"")}</textarea>
+   <p class="small muted" style="margin:4px 0 0">Один лінк або одна адреса на рядок. Порядок пристроїв у лінку не важливий; порти можна скорочувати (fa0/1, g0/1).</p>
+   ${T?`<h3>Правильна схема</h3>${topoSVG(CLI.figOf(LAB.N,[]))}<pre>${esc(T.text)}</pre>`:""}</div>`; }
+function checkLab(){ if(LAB&&LAB.sc.discover){ const t=$("#dmap"); if(t) LAB.mapText=t.value; LAB.N._map=LAB.mapText; }
   const r= LAB.sc.net? LAB.sc.check(LAB.N) : LAB.sc.check(LAB.ses[LAB.cur].state); const ok=r.every(x=>x[0]);
   LAB.res=`<div class="card"><h2>${ok?"✅ Усе виконано!":"Ще не все"}</h2><ul class="checklist">${r.map(([v,t])=>`<li>${v?"✅":"❌"} ${esc(t)}</li>`).join("")}</ul></div>`;
   const prev=labs[LAB.sc.id]||{tries:0}; const rec=labNext(LAB.sc.id,prev,ok);

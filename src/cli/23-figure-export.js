@@ -31,5 +31,5 @@ function sessionsFor(N){ const ses={}; for(const [k,d] of Object.entries(N.dev))
 function freePorts(N,dev){ const d=N.dev[dev]; if(!d) return []; const used=new Set(N.links.filter(l=>l.a===dev||l.b===dev).map(l=>l.a===dev?l.pa:l.pb));
   if(d.type==="pc"||d.type==="server") return used.has("Fa0")?[]:["Fa0"]; return Object.keys(d.ifs).filter(p=>isPhys(p)&&!used.has(p)); }
 
-window.CLI={figOf,netFromSaved,saveNet,sessionsFor,freePorts,Net,SCEN,NETSCEN,startNet,solveNet,troubleshoot,startScenario,Session,newState,normIf,parseList};
+window.CLI={discoverTruth,discoverParse,figOf,netFromSaved,saveNet,sessionsFor,freePorts,Net,SCEN,NETSCEN,startNet,solveNet,troubleshoot,startScenario,Session,newState,normIf,parseList};
 })();

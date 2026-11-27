@@ -46,7 +46,7 @@ document.addEventListener("click", async ev=>{
   if(["stats","backup","search","labs","custom","settings"].includes(act)){ view=act; render(); scrollTop(); if(act==="search"){const si=$("#searchin"); si&&si.focus();} if(act==="backup"&&store.mode==="db"&&remoteSnaps===null){ remoteSnaps=[]; loadRemoteSnaps().then(r=>{ remoteSnaps=r; if(view==="backup") render(); }); } return; }
   if(act==="lab"){ openLab(el.dataset.id); return; }
   if(act==="labcheck"){ checkLab(); return; }
-  if(act==="labdev"){ LAB.cur=el.dataset.d; render(); return; }
+  if(act==="labdev"){ const t=$("#dmap"); if(t) LAB.mapText=t.value; LAB.cur=el.dataset.d; render(); return; }
   if(act==="walk"){ if(!LAB.N.lastFlow) return; LAB.walk={i:0,play:true}; render(); walkStop(); LAB.walk.play=true; walkTimer=setInterval(()=>{ if(!LAB||!LAB.walk){walkStop();return;} const n=walkSteps().length; if(LAB.walk.i>=n-1){ walkStop(); walkUpd(); return; } LAB.walk.i++; walkUpd(); },1300); walkUpd(); return; }
   if(act==="walkclose"){ walkStop(); LAB.walk=null; render(); return; }
   if(act==="walkplay"){ if(LAB.walk.play){ walkStop(); walkUpd(); return; } if(LAB.walk.i>=walkSteps().length-1) LAB.walk.i=0; LAB.walk.play=true; walkTimer=setInterval(()=>{ if(!LAB||!LAB.walk){walkStop();return;} if(LAB.walk.i>=walkSteps().length-1){ walkStop(); walkUpd(); return; } LAB.walk.i++; walkUpd(); },1300); walkUpd(); return; }
@@ -78,7 +78,7 @@ document.addEventListener("click", async ev=>{
   if(act==="sbreset"){ if(!confirm("Видалити всі пристрої з пісочниці?")) return; LAB.outs={}; sbMutate(d=>{ d.devs={}; d.links=[]; }); return; }
   if(act==="tsstart"){ startTs(Number(el.dataset.n)||1,el.dataset.tk==="1"); return; }
   if(act==="tsgive"){ LAB.showSol=!LAB.showSol; render(); return; }
-  if(act==="labsol"){ LAB.showSol=!LAB.showSol; render(); return; }
+  if(act==="labsol"){ const t=$("#dmap"); if(t) LAB.mapText=t.value; LAB.showSol=!LAB.showSol; render(); return; }
   if(act==="labreset"){ openLab(LAB.sc.id); return; }
   if(act==="home"||act==="quit"){ examLangRestore(); view="home"; S=null; render(); scrollTop(); return; }
   if(act==="flag"){ const id=el.dataset.id; const f=flags[id]&&flags[id].on&&flags[id].kind!=="err"; const rec=f?{on:false,ts:Date.now()}:{on:true,ts:Date.now(),snip:el.dataset.snip,note:""}; flags[id]=rec; patch({flags:{[id]:rec}}); rerenderInPlace(); return; }

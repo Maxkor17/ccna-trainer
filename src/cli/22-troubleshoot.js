@@ -2,6 +2,7 @@
 function solveNet(sc){ const {N,ses}=startNet(sc); let cur=null;
   for(const raw of sc.sol.split("\n")){ const line=raw.trim().replace(/\{\{MAC:(\w+)\}\}/g,(_,x)=>N.hostMac(x)); if(!line||line.startsWith("(")) continue; const m=line.match(/^([\w-]+):$/); if(m&&ses[m[1]]){ cur=m[1]; continue; } if(!cur) continue;
     const r=ses[cur].exec(line); if(/Reset ALL/.test(ses[cur].prompt())) ses[cur].exec("yes"); N.recompute(); }
+  if(sc.autoSol){ sc.autoSol(N); N.recompute(); }
   return N; }
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 function faultsFor(N){
