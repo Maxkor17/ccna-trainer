@@ -26,6 +26,13 @@ jobs:
         run: for f in public/*.js; do node --check "$f" || exit 1; done
       - name: Автотести (банки, генератори, лаби, API)
         run: node tests/run.js
+      - name: Браузерний smoke-тест (Playwright)
+        run: |
+          npm install --prefix tests --no-audit --no-fund
+          npx --prefix tests playwright install --with-deps chromium
+          node tests/smoke.mjs
+      - name: Сховище (міграція денних записів, мок Firestore)
+        run: node tests/storage.mjs
   deploy:
     needs: test
     runs-on: ubuntu-latest

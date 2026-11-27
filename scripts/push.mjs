@@ -13,7 +13,8 @@ for (const doc of snap.docs) {
   if (!force && now.hour !== p.hour) { skipped++; continue; }
   if (!force && p.lastSent === now.key) { skipped++; continue; }
   const st = (await db.doc(`users/${uid}/progress/state`).get()).data() || {};
-  const daily = st.daily || {}; const goal = p.goal || 20, tgoal = p.tgoal || 60;
+  const daily = Object.assign({}, st.daily || {}); // старе поле — на час переходу
+  (await db.collection(`users/${uid}/daily`).get()).forEach(m => Object.assign(daily, (m.data() || {}).days || {})); const goal = p.goal || 20, tgoal = p.tgoal || 60;
   const mins = x => ((x && x.m) || 0) + ((x && x.log) || []).reduce((a, e) => a + ((e && e.min) || 0), 0);
   const done = x => ((x && x.n) || 0) >= goal || mins(x) >= tgoal;
   const dx = daily[now.key] || {}; const today = dx.n || 0, todayMin = mins(dx);
