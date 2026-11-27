@@ -113,15 +113,17 @@ function topoSVG(f){
   const W=400,H=Math.round(240*(f.h||60)/60), X=x=>20+x*3.6, Y=y=>18+y*3.4;
   const N={}; for(const n of f.nodes) N[n.id]=n;
   let g="";
-  for(const l of f.links){ const a=N[l.a], b=N[l.b]; const x1=X(a.x),y1=Y(a.y),x2=X(b.x),y2=Y(b.y);
+  for(const l of f.links){ const a=N[l.a], b=N[l.b]; let x1=X(a.x),y1=Y(a.y),x2=X(b.x),y2=Y(b.y);
+    if(l.off){ const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy)||1, ox=-dy/len*l.off, oy=dx/len*l.off; x1+=ox; x2+=ox; y1+=oy; y2+=oy; }
     g+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(${l.c||"--muted"})" stroke-width="${l.w||2}" ${l.dash?'stroke-dasharray="5 4"':""}/>`;
     const lab=(t,fx,fy)=>t?`<text x="${fx}" y="${fy}" font-size="10" text-anchor="middle" fill="var(--text)" paint-order="stroke" stroke="var(--card)" stroke-width="3">${esc(t)}</text>`:"";
-    g+=lab(l.la,x1+(x2-x1)*0.24,y1+(y2-y1)*0.24-4)+lab(l.lb,x2+(x1-x2)*0.24,y2+(y1-y2)*0.24-4)+lab(l.m,(x1+x2)/2,(y1+y2)/2+(l.mdy||12));
+    const fr=0.24+(l.li||0)*0.14; g+=lab(l.la,x1+(x2-x1)*fr,y1+(y2-y1)*fr-4)+lab(l.lb,x2+(x1-x2)*fr,y2+(y1-y2)*fr-4)+lab(l.m,(x1+x2)/2,(y1+y2)/2+(l.mdy||12));
   }
   for(const n of f.nodes){ const x=X(n.x), y=Y(n.y); let ic=n.hl?`<circle cx="${x}" cy="${y}" r="25" fill="var(--warn)" opacity=".28"><animate attributeName="r" values="21;27;21" dur="1.2s" repeatCount="indefinite"/></circle>`:"";
     if(n.t==="r") ic+=`<circle cx="${x}" cy="${y}" r="15" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/><path d="M${x-8} ${y}h16M${x} ${y-8}v16" stroke="var(--accent)" stroke-width="2"/>`;
     else if(n.t==="sw") ic+=`<rect x="${x-18}" y="${y-11}" width="36" height="22" rx="4" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2"/><path d="M${x-10} ${y-3}h20M${x-10} ${y+4}h20" stroke="var(--accent)" stroke-width="1.6"/>`;
     else if(n.t==="srv") ic+=`<rect x="${x-10}" y="${y-14}" width="20" height="28" rx="3" fill="var(--code)" stroke="var(--muted)" stroke-width="2"/><path d="M${x-6} ${y-6}h12M${x-6} ${y}h12" stroke="var(--muted)" stroke-width="1.5"/>`;
+    else if(n.t==="hub") ic+=`<rect x="${x-14}" y="${y-8}" width="28" height="16" rx="3" fill="var(--code)" stroke="var(--muted)" stroke-width="2" stroke-dasharray="3 2"/><text x="${x}" y="${y+4}" font-size="8" text-anchor="middle" fill="var(--muted)">HUB</text>`;
     else if(n.t==="cloud") ic+=`<ellipse cx="${x}" cy="${y}" rx="24" ry="13" fill="var(--code)" stroke="var(--muted)" stroke-width="2"/>`;
     else ic+=`<rect x="${x-13}" y="${y-10}" width="26" height="17" rx="2" fill="var(--code)" stroke="var(--muted)" stroke-width="2"/><path d="M${x-6} ${y+11}h12" stroke="var(--muted)" stroke-width="2"/>`;
     g+=ic+`<text x="${x}" y="${y+(n.t==="srv"?27:25)}" font-size="11" font-weight="600" text-anchor="middle" fill="var(--text)">${esc(n.l||n.id)}</text>`+(n.sub?`<text x="${x}" y="${y+38}" font-size="9.5" text-anchor="middle" fill="var(--muted)">${esc(n.sub)}</text>`:"");

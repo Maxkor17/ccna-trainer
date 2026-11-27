@@ -33,6 +33,8 @@ const COURSES=[["ITN","Вступ до мереж"],["SRWE","Комутація,
 const GEN = window.GEN, CLI = window.CLI;
 const TID2GEN = {"g-showstp":"g-showstp","g-showtrunk":"g-showtrunk","g-showec":"g-showec","g-showint":"g-showint","g-lpm":"g-lpm","g-ad":"g-ad","g-wild":"g-wild","g-ospfcost":"g-ospfcost","g-rid":"g-rid","g-bin":"g-bin","g-hex":"g-bin","g-net":"g-subnet","g-bc":"g-subnet","g-range":"g-subnet","g-hosts":"g-subnet","g-vlsm":"g-vlsm","g-ipv6":"g-ipv6","g-eui":"g-eui","g-stproot":"g-stproot","g-stprp":"g-stprp","g-stpcost":"g-stpcost","g-stpprio":"g-stpprio"};
 const INT_DAYS = [0,1,3,7,16,35], DAY = 864e5;
+// Реєстри для модулів: VIEWS[назва]={html(), after?()} — власні екрани; ACTS[data-act]=(el,ev)=>… — власні дії.
+const VIEWS = {}, ACTS = {};
 const LS = {sandbox:"ccna.sandbox.v1",snaps:"ccna.snaps.v1",custom:"ccna.custom.v1",prog:"ccna.prog.v1",exams:"ccna.exams.v1",sel:"ccna.sel.v1",opts:"ccna.opts.v1",daily:"ccna.daily.v1",flags:"ccna.flags.v1",labs:"ccna.labs.v1"};
 const TYPE_NAME = {sim:"Практичне завдання (CLI)", mc:"", order:"Розставте по порядку", match:"Зіставте", cmd:"Введіть команду", fill:"Заповніть пропуски", flash:"Картка"};
 

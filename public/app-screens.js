@@ -3,6 +3,7 @@
 // ================= Рендеринг: екрани =================
 function render(){
   const app=$("#app");
+  if(VIEWS[view]){ app.innerHTML=VIEWS[view].html(); if(VIEWS[view].after) VIEWS[view].after(); return; }
   ({home:()=>app.innerHTML=renderHome(), quiz:()=>app.innerHTML=renderQuiz(), result:()=>app.innerHTML=renderResult(), stats:()=>{app.innerHTML=renderStats(); bindChart();},
     backup:()=>app.innerHTML=renderBackup(), search:()=>app.innerHTML=renderSearch(), labs:()=>app.innerHTML=renderLabs(), lab:()=>{app.innerHTML=renderLab(); bindLab();}, custom:()=>app.innerHTML=renderCustom(), settings:()=>app.innerHTML=renderSettings(), cheat:()=>app.innerHTML=renderCheat(), wlc:()=>app.innerHTML=WLC.render(window._wlc), confuse:()=>app.innerHTML=renderConfuse(), progress:()=>app.innerHTML=renderProgress(), speed:()=>{ app.innerHTML=renderSpeed(); const i=$("#spin"); if(i){ i.focus(); i.addEventListener("keydown",e=>{ if(e.key==="Enter"&&i.value.trim()){ e.preventDefault(); speedCheck(i.value); } }); clearInterval(window._spT); window._spT=setInterval(()=>{ const t=$("#sptime"); if(!t||!SP||SP.end){ clearInterval(window._spT); return; } t.textContent="⏱ "+Math.round((Date.now()-SP.start)/1000)+" с"; },1000); } }, glossary:()=>app.innerHTML=renderGlossary(), api:()=>app.innerHTML=renderApi(), summary:()=>{} }[view]||(()=>{}))();
   if(view==="quiz"){ const ci=$("#cmdin"); if(ci) ci.focus(); }
@@ -53,7 +54,7 @@ function renderHome(){
     <p class="small muted" style="margin:6px 0 8px">Налаштовуйте пристрої командами IOS: від одного комутатора до мережі з маршрутизатором і ПК (ping, tracert).</p>
     <button class="primary" data-act="labs">Відкрити лаби</button></div>
   ${installCard()}
-  <div class="card"><h2>Інструменти</h2><div class="tools"><button data-act="speedmenu">⚡ Швидкісні тренування</button><button data-act="confuse">🧠 Що я плутаю</button><button data-act="glossary">🇬🇧 Терміни EN</button><button data-act="progress">🏆 Активність і досягнення</button><button data-act="obsexport">📒 Експорт в Obsidian</button><button data-act="labs">🌐 Лаби й пісочниця</button></div></div>
+  <div class="card"><h2>Інструменти</h2><div class="tools"><button data-act="speedmenu">⚡ Швидкісні тренування</button><button data-act="confuse">🧠 Що я плутаю</button><button data-act="glossary">🇬🇧 Терміни EN</button><button data-act="progress">🏆 Активність і досягнення</button><button data-act="stpviz">🌳 STP покроково</button><button data-act="obsexport">📒 Експорт в Obsidian</button><button data-act="labs">🌐 Лаби й пісочниця</button></div></div>
   ${(()=>{ const pi=planInfo(); return `<div class="card"><h2>🗓 План до екзамену</h2>${pi?`<p style="margin:0 0 6px">${pi.days>0?`До екзамену <b>${pi.days}</b> дн. (${esc(new Date(opts.examDate).toLocaleDateString("uk-UA"))})`:pi.days===0?"Екзамен сьогодні — успіху!":"Дата екзамену минула"} · готовність <b>${Math.round(pi.avg*100)}%</b></p>
     <p class="small muted" style="margin:0 0 6px">Нових питань лишилося: ${pi.unseen}, до повторення сьогодні: ${pi.due}. Щоб устигнути, робіть ≈ <b>${pi.perDay}</b> питань на день${pi.days>3?" (останні 3 дні — лише повторення й симуляції)":""}.</p>
     ${pi.weak.length?`<p class="small" style="margin:0 0 8px">Найслабші теми: ${pi.weak.map(w=>`${tlabel(w.id)} ${esc(TMAP[w.id].name)} — ${Math.round(w.p*100)}%`).join("; ")}</p>`:""}

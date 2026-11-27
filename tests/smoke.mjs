@@ -63,6 +63,17 @@ await step("CLI-лаба: команда в терміналі", async () => {
   await ti.fill("enable"); await ti.press("Enter"); await ti.fill("show vlan brief"); await ti.press("Enter");
   await home();
 });
+await step("STP покроково: кроки, перевір себе, обрив лінку", async () => {
+  await page.evaluate(() => { view = "stpviz"; render(); }); await has("STP покроково");
+  for (let i = 0; i < 4; i++) await act('[data-act="stpstep"][data-d="1"]'); await has("Alternate (BLK)");
+  await page.locator('[data-act="stpcut"]').first().dispatchEvent("click"); await has("Що змінилося");
+  await act('[data-act="stpmode"][data-m="quiz"]'); await page.locator('[data-act="stproot"]').first().dispatchEvent("click");
+  await page.locator('[data-act="stpport"]').first().dispatchEvent("click"); await act('[data-act="stpcheck"]'); await has("правильно");
+  await act('[data-act="stpnew"][data-p="par"]'); await home(); });
+await step("нові лаби: EtherChannel, port-security, snooping, DHCPv6", async () => {
+  for (const id of ["net-ec-lacp", "net-psec", "net-snoop", "net-dhcpv6"]) { await page.evaluate(i => openLab(i), id); await page.waitForTimeout(60);
+    const ti = page.locator("#tin"); await ti.fill("ipconfig /all"); await ti.press("Enter"); }
+  await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));

@@ -4,6 +4,7 @@
 document.addEventListener("click", async ev=>{
   if(ev.target.closest("#home-link")){ if(view==="quiz"&&S&&S.mode==="exam") return; view="home"; S=null; render(); return; }
   const el=ev.target.closest("[data-act]"); if(!el) return; const act=el.dataset.act;
+  if(ACTS[act]){ await ACTS[act](el,ev); return; }
   if(act==="topic"||act==="notesonly"||act==="match") return;
   if(act==="grp"){ const ts=TOPICS.filter(t=>t.g===el.dataset.g); const allOn=ts.every(t=>sel.has(t.id)); ts.forEach(t=>allOn?sel.delete(t.id):sel.add(t.id)); lsSet(LS.sel,[...sel]); render(); return; }
   if(act==="download"){ saveDownload("ccna-progress-"+dkey()+".json",exportJSON(),"application/json"); return; }
