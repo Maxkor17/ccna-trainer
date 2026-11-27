@@ -73,6 +73,7 @@ for(const sc of window.BASH.SCEN){ const ses=window.BASH.start(sc); ok(!sc.check
   const runs=[A.SAMPLE,vl,vl,"- hosts: all\n  gather_facts: false\n  tasks:\n    - cisco.ios.ios_config:\n        lines: ntp server 10.1.1.123\n        save_when: modified\n- hosts: switches\n  gather_facts: false\n  tasks:\n    - cisco.ios.ios_command:\n        commands: show vlan brief\n      register: vlans_out\n    - debug:\n        var: vlans_out.stdout_lines\n"].map(src=>A.run(L,src));
   ok(runs.every(r=>r.ok),"Ansible: плейбуки без помилок"); ok(runs[1].changed===2&&runs[2].changed===0,"Ansible: ідемпотентність ("+runs[1].changed+"/"+runs[2].changed+")");
   const r=A.TASKS.filter(t=>!t.ok(L)).map(t=>t.id); ok(!r.length,"Ansible: не виконано "+r.join(","));
+  { const L2=A.newLab(); const r2=A.run(L2,"- hosts: R1\n  gather_facts: false\n  tasks:\n    - ios_config:\n        lines: |\n          ntp server 1.1.1.1\n          ip domain-name x.lab\n"); ok(r2.ok&&(L2.N.dev.R1.svc.ntp||[]).includes("1.1.1.1"),"Ansible: багаторядковий lines: | розбивається на команди"); }
   ok(!A.run(L,"- hosts: S1\n  gather_facts: false\n  tasks:\n    - ios_command:\n        commands: configure terminal\n").ok,"Ansible: ios_command не має приймати conf t"); }
 // ---- злиття денних записів (журнал і час між пристроями) ----
 { const src=app.match(/function mergeDay\(o,v\)\{[\s\S]*?\n  return r; \}/); ok(!!src,"mergeDay не знайдено в app-*.js");

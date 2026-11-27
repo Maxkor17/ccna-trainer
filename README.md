@@ -38,6 +38,7 @@ firestore.rules          ← правила доступу до бази (вст
 .github/workflows/deploy.yml ← автодеплой на GitHub Pages після кожного push у main
 tests/run.js             ← автотести даних і симулятора (node tests/run.js)
 tests/cli-unit.js        ← модульні тести двигуна: розбір команд, DTP, EtherChannel, STP, ACL, LPM
+tests/fuzz.js            ← фазинг симулятора: ~85 тис. команд з граматики без винятків і undefined у виводі
 .github/workflows/test.yml ← ті самі тести на кожен pull request і push у робочі гілки
 tests/smoke.mjs          ← браузерний smoke-тест (Playwright), запускається в CI перед деплоєм
 tests/storage.mjs        ← тест сховища з моком Firestore (tests/firebase-mock/), теж у CI
