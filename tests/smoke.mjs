@@ -103,6 +103,20 @@ await step("причина помилки, власне пояснення, зв
   const md = await page.evaluate(() => issuesMd()); if (!/тест/.test(md)) throw new Error("немає коментаря в Markdown");
   const ob = await page.evaluate(() => obsidianMd()); if (!/Мої пояснення/.test(ob)) throw new Error("пояснення не потрапили в експорт Obsidian");
   await page.evaluate(() => { view = "stats"; render(); bindChart(); }); await has("Чому я помиляюсь"); await home(); });
+await step("Pomodoro: старт, пауза, стоп пише час у журнал", async () => {
+  await page.evaluate(() => { pomoStart(25, 5, "pt"); POMO.end = Date.now() + 1000; }); await page.waitForSelector("#pomo");
+  await page.locator('[data-act="pomopause"]').click(); await page.locator('[data-act="pomopause"]').click();
+  await page.waitForTimeout(2600); const ph = await page.evaluate(() => POMO && POMO.phase); if (ph !== "break") throw new Error("фокус не перейшов у перерву: " + ph);
+  const log = await page.evaluate(() => (daily[dkey()].log || []).some(e => e.min === 25 && e.k === "pt")); if (!log) throw new Error("25 хв не записано в журнал");
+  await page.locator('[data-act="pomostop"]').click(); if (await page.locator("#pomo").count()) throw new Error("віджет не зник"); });
+await step("тижневий огляд: збереження й нотатка Obsidian", async () => {
+  await page.evaluate(() => { window._wk = isoWeek(new Date()); view = "week"; render(); }); await has("Рефлексія");
+  await page.fill("#wkwin", "лаби STP"); await page.fill("#wkfocus", "ENSA 1–2"); await act('[data-act="weeksave"]');
+  const md = await page.evaluate(() => weekMd(isoWeek(new Date()))); if (!/лаби STP/.test(md) || !/weekly-review/.test(md)) throw new Error("нотатка неповна"); await home(); });
+await step("віхи: пропозиції від дати іспиту і статуси", async () => {
+  await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() + 90); opts.examDate = dkey(d); view = "miles"; render(); });
+  await act('[data-act="mssuggest"]'); const n = await page.evaluate(() => msList().length); if (n < 5) throw new Error("віх: " + n);
+  await page.locator('[data-act="msdone"]').first().click(); await home(); await has("🎯 Віхи"); await page.evaluate(() => { opts.examDate = ""; }); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));

@@ -13,7 +13,7 @@ function setDay(dk,fields){ daily[dk]=Object.assign({n:0,c:0},daily[dk],fields);
 let lastAct=Date.now(), minPending=0;
 ["pointerdown","keydown","wheel","touchstart","scroll"].forEach(t=>addEventListener(t,()=>{ lastAct=Date.now(); },{passive:true,capture:true}));
 function flushMinutes(){ if(!minPending) return; minPending=0; const dk=dkey(); const m=(daily[dk]||{}).m||0; if(m) patch({daily:{[dk]:{m}}}); }
-setInterval(()=>{ if(document.visibilityState!=="visible"||Date.now()-lastAct>120000) return;
+setInterval(()=>{ if(document.visibilityState!=="visible"||Date.now()-lastAct>120000) return; if(typeof pomoFocusing==="function"&&pomoFocusing()) return; // хвилини фокус-сесії запишуться окремо
   const dk=dkey(); daily[dk]=Object.assign({n:0,c:0},daily[dk]); daily[dk].m=(daily[dk].m||0)+1; minPending++; lsSet(LS.daily,daily);
   if(minPending>=5) flushMinutes(); },60000);
 addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") flushMinutes(); });
