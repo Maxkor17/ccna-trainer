@@ -184,3 +184,4 @@ ACTS.ansrun=()=>{ ansSync(); const r=ANSIBLE.run(ANS.lab,ANS.src); ANS.out="$ an
 ACTS.anssample=()=>{ if(!confirm("Замінити плейбук прикладом?")) return; ANS.src=ANSIBLE.SAMPLE; lsSet("ccna.ansible.src",ANS.src); render(); };
 ACTS.ansreset=()=>{ ansSync(); ANS.lab=ANSIBLE.newLab(); ANS.out=""; render(); };
 ACTS.ansdev=el=>{ ansSync(); ANS.dev=el.dataset.d; render(); };
+ACTS.labexport=()=>{ try{ const sc=LAB.sc; const fresh=sc.sb? LAB.N : CLI.startNet(sc).N; const r=LABEXPORT.build(sc.sb?Object.assign({},sc,{sol:"",task:["Ваша пісочниця"],title:"Пісочниця"}):sc,sc.discover?LAB.N:fresh); const a=document.createElement("a"); a.href=URL.createObjectURL(r.zip); a.download=r.name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000); }catch(e){ alert("Не вдалося зібрати архів: "+e.message); } };

@@ -75,6 +75,14 @@ for(const sc of window.BASH.SCEN){ const ses=window.BASH.start(sc); ok(!sc.check
   const r=A.TASKS.filter(t=>!t.ok(L)).map(t=>t.id); ok(!r.length,"Ansible: не виконано "+r.join(","));
   { const L2=A.newLab(); const r2=A.run(L2,"- hosts: R1\n  gather_facts: false\n  tasks:\n    - ios_config:\n        lines: |\n          ntp server 1.1.1.1\n          ip domain-name x.lab\n"); ok(r2.ok&&(L2.N.dev.R1.svc.ntp||[]).includes("1.1.1.1"),"Ansible: багаторядковий lines: | розбивається на команди"); }
   ok(!A.run(L,"- hosts: S1\n  gather_facts: false\n  tasks:\n    - ios_command:\n        commands: configure terminal\n").ok,"Ansible: ios_command не має приймати conf t"); }
+// ---- експорт лаб для containerlab ----
+{ global.TextEncoder=require("util").TextEncoder; global.Blob=require("buffer").Blob; global.CLI=window.CLI; require(P("labexport.js")); const X=window.LABEXPORT;
+  ok(X.crc32(new TextEncoder().encode("123456789"))===0xCBF43926,"CRC32 еталон");
+  for(const sc of window.CLI.NETSCEN){ try{ const N=window.CLI.startNet(sc).N; const r=X.build(sc,N); const names=r.files.map(f=>f[0]); const nets=Object.keys(N.dev).filter(d=>/switch|router/.test(N.dev[d].type));
+      ok(names.includes("topology.clab.yml")&&names.includes("README.md")&&names.includes("solution.md")&&nets.every(d=>names.includes("configs/"+d+".cfg.partial")),"експорт "+sc.id+": усі файли");
+      const y=r.files[1][1]; ok(N.links.every(l=>y.includes('"'+l.a+":")&&y.includes('"'+l.b+":")),"експорт "+sc.id+": усі лінки в topology.clab.yml");
+      ok(!/(Gi|Fa|GigabitEthernet|FastEthernet)\d+\/\d+/.test(r.files.filter(f=>/configs\//.test(f[0])).map(f=>f[1]).join("\n").split("\n").filter(l=>!/^!/.test(l)).join("\n")),"експорт "+sc.id+": у конфігах лишились порти тренажера"); }
+    catch(e){ ok(false,"експорт "+sc.id+": "+e.message); } } }
 // ---- злиття денних записів (журнал і час між пристроями) ----
 { const src=app.match(/function mergeDay\(o,v\)\{[\s\S]*?\n  return r; \}/); ok(!!src,"mergeDay не знайдено в app-*.js");
   if(src){ const mergeDay=new Function(src[0]+"; return mergeDay;")(); const r=mergeDay({n:5,c:4,m:10,log:[{ts:1,min:30,k:"pt"}],note:"a",jts:5},{n:3,c:3,m:12,log:[{ts:1,min:30,k:"pt"},{ts:2,min:15,k:"na"}],note:"b",jts:9});
