@@ -123,12 +123,16 @@ function makeDb(F,uid){
     set:d=>fsM.setDoc(r,plain(d)),
     update:d=>fsM.setDoc(r,plain(d),{merge:true}),
     delete:()=>fsM.deleteDoc(r),
-    onSnapshot:(n,e)=>fsM.onSnapshot(r,s=>n({exists:s.exists(),data:()=>s.data(),metadata:s.metadata}),e)
+    onSnapshot:(n,e)=>fsM.onSnapshot(r,s=>n({exists:s.exists(),data:()=>s.data(),metadata:s.metadata}),e),
+    delField:f=>fsM.updateDoc(r,{[f]:fsM.deleteField()})
   });
   return {
     doc:p=>wrapDoc(fsM.doc(db,"users",uid,...p.split("/"))),
     collection:p=>{ const c=fsM.collection(db,"users",uid,...p.split("/"));
-      return {add:d=>fsM.addDoc(c,plain(d)), orderBy:(f,dir)=>({limit:n=>({get:async()=>{ const s=await fsM.getDocs(fsM.query(c,fsM.orderBy(f,dir),fsM.limit(n))); return {docs:s.docs.map(d=>({data:()=>d.data()}))}; }})})}; }
+      return {add:d=>fsM.addDoc(c,plain(d)),
+        getAll:async()=>{ const s=await fsM.getDocs(c); return s.docs.map(d=>({id:d.id,data:()=>d.data()})); },
+        onSnapshot:(n,e)=>fsM.onSnapshot(c,s=>n(s.docs.map(d=>({id:d.id,data:()=>d.data()}))),e),
+        orderBy:(f,dir)=>({limit:n=>({get:async()=>{ const s=await fsM.getDocs(fsM.query(c,fsM.orderBy(f,dir),fsM.limit(n))); return {docs:s.docs.map(d=>({data:()=>d.data()}))}; }})})}; }
   };
 }
 async function initStore(){
@@ -137,6 +141,7 @@ async function initStore(){
   if(!store.F){ store.mode="local"; setStatus(); rerenderPassive(); return; }
   store.F.authM.onAuthStateChanged(store.F.auth, async user=>{
     if(store.unsub){ try{store.unsub();}catch(e){} store.unsub=null; }
+    if(store.unsubD){ try{store.unsubD();}catch(e){} store.unsubD=null; }
     store.user=user;
     if(!user){ store.db=null; store.ref=null; store.mode="signedout"; setStatus(); rerenderPassive(); return; }
     store.mode="loading"; setStatus(); await connectDb(makeDb(store.F,user.uid));
@@ -146,10 +151,15 @@ async function connectDb(db){
   try{
     store.db=db; store.ref=db.doc("progress/state");
     const snap = await Promise.race([store.ref.get(), sleep(15000).then(()=>{throw new Error("timeout");})]);
-    if(snap.exists){ const d=snap.data()||{};
-      prog=mergeByTs(prog,d.q||{},"l"); daily=mergeDaily(daily,d.daily||{}); flags=mergeByTs(flags,d.flags||{},"ts"); labs=mergeByTs(labs,d.labs||{},"ts");
-      await store.ref.set({q:prog,daily,flags,labs,updated:Date.now()});
-    } else await store.ref.set({q:prog,daily,flags,labs,created:Date.now(),updated:Date.now()});
+    // Денні записи живуть в окремих документах users/{uid}/daily/{YYYY-MM} (ліміт одного документа Firestore — 1 МБ).
+    // Старе поле daily у progress/state переносимо: спершу пишемо місячні документи, і лише після успіху прибираємо поле.
+    const months=await db.collection("daily").getAll(); const remoteDaily={}; for(const m of months) Object.assign(remoteDaily,(m.data()||{}).days||{});
+    const legacy=snap.exists?((snap.data()||{}).daily||{}):{};
+    if(snap.exists){ const d=snap.data()||{}; prog=mergeByTs(prog,d.q||{},"l"); flags=mergeByTs(flags,d.flags||{},"ts"); labs=mergeByTs(labs,d.labs||{},"ts"); }
+    daily=mergeDaily(mergeDaily(daily,remoteDaily),legacy);
+    let monthOk=true; try{ await writeMonths(db,daily); }catch(e){ monthOk=false; console.error("daily → місячні документи:",e); }
+    store.monthMode=monthOk;
+    await store.ref.set(Object.assign({q:prog,flags,labs,updated:Date.now()}, monthOk?{dailyV:2}:{daily}, snap.exists?{}:{created:Date.now()}));
     cacheAll();
     try{ const es=await db.collection("exams").orderBy("ts","desc").limit(100).get(); const remote=es.docs.map(d=>d.data()); const have=new Set(remote.map(e=>e.ts));
       for(const e of exams){ if(!have.has(e.ts)){ try{await db.collection("exams").add(e);}catch(_){} remote.push(e);} }
@@ -159,7 +169,13 @@ async function connectDb(db){
       customQs=remote; lsSet(LS.custom,customQs); rebuildQB(); }catch(e){}
     store.mode="db"; setStatus(); setTimeout(autoBackup,3000);
     store.db.doc("sandbox/main").get().then(d=>{ if(!d.exists) return; const x=d.data(); const loc=lsGet(LS.sandbox,null); if(x&&x.json&&(!loc||!loc.ts||x.ts>loc.ts)) lsSet(LS.sandbox,JSON.parse(x.json)); }).catch(()=>{});
-    store.unsub=store.ref.onSnapshot(s=>{ if(!s.exists) return; const d=s.data()||{}; prog=clone(d.q||{}); const tk=dkey(), loc=daily[tk]; daily=clone(d.daily||{}); if(loc&&(loc.m||0)>((daily[tk]||{}).m||0)) daily[tk]=Object.assign({n:0,c:0},daily[tk],{m:loc.m}); flags=clone(d.flags||{}); labs=clone(d.labs||{}); cacheAll(); rerenderPassive(); },()=>{});
+    store.unsub=store.ref.onSnapshot(s=>{ if(!s.exists) return; const d=s.data()||{}; prog=clone(d.q||{}); flags=clone(d.flags||{}); labs=clone(d.labs||{});
+      if(!store.monthMode){ const tk=dkey(), loc=daily[tk]; daily=clone(d.daily||{}); if(loc&&(loc.m||0)>((daily[tk]||{}).m||0)) daily[tk]=Object.assign({n:0,c:0},daily[tk],{m:loc.m}); }
+      else if(d.daily&&Object.keys(d.daily).length){ // старий клієнт (до оновлення кешу) дописав daily у спільний документ — переносимо
+        const leg=d.daily; daily=mergeDaily(daily,leg); const ms=new Set(Object.keys(leg).map(monthOf)); queueWrite(async()=>{ await writeMonths(store.db,daily,ms); await store.ref.delField("daily"); }); }
+      cacheAll(); rerenderPassive(); },()=>{});
+    if(store.monthMode) store.unsubD=db.collection("daily").onSnapshot(list=>{ const all={}; for(const m of list) Object.assign(all,(m.data()||{}).days||{});
+      const tk=dkey(), loc=daily[tk]; daily=all; if(loc&&(loc.m||0)>((daily[tk]||{}).m||0)) daily[tk]=Object.assign({n:0,c:0},daily[tk],{m:loc.m}); cacheAll(); rerenderPassive(); },()=>{});
     rerenderPassive();
   }catch(e){ console.error(e); store.db=null; store.ref=null; store.mode="local"; store.err=e.message||String(e); setStatus(); rerenderPassive(); }
 }
@@ -193,8 +209,16 @@ function authCard(){
     ${store.authErr?`<div class="note">${esc(store.authErr)}</div>`:""}</div>`;
 }
 function queueWrite(fn){ store.chain=store.chain.then(fn).then(()=>{ if(store.err){store.err=null;setStatus();} }).catch(e=>{store.err=(e&&e.message)||String(e&&e.code||e);setStatus();}); }
-function patch(obj){ cacheAll(); if(store.mode==="db") queueWrite(()=>store.ref.update(Object.assign(obj,{updated:Date.now()}))); }
-function saveAll(){ cacheAll(); if(store.mode==="db") queueWrite(()=>store.ref.set({q:prog,daily,flags,labs,updated:Date.now()})); }
+const monthOf=k=>String(k).slice(0,7);
+function groupMonths(dl){ const m={}; for(const [k,v] of Object.entries(dl||{})) (m[monthOf(k)]=m[monthOf(k)]||{})[k]=v; return m; }
+function writeMonths(db,dl,only){ return Promise.all(Object.entries(groupMonths(dl)).filter(([m])=>!only||only.has(m)).map(([m,days])=>db.doc("daily/"+m).set({days,updated:Date.now()}))); }
+function patch(obj){ cacheAll(); if(store.mode!=="db") return; const o=Object.assign({},obj); const dl=o.daily; delete o.daily;
+  if(dl&&store.monthMode){ for(const [m,days] of Object.entries(groupMonths(dl))) queueWrite(()=>store.db.doc("daily/"+m).update({days,updated:Date.now()})); }
+  else if(dl) o.daily=dl;
+  if(Object.keys(o).length) queueWrite(()=>store.ref.update(Object.assign(o,{updated:Date.now()}))); }
+function saveAll(){ cacheAll(); if(store.mode!=="db") return;
+  if(store.monthMode){ queueWrite(()=>writeMonths(store.db,daily)); queueWrite(()=>store.ref.set({q:prog,flags,labs,updated:Date.now(),dailyV:2})); }
+  else queueWrite(()=>store.ref.set({q:prog,daily,flags,labs,updated:Date.now()})); }
 function saveExam(e){ exams.unshift(e); lsSet(LS.exams,exams); if(store.mode==="db") queueWrite(()=>store.db.collection("exams").add(e)); }
 function rerenderPassive(){ if(!["home","stats","progress"].includes(view)) return;
   const a=document.activeElement; if(a&&a.closest&&a.closest("#app")&&(a.tagName==="TEXTAREA"||(a.tagName==="INPUT"&&!/checkbox|radio/.test(a.type)))) return; // не збивати введення
