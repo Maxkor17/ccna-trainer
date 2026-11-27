@@ -8,7 +8,14 @@
 
 ```
 public/                  ← усе, що публікується на сайті
-  index.html             ← додаток
+  index.html             ← оболонка; підключає app-*.js по черзі
+  app-core.js            ← дані, стан, синхронізація з Firebase, push
+  app-quiz.js            ← FSRS-повторення, сесії, рендеринг питань
+  app-screens.js         ← головна, тест модуля, симуляція CCNA, план, налаштування
+  app-tools.js           ← Obsidian-імпорт, резервні копії, аналітика, лаби
+  app-journal.js         ← облік часу, журнал, чек-ін дня
+  app-extras.js          ← експорт, швидкісні тренування, REST API, пісочниця
+  app-main.js            ← обробники подій і запуск
   firebase-config.js     ← ключі Firebase (НЕ секретні, вставити свої)
   questions-*.js         ← банки питань
   gen.js                 ← генератори розрахункових питань
@@ -16,6 +23,8 @@ public/                  ← усе, що публікується на сайт
   sw.js, manifest.webmanifest, icon-*.png  ← PWA (офлайн, встановлення)
 firestore.rules          ← правила доступу до бази (вставити в консоль Firebase)
 .github/workflows/deploy.yml ← автодеплой на GitHub Pages після кожного push у main
+tests/run.js             ← автотести даних і симулятора (node tests/run.js)
+tests/smoke.mjs          ← браузерний smoke-тест (Playwright), запускається в CI перед деплоєм
 ```
 
 ## Налаштування (≈30 хв, один раз)
