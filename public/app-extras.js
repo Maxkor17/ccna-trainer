@@ -166,7 +166,7 @@ VIEWS.ansible={ html:()=>{ const A=ansInit(); const ids=new Set((labs.ansible||{
   <div class="card"><h2>site.yml</h2><textarea id="ansrc" rows="18" spellcheck="false" style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;white-space:pre">${esc(A.src)}</textarea>
    <div class="row" style="margin-top:8px"><button class="primary" data-act="ansrun">▶ ansible-playbook -i inventory.ini site.yml</button><button data-act="anssample">Приклад</button><button data-act="ansreset">Скинути мережу</button></div>
    <p class="small muted" style="margin:6px 0 0">Відступи — лише пробіли (2 на рівень). Списки — через «- », словники — «ключ: значення».</p></div>
-  ${A.out?`<div class="term" id="ansout" style="max-height:none">${esc(A.out)}</div>`:""}
+  ${A.out?`<div class="term" id="ansout" style="height:auto;min-height:0;max-height:70vh">${esc(A.out)}</div>`:""}
   <div class="card"><h2>Стан пристроїв</h2><div class="chips">${ANSIBLE.GROUPS.all.map(d=>`<button class="seg ${A.dev===d?"on":""}" data-act="ansdev" data-d="${d}">${d}</button>`).join("")}</div><pre style="max-height:260px;overflow:auto">${esc(ansShowRun(A))}</pre></div>
   <button class="ghost" data-act="labs">← До списку лаб</button>`; } };
 function ansShowRun(A){ const s=A.lab.ses[A.dev]; s.exec("end"); s.exec("enable"); return s.exec("show running-config"); }
