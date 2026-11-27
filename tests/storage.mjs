@@ -47,6 +47,12 @@ ok(db["users/u1/daily/" + tm].days[today].n === 50 && db["users/u1/daily/" + tm]
 await page.reload(); await ready();
 ok(await page.evaluate(t => daily["2026-10-05"].n === 30 && daily[t].n === 50 && daily[t].log.length === 1, today), "після перезавантаження всі дні на місці");
 db = await fsData(); ok(!("daily" in db["users/u1/progress/state"]), "повторне підключення не повертає поле daily");
+await page.evaluate(() => { ERRMON.capture({ message: "TestError: моніторинг", src: location.origin + "/app-core.js", line: 7, col: 3, stack: "at test" }); ERRMON.capture({ message: "TestError: моніторинг", src: location.origin + "/app-core.js", line: 7, col: 3 }); }); await page.waitForTimeout(200);
+db = await fsData(); const errDocs = Object.entries(db).filter(([k]) => k.startsWith("users/u1/errors/"));
+ok(errDocs.length === 1 && errDocs[0][1].msg === "TestError: моніторинг" && errDocs[0][1].line === 7, "помилку JS записано в users/{uid}/errors один раз (дубль не надсилається повторно)");
+ok(await page.evaluate(() => ERRMON.list()[0].n === 2), "локальний журнал рахує повтори");
+ok(await page.evaluate(async () => (await ERRMON.remote()).some(e => e.msg === "TestError: моніторинг")), "помилки читаються з хмари для розділу «На виправлення»");
+await page.evaluate(() => ERRMON.clear());
 ok(errors.length === 0, "без помилок JS" + (errors.length ? ": " + errors.join("; ") : ""));
 
 await browser.close(); server.close();

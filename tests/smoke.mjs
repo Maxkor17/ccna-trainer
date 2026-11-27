@@ -150,6 +150,9 @@ await step("імпорт карток з GitHub-репозиторію vault (м
   await page.evaluate(() => { document.querySelector("#ghrepo").closest("details").open = true; }); await page.fill("#ghrepo", "test/vault"); await page.fill("#ghpath", "CCNA"); await act('[data-act="ghimport"]');
   await page.waitForFunction(() => customQs.some(q => /нормальних VLAN/.test(q.q || "")), null, { timeout: 4000 });
   await page.unroute(/api\.github\.com|raw\.githubusercontent\.com/); await home(); });
+await step("моніторинг помилок: запис і показ у «На виправлення»", async () => {
+  await page.evaluate(() => { ERRMON.capture({ message: "TypeError: x is undefined", src: location.origin + "/app-quiz.js", line: 42, col: 9, stack: "at f (app-quiz.js:42:9)" }); view = "issues"; render(); });
+  await has("Помилки в роботі тренажера"); await has("x is undefined"); await page.evaluate(() => ERRMON.clear()); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));

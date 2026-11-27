@@ -1,4 +1,5 @@
 // Мінісимулятор Cisco IOS (Catalyst 2960 / L3-комутатор) для навчальних сценаріїв.
+// Файл зібрано з src/cli/*.js скриптом scripts/build-cli.mjs — редагуйте фрагменти, а не public/cli.js.
 (function(){
 "use strict";
 const IFTYPES=[["fastethernet","Fa","FastEthernet"],["gigabitethernet","Gi","GigabitEthernet"],["port-channel","Po","Port-channel"],["vlan","Vlan","Vlan"],["loopback","Lo","Loopback"],["tunnel","Tu","Tunnel"]];
@@ -848,6 +849,10 @@ for(const m of ["user","exec"]) for(const [p,f] of [
  ["show mls qos",(s)=>"QoS is "+(s.mlsQos?"enabled":"disabled")+"\nQoS ip packet dscp rewrite is enabled"],
  ["show mls qos interface <if>",(s,a)=>{ const n=normIf(a[0]); const i=n&&s.ifs[n]; if(!i) return INV; return longIf(n)+"\ntrust state: "+(s.mlsQos&&i.qosTrust?(i.qosTrustDev&&!(i.phoneSeen)?"not trusted":"trust "+i.qosTrust):"not trusted")+"\ntrust mode: "+(i.qosTrust?"trust "+i.qosTrust:"not trusted")+"\ntrust enabled flag: ena\nCOS override: dis\ndefault COS: 0\nDSCP Mutation Map: Default DSCP Mutation Map\nTrust device: "+(i.qosTrustDev||"none")+"\nqos mode: port-based"+(s.mlsQos?"":"\n! Підказка тренажера: глобально QoS вимкнено — без «mls qos» налаштування trust не діють"); }]
 ]) add(m,p,f);
+function showRouteIp(s,ip){ if(!s.net||!s.ipRouting) return "% Network not in table"; const r=s.net.lookup(s.devName,ip); if(!r||r.len===0) return "% Network not in table"+(r&&r.len===0?"\n! Підказка тренажера: точного маршруту немає — пакет піде маршрутом за замовчуванням через "+(r.nh||longIf(r.ifn||"")):"");
+  const src=r.ospf?{k:"ospf "+(s.ospf?s.ospf.pid:1),ad:110,m:(s.net.ospfRoutes(s.devName).find(x=>x.net+"/"+maskLen(x.mask)===r.pfx)||{}).cost||0}:r.conn?{k:"connected",ad:0,m:0}:{k:"static",ad:r.ad,m:0};
+  return "Routing entry for "+r.pfx+"\n  Known via \""+src.k+"\", distance "+src.ad+", metric "+src.m+(r.conn?" (connected, via interface)":"")+"\n  Routing Descriptor Blocks:\n  * "+(r.conn?"directly connected, via "+longIf(r.ifn):r.nh+(r.ifn?", via "+longIf(r.ifn):""))+"\n      Route metric is "+src.m+", traffic share count is 1"; }
+for(const m of ["user","exec"]) add(m,"show ip route <ip>",(s,a)=>showRouteIp(s,a[0]));
 // ---------- Розбір рядка ----------
 function tokenize(line){
   let t=line.trim().split(/\s+/).filter(Boolean);
@@ -1442,6 +1447,7 @@ function Net(def){
     if(!d.ipRouting && d.defaultGw) cands.push({len:0,ad:0,nh:d.defaultGw,code:"gw",pfx:"0.0.0.0/0"});
     cands.sort((a,b)=>b.len-a.len||a.ad-b.ad); return cands[0]||null;
   }
+  N.lookup=(dn,ip)=>lookup(N.dev[dn],ip);
   const T=(c,o)=>{ if(c&&c.tr) c.tr.push(o); };
   const macOf=(dev,ifn)=>{ const d=N.dev[dev]; const key=isHost(d)? dev : dev+"|"+String(ifn||"").split(".")[0]; let h=0x811c9dc5; for(let i=0;i<key.length;i++){ h^=key.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } h^=h>>>13; h=Math.imul(h,0x5bd1e995)>>>0; h^=h>>>15; const x=(h>>>0).toString(16).padStart(8,"0");
     return isHost(d)? "0050.79"+x.slice(0,2)+"."+x.slice(2,6) : "00"+(d.type==="router"?"1a":"19")+"."+x.slice(0,4)+"."+x.slice(4,8); };
