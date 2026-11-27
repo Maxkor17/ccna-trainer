@@ -1,4 +1,4 @@
-// Щогодини (GitHub Actions): для кожного пристрою з увімкненим push перевіряє денну норму і надсилає нагадування.
+// Щогодини (GitHub Actions): для кожного пристрою з увімкненим push перевіряє денну норму (відповіді АБО хвилини) і надсилає нагадування.
 import admin from "firebase-admin";
 const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || "{}");
 if (!sa.project_id) { console.log("FIREBASE_SERVICE_ACCOUNT не задано — пропускаю"); process.exit(0); }
@@ -13,13 +13,16 @@ for (const doc of snap.docs) {
   if (!force && now.hour !== p.hour) { skipped++; continue; }
   if (!force && p.lastSent === now.key) { skipped++; continue; }
   const st = (await db.doc(`users/${uid}/progress/state`).get()).data() || {};
-  const daily = st.daily || {}; const goal = p.goal || 20; const today = (daily[now.key] || {}).n || 0;
-  if (today >= goal && !force) { await doc.ref.update({ lastSent: now.key }); skipped++; continue; }
-  let streak = 0; const d = new Date(); for (let i = 1; i < 400; i++) { d.setDate(d.getDate() - 1); const k = local(tz, d).key; if (((daily[k] || {}).n || 0) >= goal) streak++; else break; }
+  const daily = st.daily || {}; const goal = p.goal || 20, tgoal = p.tgoal || 60;
+  const mins = x => ((x && x.m) || 0) + ((x && x.log) || []).reduce((a, e) => a + ((e && e.min) || 0), 0);
+  const done = x => ((x && x.n) || 0) >= goal || mins(x) >= tgoal;
+  const dx = daily[now.key] || {}; const today = dx.n || 0, todayMin = mins(dx);
+  if (done(dx) && !force) { await doc.ref.update({ lastSent: now.key }); skipped++; continue; }
+  let streak = 0; const d = new Date(); for (let i = 1; i < 400; i++) { d.setDate(d.getDate() - 1); const k = local(tz, d).key; if (done(daily[k])) streak++; else break; }
   const due = Object.values(st.q || {}).filter(r => r && r.d && r.d <= Date.now()).length;
   const left = Math.max(0, goal - today);
   const title = streak >= 2 ? `🔥 Серія ${streak} дн. під загрозою` : "📚 CCNA: час для навчання";
-  const body = `Сьогодні ${today}/${goal} — ще ${left} до норми.` + (due ? ` До повторення: ${due}.` : "") + " 10 хвилин вистачить.";
+  const body = `Сьогодні ${today}/${goal} відповідей, ${todayMin}/${tgoal} хв — ще ${left} відповідей або ${Math.max(0, tgoal - todayMin)} хв до норми.` + (due ? ` До повторення: ${due}.` : "");
   try {
     await fcm.send({ token: p.token, notification: { title, body }, data: { url: SITE, title, body }, webpush: { fcmOptions: { link: SITE }, notification: { icon: SITE + "icon-192.png", tag: "ccna-daily" } } });
     await doc.ref.update({ lastSent: now.key }); sent++;
