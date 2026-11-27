@@ -70,7 +70,7 @@ const recId = q=>q.tid||q.id;
 // ================= Стан =================
 let prog = lsGet(LS.prog,{}), exams = lsGet(LS.exams,[]), daily = lsGet(LS.daily,{}), flags = lsGet(LS.flags,{}), labs = lsGet(LS.labs,{});
 let sel = new Set(lsGet(LS.sel,["SRWE1","SRWE2","SRWE3","SRWE4","SRWE5","SRWE6"]));
-let opts = Object.assign({train:20, exam:40, src:"all", goal:20, theme:"auto", fs:16, shuffle:true, sound:false, modTopic:"SRWE1", examDate:"", lang:"mix", enTerms:false}, lsGet(LS.opts,{}));
+let opts = Object.assign({train:20, exam:40, src:"all", goal:20, tgoal:60,theme:"auto", fs:16, shuffle:true, sound:false, modTopic:"SRWE1", examDate:"", lang:"mix", enTerms:false}, lsGet(LS.opts,{}));
 if(opts.notesOnly){ opts.src="n"; delete opts.notesOnly; }
 let view = "home", S = null, LAB = null, searchQ = "";
 
@@ -105,11 +105,11 @@ async function pushEnable(){
   if(!(await m.isSupported())) throw new Error("FCM не підтримується в цьому браузері");
   const reg=await navigator.serviceWorker.ready; const token=await m.getToken(m.getMessaging(store.F.app),{vapidKey:VAPID,serviceWorkerRegistration:reg});
   const id=hashStr(token); const [h,mi]=(opts.remind||"19:00").split(":").map(Number);
-  await store.db.doc("push/"+id).set({token,hour:h,minute:mi||0,tz:Intl.DateTimeFormat().resolvedOptions().timeZone||"Europe/Kyiv",goal:opts.goal,ua:navigator.userAgent.slice(0,120),ts:Date.now()});
+  await store.db.doc("push/"+id).set({token,hour:h,minute:mi||0,tz:Intl.DateTimeFormat().resolvedOptions().timeZone||"Europe/Kyiv",goal:opts.goal,tgoal:opts.tgoal,ua:navigator.userAgent.slice(0,120),ts:Date.now()});
   opts.pushId=id; lsSet(LS.opts,opts); return id; }
 async function pushDisable(){ if(opts.pushId&&store.db){ try{ await store.db.doc("push/"+opts.pushId).delete(); }catch(e){} }
   try{ const m=await import("https://www.gstatic.com/firebasejs/"+FB_VER+"/firebase-messaging.js"); await m.deleteToken(m.getMessaging(store.F.app)); }catch(e){} delete opts.pushId; lsSet(LS.opts,opts); }
-async function pushSync(){ if(!opts.pushId||store.mode!=="db") return; const [h,mi]=(opts.remind||"19:00").split(":").map(Number); try{ await store.db.doc("push/"+opts.pushId).update({hour:h,minute:mi||0,goal:opts.goal,ts:Date.now()}); }catch(e){} }
+async function pushSync(){ if(!opts.pushId||store.mode!=="db") return; const [h,mi]=(opts.remind||"19:00").split(":").map(Number); try{ await store.db.doc("push/"+opts.pushId).update({hour:h,minute:mi||0,goal:opts.goal,tgoal:opts.tgoal,ts:Date.now()}); }catch(e){} }
 const plain=o=>JSON.parse(JSON.stringify(o)); // Firestore не приймає undefined
 function makeDb(F,uid){
   const {fsM,db}=F;
@@ -154,12 +154,19 @@ async function connectDb(db){
       customQs=remote; lsSet(LS.custom,customQs); rebuildQB(); }catch(e){}
     store.mode="db"; setStatus(); setTimeout(autoBackup,3000);
     store.db.doc("sandbox/main").get().then(d=>{ if(!d.exists) return; const x=d.data(); const loc=lsGet(LS.sandbox,null); if(x&&x.json&&(!loc||!loc.ts||x.ts>loc.ts)) lsSet(LS.sandbox,JSON.parse(x.json)); }).catch(()=>{});
-    store.unsub=store.ref.onSnapshot(s=>{ if(!s.exists) return; const d=s.data()||{}; prog=clone(d.q||{}); daily=clone(d.daily||{}); flags=clone(d.flags||{}); labs=clone(d.labs||{}); cacheAll(); rerenderPassive(); },()=>{});
+    store.unsub=store.ref.onSnapshot(s=>{ if(!s.exists) return; const d=s.data()||{}; prog=clone(d.q||{}); const tk=dkey(), loc=daily[tk]; daily=clone(d.daily||{}); if(loc&&(loc.m||0)>((daily[tk]||{}).m||0)) daily[tk]=Object.assign({n:0,c:0},daily[tk],{m:loc.m}); flags=clone(d.flags||{}); labs=clone(d.labs||{}); cacheAll(); rerenderPassive(); },()=>{});
     rerenderPassive();
   }catch(e){ console.error(e); store.db=null; store.ref=null; store.mode="local"; store.err=e.message||String(e); setStatus(); rerenderPassive(); }
 }
 function mergeByTs(a,b,f){ const out=clone(a||{}); for(const [k,v] of Object.entries(b||{})){ if(!out[k]||(v[f]||0)>=(out[k][f]||0)) out[k]=v; } return out; }
-function mergeDaily(a,b){ const out=clone(a||{}); for(const [k,v] of Object.entries(b||{})){ if(!out[k]||(v.n||0)>=(out[k].n||0)) out[k]=v; } return out; }
+// Денний запис: n/c — відповіді, m — хвилини в тренажері, log — записи навчання поза ним, note/plan/jts — чек-ін дня.
+function mergeDay(o,v){ if(!o) return v; if(!v) return o;
+  const big=(v.n||0)>=(o.n||0)?v:o; const r=Object.assign({},o,v,{n:big.n||0,c:big.c||0});
+  if(o.m||v.m) r.m=Math.max(o.m||0,v.m||0);
+  const L=[...(o.log||[]),...(v.log||[])]; if(L.length){ const seen=new Set(); r.log=L.filter(e=>e&&!seen.has(e.ts)&&seen.add(e.ts)).sort((a,b)=>a.ts-b.ts); }
+  const j=(v.jts||0)>=(o.jts||0)?v:o; for(const f of ["note","plan","jts"]){ if(j[f]!==undefined) r[f]=j[f]; else delete r[f]; }
+  return r; }
+function mergeDaily(a,b){ const out=clone(a||{}); for(const [k,v] of Object.entries(b||{})) out[k]=mergeDay(out[k],v); return out; }
 function cacheAll(){ lsSet(LS.prog,prog); lsSet(LS.daily,daily); lsSet(LS.flags,flags); lsSet(LS.labs,labs); }
 function authErrText(e){ const c=(e&&e.code)||""; return ({"auth/invalid-credential":"Невірний email або пароль.","auth/wrong-password":"Невірний пароль.","auth/user-not-found":"Користувача не знайдено — натисніть «Створити акаунт».","auth/email-already-in-use":"Такий email уже зареєстровано — натисніть «Увійти».","auth/weak-password":"Пароль має бути щонайменше 6 символів.","auth/invalid-email":"Некоректний email.","auth/popup-blocked":"Браузер заблокував вікно входу — дозвольте спливаючі вікна або увійдіть через email.","auth/popup-closed-by-user":"Вікно входу закрито.","auth/unauthorized-domain":"Цей домен не додано в Firebase → Authentication → Settings → Authorized domains.","auth/operation-not-allowed":"Цей спосіб входу не увімкнено в Firebase → Authentication → Sign-in method."}[c])||(e&&e.message)||String(e); }
 async function doAuth(kind){
@@ -184,7 +191,9 @@ function queueWrite(fn){ store.chain=store.chain.then(fn).then(()=>{ if(store.er
 function patch(obj){ cacheAll(); if(store.mode==="db") queueWrite(()=>store.ref.update(Object.assign(obj,{updated:Date.now()}))); }
 function saveAll(){ cacheAll(); if(store.mode==="db") queueWrite(()=>store.ref.set({q:prog,daily,flags,labs,updated:Date.now()})); }
 function saveExam(e){ exams.unshift(e); lsSet(LS.exams,exams); if(store.mode==="db") queueWrite(()=>store.db.collection("exams").add(e)); }
-function rerenderPassive(){ if(["home","stats"].includes(view)) render(); }
+function rerenderPassive(){ if(!["home","stats","progress"].includes(view)) return;
+  const a=document.activeElement; if(a&&a.closest&&a.closest("#app")&&(a.tagName==="TEXTAREA"||(a.tagName==="INPUT"&&!/checkbox|radio/.test(a.type)))) return; // не збивати введення
+  render(); }
 
 // ================= Навчання =================
 // ---- FSRS-4.5: планування повторень (як у сучасному Anki) ----
@@ -415,10 +424,10 @@ function render(){
   if(view==="quiz"){ const ci=$("#cmdin"); if(ci) ci.focus(); }
 }
 function streakInfo(){
-  const today=dkey(); const t=(daily[today]||{}).n||0; let streak=0; const d=new Date();
-  if(t<opts.goal) d.setDate(d.getDate()-1);
-  for(;;){ const v=(daily[dkey(d)]||{}).n||0; if(v>=opts.goal){streak++; d.setDate(d.getDate()-1);} else break; }
-  return {today:t, streak};
+  const today=dkey(); const x=daily[today]||{}; let streak=0; const d=new Date();
+  if(!dayDone(x)) d.setDate(d.getDate()-1);
+  for(;;){ if(dayDone(daily[dkey(d)])){streak++; d.setDate(d.getDate()-1);} else break; }
+  return {today:x.n||0, min:dayMin(x), done:dayDone(x), streak};
 }
 function renderHome(){
   const rq=reviewQueue().length, selQ=qsFor(sel).length, gk=genKeysFor(sel);
@@ -433,10 +442,15 @@ function renderHome(){
   const labsDone=ALLSCEN().filter(s=>labs[s.id]&&labs[s.id].ok).length;
   return `${authCard()}
   <div class="card">
-    <div class="row"><h2 class="grow" style="margin:0">Денна норма</h2><span class="small">${si.streak?`🔥 ${si.streak} ${si.streak===1?"день":si.streak<5?"дні":"днів"} поспіль`:"Серія ще не почалась"}</span></div>
+    <div class="row"><h2 class="grow" style="margin:0">Денна норма${si.done?" ✅":""}</h2><span class="small">${si.streak?`🔥 ${si.streak} ${si.streak===1?"день":si.streak<5?"дні":"днів"} поспіль`:"Серія ще не почалась"}</span></div>
     <div class="bar wide"><i style="width:${pct}%"></i></div>
-    <div class="row"><span class="small muted grow">Сьогодні: <b>${si.today}</b> / ${opts.goal} відповідей${si.today>=opts.goal?" ✅":""}</span>${seg("goal",[10,20,30,50],v=>v)}</div>
+    <div class="row"><span class="small muted grow">Відповіді: <b>${si.today}</b> / ${opts.goal}${si.today>=opts.goal?" ✅":""}</span>${seg("goal",[10,20,30,50],v=>v)}</div>
+    <div class="bar wide"><i style="width:${Math.min(100,Math.round(si.min/opts.tgoal*100))}%"></i></div>
+    <div class="row"><span class="small muted grow">Час: <b>${fmtMin(si.min)}</b> / ${fmtMin(opts.tgoal)}${si.min>=opts.tgoal?" ✅":""}</span>${seg("tgoal",[30,60,90,120],v=>v>=60?v/60+" год":v+" хв")}</div>
+    <p class="small muted" style="margin:4px 0 8px">День іде в серію, якщо виконано будь-яку з норм. Час у тренажері рахується сам (поки вкладка активна); Packet Tracer, NetAcad, конспекти — запишіть кнопкою нижче.</p>
+    ${logForm()}
   </div>
+  ${checkinCard()}
   ${readinessCard()}
   <div class="card"><h2>Тест модуля</h2>
     <p class="small muted" style="margin:0 0 8px">20 питань по одному модулю: спершу 🎓 NetAcad і слабкі місця, потім нові та розрахунки.</p>
@@ -577,7 +591,8 @@ function renderSettings(){
     <p class="small muted" style="margin:6px 0">English — увесь банк CCNA перекладено англійською (як на справжньому іспиті); під кожним питанням можна розгорнути український оригінал. Змішано — оригінали плюс окремі англомовні питання.</p>
     <div class="kv"><span>Підказувати англійські терміни в питаннях</span><span class="row">${seg("enTerms",[[true,"Так"],[false,"Ні"]])}</span></div>
     <p class="small muted" style="margin:6px 0">Інтервали повторення рахує алгоритм FSRS (як у сучасному Anki): він оцінює стабільність пам'яті для кожного питання і повертає його, коли ймовірність пригадати падає до 90%. На комп'ютері: 1–9 — варіант, Enter — перевірити/далі, F — сумнівне, ? — довідка.</p>
-    <div class="kv"><span>Денна норма</span><span class="row">${seg("goal",[[10,"10"],[20,"20"],[30,"30"],[50,"50"]])}</span></div></div>
+    <div class="kv"><span>Денна норма</span><span class="row">${seg("goal",[[10,"10"],[20,"20"],[30,"30"],[50,"50"]])}</span></div>
+    <div class="kv"><span>Норма часу</span><span class="row">${seg("tgoal",[[30,"30 хв"],[60,"1 год"],[90,"1.5 год"],[120,"2 год"]])}</span></div></div>
   <div class="card"><h2>🔔 Push-сповіщення</h2><p class="small muted" style="margin:0 0 8px">Щодня у вибраний нижче час сервер перевіряє вашу денну норму і, якщо її ще не виконано, надсилає сповіщення: скільки лишилося і що серія днів під загрозою. Працює навіть із закритим тренажером. На iPhone — лише якщо тренажер встановлено на початковий екран.</p>
     ${opts.pushId?`<div class="row"><span class="grow">✅ Увімкнено на цьому пристрої</span><button data-act="pushoff">Вимкнути</button></div>`:`<button class="primary" data-act="pushon">Увімкнути push</button>`}<p class="small muted" id="pushmsg" style="margin:6px 0 0"></p></div>
   <div class="card"><h2>Нагадування</h2><p class="small muted" style="margin:0 0 8px">Щоденне нагадування з'явиться у вашому календарі (Google, Apple, Outlook) і спрацює навіть із закритим тренажером. Відкрийте завантажений файл .ics на телефоні — календар запропонує додати подію.</p>
@@ -836,28 +851,94 @@ window._pairSorted=null;
 function heatmapSVG(){ const weeks=16, cell=14, gap=3; const end=new Date(); const start=new Date(end); start.setDate(end.getDate()-(weeks*7-1)-((end.getDay()+6)%7)+((end.getDay()+6)%7));
   start.setDate(end.getDate()-(weeks*7-1)); const off=(start.getDay()+6)%7; start.setDate(start.getDate()-off);
   let g=""; const d=new Date(start); let col=0;
-  while(d<=end){ const row=(d.getDay()+6)%7; const n=(daily[dkey(d)]||{}).n||0; const lv=n===0?0:n<10?1:n<20?2:n<40?3:4;
-    g+=`<rect x="${20+col*(cell+gap)}" y="${row*(cell+gap)}" width="${cell}" height="${cell}" rx="2" fill="${lv?"var(--accent)":"var(--line)"}" opacity="${[1,.3,.5,.75,1][lv]}"><title>${d.toLocaleDateString("uk-UA")}: ${n}</title></rect>`;
+  while(d<=end){ const row=(d.getDay()+6)%7; const x=daily[dkey(d)]||{}; const n=x.n||0, mn=dayMin(x); const lv=Math.max(n===0?0:n<10?1:n<20?2:n<40?3:4, mn===0?0:mn<20?1:mn<45?2:mn<90?3:4);
+    g+=`<rect x="${20+col*(cell+gap)}" y="${row*(cell+gap)}" width="${cell}" height="${cell}" rx="2" fill="${lv?"var(--accent)":"var(--line)"}" opacity="${[1,.3,.5,.75,1][lv]}"><title>${d.toLocaleDateString("uk-UA")}: ${n} відп.${mn?", "+fmtMin(mn):""}</title></rect>`;
     if(row===6) col++; d.setDate(d.getDate()+1); }
-  return `<svg viewBox="0 0 ${22+(col+1)*(cell+gap)} ${7*(cell+gap)+14}" style="width:100%;height:auto">${["Пн","","Ср","","Пт","",""].map((t,i)=>`<text x="0" y="${i*(cell+gap)+9}" font-size="8" fill="var(--muted)">${t}</text>`).join("")}${g}<text x="20" y="${7*(cell+gap)+11}" font-size="9" fill="var(--muted)">останні 16 тижнів · темніше — більше питань</text></svg>`; }
-function achievements(){ const tot=Object.values(prog).reduce((a,r)=>a+r.s,0); const si=streakInfo(); let best=0,cur=0; const d=new Date(); d.setDate(d.getDate()-400); for(let i=0;i<=400;i++){ if(((daily[dkey(d)]||{}).n||0)>0){cur++;best=Math.max(best,cur);}else cur=0; d.setDate(d.getDate()+1); }
+  return `<svg viewBox="0 0 ${22+(col+1)*(cell+gap)} ${7*(cell+gap)+14}" style="width:100%;height:auto">${["Пн","","Ср","","Пт","",""].map((t,i)=>`<text x="0" y="${i*(cell+gap)+9}" font-size="8" fill="var(--muted)">${t}</text>`).join("")}${g}<text x="20" y="${7*(cell+gap)+11}" font-size="9" fill="var(--muted)">останні 16 тижнів · темніше — більше питань і часу</text></svg>`; }
+function achievements(){ const tot=Object.values(prog).reduce((a,r)=>a+r.s,0); const si=streakInfo(); let best=0,cur=0; const d=new Date(); d.setDate(d.getDate()-400); for(let i=0;i<=400;i++){ if(dayActive(daily[dkey(d)])){cur++;best=Math.max(best,cur);}else cur=0; d.setDate(d.getDate()+1); }
   const L=k=>labs[k]&&labs[k].ok; const net=(CLI.NETSCEN||[]); const ts=Object.keys(labs).filter(k=>k.startsWith("ts-")).reduce((a,k)=>a+(labs[k].solved||0),0);
   const sp=k=>((labs["speed-"+k]||{}).runs||[]); const ex=exams; const sb=Object.keys((lsGet(LS.sandbox,{devs:{}}).devs)||{}).length;
   return [["🌱","Перший крок","10 відповідей",tot>=10],["📚","Сотня","100 відповідей",tot>=100],["🏋","Півтисячі","500 відповідей",tot>=500],["🧠","Тисячник","1000 відповідей",tot>=1000],
-   ["🔥","Три дні поспіль","3 дні навчання без перерви",best>=3],["🔥","Тиждень","7 днів поспіль",best>=7],["☄","Місяць дисципліни","30 днів поспіль",best>=30],["🎯","Норма","Денна норма виконана",si.today>=opts.goal],
+   ["🔥","Три дні поспіль","3 дні навчання без перерви",best>=3],["🔥","Тиждень","7 днів поспіль",best>=7],["☄","Місяць дисципліни","30 днів поспіль",best>=30],["🎯","Норма","Денна норма виконана",si.done],
    ["🔧","Перша лаба","Будь-яка CLI-лаба виконана",Object.keys(labs).some(k=>!k.startsWith("speed")&&labs[k].ok)],["🌐","SRWE-мережі","Усі 🌐 лаби SRWE",net.filter(x=>/^SRWE/.test(x.t)).every(x=>L(x.id))],["🛰","ENSA-мережі","Усі 🌐 лаби ENSA",net.filter(x=>/^ENSA/.test(x.t)).every(x=>L(x.id))],
    ["🛠","Ремонтник","5 поломок виправлено",ts>=5],["🚑","Мережевий лікар","20 поломок виправлено",ts>=20],["🤖","Автоматизатор","REST API лаба",L("api")],["🧪","Архітектор","Пісочниця з 5+ пристроїв",sb>=5],
    ["🧮","Субнет-ніндзя","10/10 субнетингу менш ніж за 120 с",sp("subnet").some(r=>r.ok===r.n&&r.sec<120)],["⌨","Швидкі пальці","10/10 команд менш ніж за 90 с",sp("cmd").some(r=>r.ok===r.n&&r.sec<90)],
-   ["📝","Екзаменований","Екзамен ≥ 90%",ex.some(e=>e.pct>=90)],["🏅","Готовий до CCNA","Симуляція CCNA ≥ 825",ex.some(e=>e.ccna&&300+700*e.correct/e.n>=825)],["📒","Конспект у справі","20+ карток з Obsidian",customQs.filter(q=>q.type==="flash").length>=20],["🇬🇧","English ready","20 англійських питань правильно",QB.filter(q=>q.src==="en"&&prog[q.id]&&prog[q.id].c>0).length>=20]]; }
-function weekReport(){ const sum=(from,to)=>{ let n=0,c=0; const d=new Date(); d.setDate(d.getDate()-from); for(let i=from;i<to;i++){ const x=daily[dkey(d)]||{}; n+=x.n||0; c+=x.c||0; d.setDate(d.getDate()-1); } return {n,c}; };
+   ["📝","Екзаменований","Екзамен ≥ 90%",ex.some(e=>e.pct>=90)],["🏅","Готовий до CCNA","Симуляція CCNA ≥ 825",ex.some(e=>e.ccna&&300+700*e.correct/e.n>=825)],["📒","Конспект у справі","20+ карток з Obsidian",customQs.filter(q=>q.type==="flash").length>=20],["🇬🇧","English ready","20 англійських питань правильно",QB.filter(q=>q.src==="en"&&prog[q.id]&&prog[q.id].c>0).length>=20],
+   ...journalAchievements()]; }
+function weekReport(){ const sum=(from,to)=>{ let n=0,c=0,m=0; const d=new Date(); d.setDate(d.getDate()-from); for(let i=from;i<to;i++){ const x=daily[dkey(d)]||{}; n+=x.n||0; c+=x.c||0; m+=dayMin(x); d.setDate(d.getDate()-1); } return {n,c,m}; };
   const a=sum(0,7), b=sum(7,14); const wk=Date.now()-7*864e5; const lb=Object.entries(labs).filter(([k,v])=>v.done&&v.done>wk).length; const ex=exams.filter(e=>e.ts>wk);
   return {a,b,lb,ex}; }
 function renderProgress(){ const A=achievements(); const got=A.filter(x=>x[3]).length; const w=weekReport(); const si=streakInfo(); const acc=x=>x.n?Math.round(x.c/x.n*100)+"%":"—";
   return `<div class="card"><h2>📈 Активність</h2>${heatmapSVG()}<p class="small" style="margin:6px 0 0">Серія днів із виконаною нормою: <b>${si.streak}</b></p></div>
-  <div class="card"><h2>🗒 Тижневий звіт</h2><table><tr><th></th><th class="num">Цей тиждень</th><th class="num">Минулий</th></tr><tr><td>Відповідей</td><td class="num">${w.a.n}</td><td class="num">${w.b.n}</td></tr><tr><td>Точність</td><td class="num">${acc(w.a)}</td><td class="num">${acc(w.b)}</td></tr></table>
+  ${journalCard()}
+  <div class="card"><h2>🗒 Тижневий звіт</h2><table><tr><th></th><th class="num">Цей тиждень</th><th class="num">Минулий</th></tr><tr><td>Відповідей</td><td class="num">${w.a.n}</td><td class="num">${w.b.n}</td></tr><tr><td>Точність</td><td class="num">${acc(w.a)}</td><td class="num">${acc(w.b)}</td></tr><tr><td>Час навчання</td><td class="num">${fmtMin(w.a.m)}</td><td class="num">${fmtMin(w.b.m)}</td></tr></table>
     <p class="small" style="margin:6px 0 0">${w.a.n>w.b.n?"📈 Більше, ніж минулого тижня — так тримати.":w.a.n<w.b.n?"📉 Менше, ніж минулого тижня — спробуйте план на сьогодні.":"Стабільно."} Лаб завершено: ${w.lb}. Екзаменів: ${w.ex.length}${w.ex.length?" (найкращий "+Math.max(...w.ex.map(e=>e.pct))+"%)":""}.</p></div>
   <div class="card"><h2>🏆 Досягнення ${got}/${A.length}</h2><div class="ach">${A.map(([i,t,d,ok])=>`<div class="${ok?"on":""}"><span>${i}</span><b>${esc(t)}</b><small>${esc(d)}</small></div>`).join("")}</div></div>
   <button class="ghost" data-act="home">На головну</button>`; }
+// ---- Облік часу, журнал навчання, чек-ін дня ----
+const KINDS={pt:["🖥","Packet Tracer"],na:["🎓","NetAcad"],ob:["📒","Конспект в Obsidian"],vid:["🎬","Відео / курс"],lab:["🔌","Залізо / домашня лаба"],ex:["📝","Пробний тест"],oth:["📖","Інше"]};
+function dayMin(x){ x=x||{}; return (x.m||0)+(x.log||[]).reduce((a,e)=>a+(e&&e.min||0),0); }
+function dayDone(x){ x=x||{}; return (x.n||0)>=opts.goal || dayMin(x)>=opts.tgoal; }
+function dayActive(x){ x=x||{}; return (x.n||0)>0 || dayMin(x)>0; }
+function fmtMin(m){ m=Math.round(m||0); if(m<60) return m+" хв"; const h=Math.floor(m/60), r=m%60; return h+" год"+(r?" "+r+" хв":""); }
+function dayKeyOff(off){ const d=new Date(); d.setDate(d.getDate()-off); return dkey(d); }
+function fmtDay(k){ const [y,m,d]=k.split("-").map(Number); return new Date(y,m-1,d).toLocaleDateString("uk-UA",{weekday:"short",day:"2-digit",month:"2-digit"}); }
+function setDay(dk,fields){ daily[dk]=Object.assign({n:0,c:0},daily[dk],fields); patch({daily:{[dk]:fields}}); }
+// Автоматичний таймер: +1 хв за кожну хвилину, коли вкладка видима й була активність за останні 2 хв.
+let lastAct=Date.now(), minPending=0;
+["pointerdown","keydown","wheel","touchstart","scroll"].forEach(t=>addEventListener(t,()=>{ lastAct=Date.now(); },{passive:true,capture:true}));
+function flushMinutes(){ if(!minPending) return; minPending=0; const dk=dkey(); const m=(daily[dk]||{}).m||0; if(m) patch({daily:{[dk]:{m}}}); }
+setInterval(()=>{ if(document.visibilityState!=="visible"||Date.now()-lastAct>120000) return;
+  const dk=dkey(); daily[dk]=Object.assign({n:0,c:0},daily[dk]); daily[dk].m=(daily[dk].m||0)+1; minPending++; lsSet(LS.daily,daily);
+  if(minPending>=5) flushMinutes(); },60000);
+addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") flushMinutes(); });
+addEventListener("pagehide",flushMinutes);
+function logForm(){ const f=window._logOpen; if(!f) return `<button data-act="logopen">⏱ Записати навчання поза тренажером</button>`;
+  return `<div style="border-top:1px solid var(--line);padding-top:8px">
+    <div class="row"><select id="lkind" style="width:auto">${Object.entries(KINDS).map(([k,[i,n]])=>`<option value="${k}" ${f.k===k?"selected":""}>${i} ${n}</option>`).join("")}</select>
+      <select id="lday" style="width:auto"><option value="0">сьогодні</option><option value="1" ${f.day==="1"?"selected":""}>учора</option></select></div>
+    <div class="row" style="margin-top:6px">${[15,30,45,60,90,120].map(v=>`<button class="seg ${f.min===v?"on":""}" data-act="logmin" data-v="${v}">${v>=60?v/60+" год":v+" хв"}</button>`).join("")}<input type="number" id="lmin" min="1" max="600" placeholder="хв" value="${f.min||""}" style="width:80px"></div>
+    <input type="text" id="lnote" maxlength="200" placeholder="Що саме (необов'язково): напр. лаба 6.4.2 EtherChannel" value="${esc(f.note||"")}" style="margin-top:6px">
+    <div class="row" style="margin-top:6px"><span class="small grow" id="logmsg" style="color:var(--bad)"></span><button class="ghost" data-act="logcancel">Скасувати</button><button class="primary" data-act="logadd">Додати</button></div></div>`; }
+function logDraft(){ const f=window._logOpen||{}; const g=id=>($(id)||{}).value; if($("#lkind")){ f.k=g("#lkind"); f.day=g("#lday"); f.note=g("#lnote"); const m=Number(g("#lmin")); if(m) f.min=m; } window._logOpen=f; return f; }
+function checkinCard(){ const dk=dkey(), x=daily[dk]||{}, y=daily[dayKeyOff(1)]||{}; const jd=window._jd||{};
+  const note=jd.note!==undefined?jd.note:(x.note||""), plan=jd.plan!==undefined?jd.plan:(x.plan||"");
+  return `<div class="card"><div class="row"><h2 class="grow" style="margin:0">📝 Чек-ін дня</h2>${x.jts?`<span class="small muted">збережено о ${new Date(x.jts).toLocaleTimeString("uk-UA",{hour:"2-digit",minute:"2-digit"})}</span>`:""}</div>
+    ${y.plan?`<p class="small" style="margin:8px 0;padding:8px 10px;background:var(--accent-soft);border-radius:8px"><b>План на сьогодні (з учора):</b><br>${esc(y.plan).replace(/\n/g,"<br>")}</p>`:""}
+    <label class="small muted" for="jnote">Що вивчив сьогодні: теми, лаби, що зрозумів, що досі незрозуміло</label>
+    <textarea id="jnote" class="jt" maxlength="2000">${esc(note)}</textarea>
+    <label class="small muted" for="jplan">План на завтра: конкретно — модуль, лаба, скільки питань</label>
+    <textarea id="jplan" class="jt" maxlength="1000">${esc(plan)}</textarea>
+    <div class="row" style="margin-top:6px"><span class="small muted grow">${journalStreak()>=2?"🗓 Чек-інів поспіль: "+journalStreak():"Записуйте щодня — завтра побачите свій план тут."}</span><button class="primary" data-act="jsave">Зберегти</button></div></div>`; }
+function journalStreak(){ let n=0; const d=new Date(); if(!(daily[dkey(d)]||{}).jts) d.setDate(d.getDate()-1); while((daily[dkey(d)]||{}).jts){ n++; d.setDate(d.getDate()-1); } return n; }
+function journalAct(act,el){
+  if(act==="logopen"){ window._logOpen={k:"pt",day:"0"}; render(); return true; }
+  if(act==="logcancel"){ window._logOpen=null; render(); return true; }
+  if(act==="logmin"){ const f=logDraft(); f.min=Number(el.dataset.v); render(); return true; }
+  if(act==="logadd"){ const f=logDraft(); const min=Math.round(Number(f.min)); if(!(min>=1&&min<=600)){ const m=$("#logmsg"); if(m) m.textContent="Вкажіть 1–600 хв"; return true; }
+    const dk=dayKeyOff(Number(f.day)||0); const log=((daily[dk]||{}).log||[]).concat([{ts:Date.now(),min,k:f.k||"oth",note:(f.note||"").trim().slice(0,200)}]);
+    setDay(dk,{log}); window._logOpen=null; render(); return true; }
+  if(act==="logdel"){ const dk=el.dataset.d, ts=Number(el.dataset.ts); if(el.dataset.confirm!=="1"){ el.dataset.confirm="1"; el.textContent="Видалити?"; return true; }
+    setDay(dk,{log:((daily[dk]||{}).log||[]).filter(e=>e.ts!==ts)}); render(); return true; }
+  if(act==="jsave"){ const note=(($("#jnote")||{}).value||"").trim(), plan=(($("#jplan")||{}).value||"").trim(); if(!note&&!plan) return true;
+    setDay(dkey(),{note,plan,jts:Date.now()}); window._jd=null; render(); return true; }
+  if(act==="jlog"){ window._jlogAll=!window._jlogAll; render(); return true; }
+  return false; }
+function journalCard(){ const days=[]; for(let i=0;i<(window._jlogAll?60:14);i++){ const k=dayKeyOff(i), x=daily[k]; if(x&&(dayActive(x)||x.note||x.plan)) days.push([k,x]); }
+  let tot=0; const byK={}; for(const x of Object.values(daily)){ tot+=dayMin(x); } for(let i=0;i<30;i++){ const x=daily[dayKeyOff(i)]||{}; if(x.m) byK.app=(byK.app||0)+x.m; for(const e of x.log||[]) byK[e.k]=(byK[e.k]||0)+(e.min||0); }
+  const kn=k=>k==="app"?"🧩 Тренажер":(KINDS[k]?KINDS[k].join(" "):k); const m30=Object.values(byK).reduce((a,b)=>a+b,0);
+  return `<div class="card"><h2>⏱ Час навчання</h2><p style="margin:0 0 6px">Усього: <b>${fmtMin(tot)}</b> · за 30 днів: <b>${fmtMin(m30)}</b></p>
+    ${m30?`<table>${Object.entries(byK).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${kn(k)}</td><td class="num">${fmtMin(v)}</td><td style="width:40%"><div class="bar" style="width:100%"><i style="width:${Math.round(v/m30*100)}%"></i></div></td></tr>`).join("")}</table>`:`<p class="small muted" style="margin:0">Ще немає записів.</p>`}</div>
+  <div class="card"><h2>📒 Журнал навчання</h2>${days.length?days.map(([k,x])=>`<div style="border-top:1px solid var(--line);padding:8px 0">
+    <div class="row"><b class="grow">${fmtDay(k)}</b><span class="small muted">${x.n?x.n+" відп. · ":""}${fmtMin(dayMin(x))}${dayDone(x)?" ✅":""}</span></div>
+    ${x.m?`<div class="small muted">🧩 Тренажер — ${fmtMin(x.m)}</div>`:""}
+    ${(x.log||[]).map(e=>`<div class="row small"><span class="grow">${KINDS[e.k]?KINDS[e.k][0]+" "+KINDS[e.k][1]:"📖"} — ${fmtMin(e.min)}${e.note?" · "+esc(e.note):""}</span><button class="mini ghost" data-act="logdel" data-d="${k}" data-ts="${e.ts}">✕</button></div>`).join("")}
+    ${x.note?`<div class="small" style="margin-top:4px"><b>Вивчив:</b> ${esc(x.note).replace(/\n/g,"<br>")}</div>`:""}${x.plan?`<div class="small muted"><b>План:</b> ${esc(x.plan).replace(/\n/g,"<br>")}</div>`:""}</div>`).join("")
+    :`<p class="small muted" style="margin:0">Тут з'являться дні з навчанням, записи часу та чек-іни.</p>`}
+    <button class="ghost" data-act="jlog" style="margin-top:6px">${window._jlogAll?"Лише 14 днів":"Показати 60 днів"}</button></div>`; }
+function journalAchievements(){ let tot=0, checkins=0, bigDays=0; for(const x of Object.values(daily)){ const m=dayMin(x); tot+=m; if(x.jts) checkins++; if(m>=180) bigDays++; }
+  const js=journalStreak(); return [["⏱","10 годин","10 год навчання загалом",tot>=600],["⌛","50 годин","50 год навчання",tot>=3000],["🏔","100 годин","100 год навчання",tot>=6000],
+   ["🗒","Рефлексія","Чек-ін 7 днів поспіль",js>=7],["📓","Щоденник","30 чек-інів",checkins>=30],["🚀","Глибоке занурення","3+ години за день",bigDays>=1]]; }
 // ---- Експорт в Obsidian ----
 function ansText(q){ const t=qtype(q); if(t==="mc") return q.a.map(i=>q.o[i][0]).join("; "); if(t==="cmd") return q.ans[0]; if(t==="order") return q.items.join(" → "); if(t==="match") return q.pairs.map(p=>p[0]+" — "+p[1]).join("; "); if(t==="fill") return fillBlanks(q).map(b=>b[0]).join(", "); if(t==="flash") return q.ans; return ""; }
 function obsidianMd(){ const today=dkey(); const L=[]; L.push("---","tags: [ccna, ccna-trainer]","updated: "+today,"---","# CCNA — слабкі місця (з тренажера)","","> Згенеровано "+new Date().toLocaleString("uk-UA")+" у [CCNA тренажері]("+location.origin+location.pathname+").","");
@@ -1011,7 +1092,8 @@ document.addEventListener("click", async ev=>{
   if(act==="authsignup"){ doAuth("signup"); return; }
   if(act==="logout"){ if(store.F) store.F.authM.signOut(store.F.auth); view="home"; render(); return; }
   if(act==="src"){ opts.src=el.dataset.v; lsSet(LS.opts,opts); render(); return; }
-  if(act==="opt"){ opts[el.dataset.k]=Number(el.dataset.v); lsSet(LS.opts,opts); render(); return; }
+  if(act==="opt"){ opts[el.dataset.k]=Number(el.dataset.v); lsSet(LS.opts,opts); if(/goal/.test(el.dataset.k)) pushSync(); render(); return; }
+  if(journalAct(act,el)) return;
   if(act==="train"){ startSession("train", pickTraining(sel, opts.train)); return; }
   if(act==="review"){ startSession("review", shuffle(reviewQueue())); return; }
   if(act==="obtrain"){ startSession("train", shuffle(customQs.filter(q=>q.type==="flash")).slice(0,opts.train), "Картки з нотаток"); return; }
@@ -1024,7 +1106,7 @@ document.addEventListener("click", async ev=>{
   if(act==="cheat"){ const tid=($("#modsel")||{}).value||opts.modTopic; opts.modTopic=tid; lsSet(LS.opts,opts); view="cheat"; render(); scrollTop(); return; }
   if(act==="module2"){ startSession("module", pickModule(opts.modTopic), "Тест модуля "+tlabel(opts.modTopic)); return; }
   if(act==="module"){ const tid=($("#modsel")||{}).value||opts.modTopic; opts.modTopic=tid; lsSet(LS.opts,opts); startSession("module", pickModule(tid), "Тест модуля "+tlabel(tid)); return; }
-  if(act==="setopt"){ const k=el.dataset.k; let v=el.dataset.v; if(v==="true"||v==="false") v=(v==="true"); else if(/^\d+$/.test(v)) v=Number(v); opts[k]=v; lsSet(LS.opts,opts); if(k==="goal") pushSync(); if(k==="lang") rebuildQB(); applyLook(); render(); return; }
+  if(act==="setopt"){ const k=el.dataset.k; let v=el.dataset.v; if(v==="true"||v==="false") v=(v==="true"); else if(/^\d+$/.test(v)) v=Number(v); opts[k]=v; lsSet(LS.opts,opts); if(k==="goal"||k==="tgoal") pushSync(); if(k==="lang") rebuildQB(); applyLook(); render(); return; }
   if(act==="cadd"){ customDraft=null; customEdit=null; render(); return; }
   if(act==="csave"){ saveCustom(); return; }
   if(act==="cedit"){ customEdit=el.dataset.id; render(); scrollTop(); return; }
@@ -1113,6 +1195,7 @@ document.addEventListener("input", ev=>{
   const t=ev.target;
   if(t.classList&&t.classList.contains("fillin") && S){ const a=(S.ans[S.i]||[]).slice(); a[Number(t.dataset.i)]=t.value; S.ans[S.i]=a; const b=$("#checkbtn"); if(b) b.disabled=!hasAnswer(S.items[S.i],a); const dots=document.querySelectorAll(".dots span"); if(dots[S.i]) dots[S.i].classList.toggle("done",hasAnswer(S.items[S.i],a)); }
   if(t.id==="cmdin" && S){ S.ans[S.i]=t.value; const b=$("#checkbtn"); if(b) b.disabled=!t.value.trim(); const dots=document.querySelectorAll(".dots span"); if(dots[S.i]) dots[S.i].classList.toggle("done",!!t.value.trim()); }
+  if(t.id==="jnote"||t.id==="jplan"){ window._jd=window._jd||{}; window._jd[t.id.slice(1)]=t.value; return; }
   if(t.id==="glq"){ window._glq=t.value; const pos=t.selectionStart; render(); const g=$("#glq"); if(g){ g.focus(); g.setSelectionRange(pos,pos); } return; }
   if(t.id==="searchin"){ searchQ=t.value; const pos=t.selectionStart; render(); const si=$("#searchin"); si.focus(); try{si.setSelectionRange(pos,pos);}catch(e){} }
 });

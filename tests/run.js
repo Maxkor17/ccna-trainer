@@ -63,5 +63,9 @@ for(const sc of window.BASH.SCEN){ const ses=window.BASH.start(sc); ok(!sc.check
   go("newwlan"); go("savewlan",{w_id:2,w_prof:"GUEST",w_ssid:"Guest-WiFi",w_en:true,w_if:"guest",w_l2:"WPA2",w_ci:"AES",w_akm:"PSK",w_psk:"Welcome2026",w_aaa:""});
   go("newwlan"); go("savewlan",{w_id:3,w_prof:"CORP",w_ssid:"Corp",w_en:true,w_if:"management",w_l2:"WPA2",w_ci:"AES",w_akm:"802.1X",w_psk:"",w_aaa:"10.0.0.50"});
   go("delwlan",null,{v:"1"}); const d=W.done(st); ok(Object.values(d).every(Boolean),"WLC: "+JSON.stringify(d)); }
+// ---- злиття денних записів (журнал і час між пристроями) ----
+{ const src=app.match(/function mergeDay\(o,v\)\{[\s\S]*?\n  return r; \}/); ok(!!src,"mergeDay не знайдено в app.js");
+  if(src){ const mergeDay=new Function(src[0]+"; return mergeDay;")(); const r=mergeDay({n:5,c:4,m:10,log:[{ts:1,min:30,k:"pt"}],note:"a",jts:5},{n:3,c:3,m:12,log:[{ts:1,min:30,k:"pt"},{ts:2,min:15,k:"na"}],note:"b",jts:9});
+    ok(r.n===5&&r.c===4,"mergeDay: відповіді"); ok(r.m===12,"mergeDay: хвилини"); ok(r.log.length===2,"mergeDay: журнал без дублів"); ok(r.note==="b","mergeDay: новіший чек-ін"); } }
 console.log(fails? "\n❌ Помилок: "+fails+" (перевірок "+checks+")" : "\n✅ Усі перевірки пройдено ("+checks+")");
 process.exit(fails?1:0);
