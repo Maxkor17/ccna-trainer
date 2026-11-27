@@ -234,7 +234,7 @@ function bindLab(){
   clearInterval(window._tkT); if(LAB.ts&&LAB.ts.tk&&!LAB.ts.done){ const upd=()=>{ const el=$("#tktimer"); if(!el||!LAB.ts||!LAB.ts.tk||LAB.ts.done){ clearInterval(window._tkT); return; } const s=Math.floor((Date.now()-LAB.ts.tk.t0)/1000); el.textContent=`⏱ ${Math.floor(s/60)}:${String(s%60).padStart(2,"0")} · команд: ${LAB.hist.length}`; }; upd(); window._tkT=setInterval(upd,1000); }
   const tin=$("#tin"), term=$("#term"); if(!tin) return; term.scrollTop=term.scrollHeight; tin.focus();
   tin.addEventListener("keydown",e=>{
-    if(e.key==="Enter"){ const line=tin.value; const ses=LAB.ses[LAB.cur]; const pr=ses.prompt(); const out=ses.exec(line);
+    if(e.key==="Enter"){ const line=tin.value; const ses=LAB.ses[LAB.cur]; const pr=ses.prompt(); const mode0=ses.ctx&&ses.ctx.mode; const out=ses.exec(line); ccCapture(mode0,line,out);
       let hint=""; if(/Invalid|Incomplete/.test(out) && /^\s*(sh|show|ping)\b/i.test(line) && /\(config/.test(pr)) hint="(Підказка: у режимі конфігурації використовуйте do "+line.trim()+")";
       LAB.outs[LAB.cur]+=pr+line+"\n"+(out?out+"\n":"")+hint+(hint?"\n":"");
       if(LAB.N){ for(const [d,m] of LAB.N.recompute()) LAB.outs[d]+=m+"\n"; }

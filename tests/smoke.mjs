@@ -174,6 +174,13 @@ await step("перетягни в категорію: тап і drag-and-drop, �
   for (let i = 0; i < items.length; i++) { if (await page.evaluate(i => (S.ans[0] || [])[i] != null, i)) continue; await act(`[data-act="catpick"][data-i="${i}"]`); const sel = await page.evaluate(() => S.catSel); await act(`[data-act="catdrop"][data-c="${items[i]}"]`); if (sel !== i) throw new Error("catSel=" + sel + " i=" + i + " view=" + await page.evaluate(() => view)); if (await page.evaluate(i => (S.ans[0] || [])[i] == null, i)) throw new Error("drop не спрацював для " + i + ": " + await page.evaluate(c => { const b = document.querySelector(`[data-catdrop="${c}"]`); const r = b.getBoundingClientRect(); const e = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return e.outerHTML.slice(0, 150) + " | sel=" + S.catSel; }, items[i])); }
   const ok = await page.evaluate(() => isCorrect(S.items[0], S.ans[0])); if (!ok) throw new Error("відповідь не зарахована: " + JSON.stringify(await page.evaluate(() => S.ans[0])));
   await page.evaluate(() => doCheck()); await has("✅"); await home(); });
+await step("картки команд: команда з лаби → картка → повторення", async () => {
+  await page.evaluate(() => { view = "labs"; render(); }); await act('[data-act="lab"][data-id="lab-vlan"]');
+  for (const c of ["enable", "conf t", "vlan 10", "name USERS", "interface fa0/1", "sw mo acc", "sw acc vl 10"]) { await page.fill("#tin", c); await page.press("#tin", "Enter"); }
+  const n = await page.evaluate(() => ccAll().length); if (n < 3) throw new Error("карток: " + n);
+  await page.evaluate(() => { opts.homeTab = "prac"; view = "home"; render(); }); await has("Картки команд"); await act('[data-act="ccrun"]'); await has("Команда з ваших лаб");
+  const q = await page.evaluate(() => S.items.find(x => /access vlan/.test(x.ans[0]))); if (!q || q.ans[0] !== "switchport access vlan 10") throw new Error("немає картки access vlan: " + JSON.stringify(q));
+  await page.evaluate(() => { opts.homeTab = "all"; }); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));

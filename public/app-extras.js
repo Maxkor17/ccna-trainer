@@ -128,6 +128,13 @@ function labNext(id,prev,ok){ const now=Date.now(); const rec=Object.assign({},p
   else if(ok&&prev.ok){ if(labDue(id,now)) rec.reps=(prev.reps||0)+1; rec.last=now; } return rec; }
 function labsDue(){ return ALLSCEN().filter(s=>!s.bash&&!s.sb&&!s.discover&&TMAP[s.t]&&TMAP[s.t].g!=="LNX"&&labDue(s.id)).sort((a,b)=>(labs[a.id].last||labs[a.id].done||0)-(labs[b.id].last||labs[b.id].done||0)); }
 function labRecord(id,ok){ const prev=labs[id]||{tries:0}; const rec=labNext(id,prev,ok); labs[id]=rec; patch({labs:{[id]:rec}}); }
+// ---- Картки команд із власних лаб ----
+function ccCapture(mode,line,out){ try{ if(!mode||!window.CMDCARDS||!LAB||LAB.sc.sb||/%\s|Invalid|Incomplete|Ambiguous|Unrecognized/.test(out||"")) return; let c=CLI.canonOf(mode,line); if((!c||!CMDCARDS.has(c.mode,c.pat))&&mode!=="config"&&mode!=="exec") c=CLI.canonOf("config",line);
+  if(!c||!CMDCARDS.has(c.mode,c.pat)) return; const k="cc:"+c.mode+"|"+c.pat; const prev=flags[k]; if(prev&&prev.cmd===c.full) return;
+  const rec={on:false,kind:"cc",cmd:c.full,mode:c.mode,pat:c.pat,lab:LAB.sc.title,ts:Date.now()}; flags[k]=rec; patch({flags:{[k]:rec}}); }catch(e){} }
+function ccAll(){ const en=opts.lang==="en"; return Object.entries(flags).filter(([k,f])=>k.startsWith("cc:")&&f&&f.kind==="cc").map(([k,f])=>CMDCARDS.card({mode:f.mode,pat:f.pat,full:f.cmd,lab:f.lab},en)).filter(Boolean); }
+function ccDue(){ const now=Date.now(); return ccAll().filter(q=>!prog[q.id]||prog[q.id].d<=now).sort((a,b)=>((prog[a.id]||{}).d||0)-((prog[b.id]||{}).d||0)); }
+ACTS.ccrun=()=>{ const L=ccDue(); if(!L.length){ alert("Сьогодні карток на повторення немає"); return; } startSession("train",L.slice(0,20),"🃏 Картки команд"); };
 function startTs(n,ticket){
   const pool=(CLI.NETSCEN||[]).filter(s=>!s.discover); let t=null, base=null;
   for(let k=0;k<10&&!t;k++){ base=pool[Math.floor(Math.random()*pool.length)]; t=CLI.troubleshoot(base,n); }
