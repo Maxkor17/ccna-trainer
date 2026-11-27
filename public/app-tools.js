@@ -87,6 +87,7 @@ function renderStats(){
   <div class="card"><h2>Що плутає найбільше</h2>
     ${wc.length?wc.map(x=>`<div class="kv"><span>${esc(x.c)} <span class="small muted">· ${tlabel(x.t)}</span></span><span class="small"><b style="color:var(--bad)">${x.bad} ${x.bad===1?"помилка":x.bad<5?"помилки":"помилок"}</b> · точність ${Math.round(x.ok/(x.ok+x.bad)*100)}%</span></div>`).join(""):`<p class="small muted" style="margin:0">Поки помилок немає.</p>`}
     <p class="small muted" style="margin:8px 0 0">Порада: експортуйте JSON (💾 Копія) і попросіть Claude чи іншого AI-асистента розібрати слабкі місця.</p></div>
+  ${whyCard()}
   <div class="card"><h2>По темах</h2><table><tr><th>Тема</th><th class="num">Пройд.</th><th class="num">Точн.</th></tr>${rows}</table></div>
   <div class="card"><h2>Найважчі питання</h2>${weakQ.length?weakQ.map(([id,r])=>`<div class="small muted" style="margin-top:6px">✅${r.c} ❌${r.w}</div>`+reviewItem(QMAP[id],undefined)).join(""):`<p class="muted small" style="margin:0">Поки що немає.</p>`}</div>
   <div class="card"><h2>⚑ Сумнівні питання <span class="muted">(${fl.length})</span></h2>

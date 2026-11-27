@@ -26,6 +26,7 @@ function renderHome(){
       <span class="bar"><i style="width:${st.n?Math.round(st.mast/st.n*100):0}%"></i></span></label>`;}).join(""); };
   const labsDone=ALLSCEN().filter(s=>labs[s.id]&&labs[s.id].ok).length;
   return `${authCard()}
+  ${dayCard()}
   <div class="card">
     <div class="row"><h2 class="grow" style="margin:0">Денна норма${si.done?" ✅":""}</h2><span class="small">${si.streak?`🔥 ${si.streak} ${si.streak===1?"день":si.streak<5?"дні":"днів"} поспіль`:"Серія ще не почалась"}</span></div>
     <div class="bar wide"><i style="width:${pct}%"></i></div>
@@ -54,7 +55,7 @@ function renderHome(){
     <p class="small muted" style="margin:6px 0 8px">Налаштовуйте пристрої командами IOS: від одного комутатора до мережі з маршрутизатором і ПК (ping, tracert).</p>
     <button class="primary" data-act="labs">Відкрити лаби</button></div>
   ${installCard()}
-  <div class="card"><h2>Інструменти</h2><div class="tools"><button data-act="speedmenu">⚡ Швидкісні тренування</button><button data-act="confuse">🧠 Що я плутаю</button><button data-act="glossary">🇬🇧 Терміни EN</button><button data-act="progress">🏆 Активність і досягнення</button><button data-act="stpviz">🌳 STP покроково</button><button data-act="bpview">🗺 Карта покриття CCNA</button><button data-act="obsexport">📒 Експорт в Obsidian</button><button data-act="labs">🌐 Лаби й пісочниця</button></div></div>
+  <div class="card"><h2>Інструменти</h2><div class="tools"><button data-act="speedmenu">⚡ Швидкісні тренування</button><button data-act="confuse">🧠 Що я плутаю</button><button data-act="glossary">🇬🇧 Терміни EN</button><button data-act="progress">🏆 Активність і досягнення</button><button data-act="stpviz">🌳 STP покроково</button><button data-act="bpview">🗺 Карта покриття CCNA</button><button data-act="issues">🛠 На виправлення${(()=>{ const n=issuesList().length; return n?" ("+n+")":""; })()}</button><button data-act="obsexport">📒 Експорт в Obsidian</button><button data-act="labs">🌐 Лаби й пісочниця</button></div></div>
   ${(()=>{ const pi=planInfo(); return `<div class="card"><h2>🗓 План до екзамену</h2>${pi?`<p style="margin:0 0 6px">${pi.days>0?`До екзамену <b>${pi.days}</b> дн. (${esc(new Date(opts.examDate).toLocaleDateString("uk-UA"))})`:pi.days===0?"Екзамен сьогодні — успіху!":"Дата екзамену минула"} · готовність <b>${Math.round(pi.avg*100)}%</b></p>
     <p class="small muted" style="margin:0 0 6px">Нових питань лишилося: ${pi.unseen}, до повторення сьогодні: ${pi.due}. Щоб устигнути, робіть ≈ <b>${pi.perDay}</b> питань на день${pi.days>3?" (останні 3 дні — лише повторення й симуляції)":""}.</p>
     ${pi.weak.length?`<p class="small" style="margin:0 0 8px">Найслабші теми: ${pi.weak.map(w=>`${tlabel(w.id)} ${esc(TMAP[w.id].name)} — ${Math.round(w.p*100)}%`).join("; ")}</p>`:""}

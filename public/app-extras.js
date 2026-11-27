@@ -8,6 +8,7 @@ function obsidianMd(){ const today=dkey(); const L=[]; L.push("---","tags: [ccna
   const wrong=Object.entries(prog).filter(([id,r])=>QMAP[id]&&r.w>0&&(r.k===0||r.w/r.s>=0.34)).map(([id,r])=>[QMAP[id],r]).sort((a,b)=>a[0].t.localeCompare(b[0].t,undefined,{numeric:true}));
   if(wrong.length){ L.push("## Питання з помилками ("+wrong.length+")",""); let cur=""; for(const [q,r] of wrong){ if(q.t!==cur){ cur=q.t; L.push("### "+tlabel(q.t)+" · "+TMAP[q.t].name,""); }
     L.push("- **"+q.q.replace(/\n/g," ")+"**"+(q.c?"\n  ```\n  "+q.c.replace(/\n/g,"\n  ")+"\n  ```":""),"  - ✅ "+ansText(q).replace(/\n/g," "),(q.e?"  - 💡 "+q.e:"")+"","  - помилок: "+r.w+" з "+r.s+" · #ccna/"+q.t.toLowerCase()); } }
+  const my=myList(); if(my.length){ L.push("## Мої пояснення ("+my.length+")",""); for(const {f,q} of my){ L.push("- **"+((q?q.q:f.snip)||"").replace(/\n/g," ")+"**"+(q?" · #ccna/"+q.t.toLowerCase():"")); if(q) L.push("  - ✅ "+ansText(q).replace(/\n/g," ")); L.push("  - ✍ "+f.mine.replace(/\n/g,"\n    ")); } }
   return L.filter(x=>x!=="").join("\n").replace(/\n(#{2,3} )/g,"\n\n$1")+"\n"; }
 async function exportObsidian(){ const md=obsidianMd(); const name="CCNA тренажер — слабкі місця.md";
   if(window.showDirectoryPicker){ try{ const dir=await window.showDirectoryPicker({mode:"readwrite",id:"ccna-vault"}); const fh=await dir.getFileHandle(name,{create:true}); const w=await fh.createWritable(); await w.write(md); await w.close(); alert("Записано у vault: "+name); return; }catch(e){ if(e&&e.name==="AbortError") return; } }

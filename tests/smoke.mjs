@@ -90,6 +90,19 @@ await step("карта покриття v1.1/v2.0 і прогноз", async () =
 await step("англійський режим: симлет і нові питання перекладено", async () => {
   const bad = await page.evaluate(() => { opts.lang = "en"; rebuildQB(); const CY = /[а-яіїєґ]/i; const r = QB.filter(q => /^(e\d+x|v2-|sl-|pf-|po-)/.test(q.id)).filter(q => CY.test(q.q) || (q.parts || []).some(p => CY.test(p.q))).map(q => q.id); opts.lang = "mix"; rebuildQB(); return r; });
   if (bad.length) throw new Error("без перекладу: " + bad.join(", ")); });
+await step("сесія дня стартує з лабою наприкінці", async () => {
+  await act('[data-act="dayrun"]'); const r = await page.evaluate(() => ({ v: view, n: S.items.length, last: (S.items[S.items.length - 1] || {}).type }));
+  if (r.v !== "quiz" || r.n < 5 || r.last !== "sim") throw new Error(JSON.stringify(r)); await home(); });
+await step("причина помилки, власне пояснення, звіт про помилку", async () => {
+  await page.evaluate(() => { const q = QB.find(x => x.type === undefined && x.o && x.a.length === 1 && x.id.startsWith("e8x")); startSession("train", [q], "t"); const wrong = q.o.findIndex((_, i) => !q.a.includes(i)); S.ans[0] = [wrong]; render(); });
+  await act("#checkbtn"); await act('[data-act="why"][data-w="ina"]');
+  if (!(await page.evaluate(() => (prog[recId(S.items[0])].whys || {}).ina === 1))) throw new Error("причину не збережено");
+  await act('[data-act="myedit"]'); await page.fill("#mytext", "ESP шифрує, AH — ні"); await act('[data-act="mysave"]'); await has("Моє пояснення");
+  await act('[data-act="flagerr"]'); await page.fill("#flagnote", "тест"); await act('[data-act="flagnote"]');
+  await home(); await act('[data-act="issues"]'); await has("Питання на виправлення"); await has("Мої пояснення");
+  const md = await page.evaluate(() => issuesMd()); if (!/тест/.test(md)) throw new Error("немає коментаря в Markdown");
+  const ob = await page.evaluate(() => obsidianMd()); if (!/Мої пояснення/.test(ob)) throw new Error("пояснення не потрапили в експорт Obsidian");
+  await page.evaluate(() => { view = "stats"; render(); bindChart(); }); await has("Чому я помиляюсь"); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));

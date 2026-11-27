@@ -107,9 +107,9 @@ function finishExam(){
 
 // ================= Рендеринг: питання =================
 const letters="ABCDEFGH";
-function flagBtn(q){ const id=recId(q); const f=flags[id]&&flags[id].on;
-  return `<button class="flagbtn ${f?"on":""}" data-act="flag" data-id="${esc(id)}" data-snip="${esc(q.q.slice(0,140))}">${f?"⚑ Позначено як сумнівне":"⚐ Позначити як сумнівне"}</button>`+
-  (f?`<div class="row"><input type="text" id="flagnote" placeholder="Що не так? (необов'язково)" value="${esc(flags[id].note||"")}"><button class="mini" data-act="flagnote" data-id="${esc(id)}">Зберегти</button></div>`:""); }
+function flagBtn(q){ const id=recId(q); const fl=flags[id]; const f=!!(fl&&fl.on&&fl.kind!=="err"), er=!!(fl&&fl.on&&fl.kind==="err");
+  return `<div class="row" style="gap:6px;flex-wrap:wrap"><button class="flagbtn ${f?"on":""}" data-act="flag" data-id="${esc(id)}" data-snip="${esc(q.q.slice(0,140))}">${f?"⚑ Позначено як сумнівне":"⚐ Позначити як сумнівне"}</button><button class="flagbtn ${er?"on":""}" data-act="flagerr" data-id="${esc(id)}" data-snip="${esc(q.q.slice(0,140))}">${er?"⚠ Позначено: помилка в питанні":"⚠ Помилка в питанні"}</button></div>`+
+  ((f||er)?`<div class="row"><input type="text" id="flagnote" placeholder="${er?"Що саме неправильно? Яка правильна відповідь і чому?":"Що не так? (необов'язково)"}" value="${esc(fl.note||"")}"><button class="mini" data-act="flagnote" data-id="${esc(id)}">Зберегти</button></div>`:""); }
 // Схема топології: nodes [{id,t:"r"|"sw"|"pc"|"srv"|"cloud",x,y,l}], links [{a,b,la,lb,m,dash}] у координатах 0..100 × 0..60
 function topoSVG(f){
   const W=400,H=Math.round(240*(f.h||60)/60), X=x=>20+x*3.6, Y=y=>18+y*3.4;
@@ -206,7 +206,7 @@ function renderQuiz(){
   const checked = S.mode!=="exam" && S.checked[k];
   const modeName=S.title||{train:"Тренування",review:"Повтор помилок",exam:"Екзамен",gen:"Розрахунки",module:"Тест модуля"}[S.mode];
   const badge=(q.src==="my"?` <span class="chip" style="font-size:11px;padding:1px 7px">✍ моє</span>`:"")+(q.src==="na"?` <span class="chip" style="font-size:11px;padding:1px 7px">🎓 NetAcad</span>`:"")+(q.src==="n"?` <span class="chip" style="font-size:11px;padding:1px 7px">📒 з нотаток</span>`:"")+(q.gen?` <span class="chip" style="font-size:11px;padding:1px 7px">🎲 генератор</span>`:"")+(TYPE_NAME[qtype(q)]?` <span class="chip" style="font-size:11px;padding:1px 7px">${TYPE_NAME[qtype(q)]}</span>`:"");
-  let verdict=""; if(checked){ const ok=isCorrect(q,ans); verdict=`<div class="verdict ${ok?"ok":"bad"}">${ok?"Правильно!":"Неправильно"}</div>`; }
+  let verdict=""; if(checked){ const ok=isCorrect(q,ans); verdict=`<div class="verdict ${ok?"ok":"bad"}">${ok?"Правильно!":"Неправильно"}</div>`+(!ok&&prog[recId(q)]?whyChips(q,k):"")+mineBox(q); }
   let nav="";
   if(S.mode==="exam"){
     const done=S.items.filter((qq,i)=>hasAnswer(qq,S.ans[i])).length;

@@ -80,7 +80,7 @@ document.addEventListener("click", async ev=>{
   if(act==="labsol"){ LAB.showSol=!LAB.showSol; render(); return; }
   if(act==="labreset"){ openLab(LAB.sc.id); return; }
   if(act==="home"||act==="quit"){ view="home"; S=null; render(); scrollTop(); return; }
-  if(act==="flag"){ const id=el.dataset.id; const f=flags[id]&&flags[id].on; const rec=f?{on:false,ts:Date.now()}:{on:true,ts:Date.now(),snip:el.dataset.snip,note:""}; flags[id]=rec; patch({flags:{[id]:rec}}); rerenderInPlace(); return; }
+  if(act==="flag"){ const id=el.dataset.id; const f=flags[id]&&flags[id].on&&flags[id].kind!=="err"; const rec=f?{on:false,ts:Date.now()}:{on:true,ts:Date.now(),snip:el.dataset.snip,note:""}; flags[id]=rec; patch({flags:{[id]:rec}}); rerenderInPlace(); return; }
   if(act==="flagnote"){ const id=el.dataset.id; const inp=el.parentElement.querySelector("input"); const rec=Object.assign({},flags[id],{note:inp.value.slice(0,500),ts:Date.now()}); flags[id]=rec; patch({flags:{[id]:rec}}); el.textContent="Збережено"; return; }
   if(act==="unflag"){ const id=el.dataset.id; const rec={on:false,ts:Date.now()}; flags[id]=rec; patch({flags:{[id]:rec}}); render(); return; }
   if(!S) { if(act==="copy"||act==="import"||act==="reset") return backupAct(act,el); return; }
