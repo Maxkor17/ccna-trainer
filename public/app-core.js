@@ -20,14 +20,16 @@ const TOPICS = [
  ["LNX1","LNX","1","Файли, права, журнали"],["LNX2","LNX","2","Процеси і сервіси systemd"],["LNX3","LNX","3","Мережа в Linux"],["LNX4","LNX","4","Bash-скрипти і cron"],["LNX5","LNX","5","Git"],["LNX6","LNX","6","CI/CD, YAML, Python, контейнери"]
 ].map(([id,g,n,name])=>({id,g,n,name}));
 const TMAP = Object.fromEntries(TOPICS.map(t=>[t.id,t]));
-const QB_BASE = [...(window.QB_ITN||[]), ...(window.QB_SRWE||[]), ...(window.QB_NOTES||[]), ...(window.QB_EXTRA||[]), ...(window.QB_SRWE2||[]), ...(window.QB_ENSA||[]), ...(window.QB_NETACAD||[]), ...(window.QB_FIGS||[]), ...(window.QB_EN||[]), ...(window.QB_LNX||[])];
+const QB_BASE = [...(window.QB_ITN||[]), ...(window.QB_SRWE||[]), ...(window.QB_NOTES||[]), ...(window.QB_EXTRA||[]), ...(window.QB_SRWE2||[]), ...(window.QB_ENSA||[]), ...(window.QB_NETACAD||[]), ...(window.QB_FIGS||[]), ...(window.QB_EN||[]), ...(window.QB_LNX||[]), ...(window.QB_ENSA2||[]), ...(window.QB_V2||[]), ...(window.QB_SIM||[]), ...(window.QB_PRACT||[])];
 let customQs = [];
 let QB = QB_BASE.slice();
 let QMAP = Object.fromEntries(QB.map(q=>[q.id,q]));
 function trq(q){ const t=window.QB_TR&&window.QB_TR[q.id]; if(!t) return q;
   const n=Object.assign({},q,{q:t.q,_uk:q.q,_tr:1});
   if(t.o&&q.o) n.o=q.o.map((p,i)=>{ const r=t.o[i]; return r?[r[0]===0?p[0]:r[0], r[1]]:p; });
-  ["items","pairs","e","cfg"].forEach(k=>{ if(t[k]!=null) n[k]=t[k]; }); return n; }
+  ["items","pairs","e","cfg"].forEach(k=>{ if(t[k]!=null) n[k]=t[k]; });
+  if(t.parts&&q.parts) n.parts=q.parts.map((p,i)=>{ const r=t.parts[i]; return r? Object.assign({},p,{q:r.q,o:p.o.map((x,j)=>r.o&&r.o[j]?[r.o[j][0],r.o[j][1]]:x)}) : p; });
+  if(t.intro) n.intro=t.intro; return n; }
 function rebuildQB(){ const base=opts.lang==="en"?QB_BASE.map(trq):QB_BASE; QB = base.concat(customQs.filter(q=>TMAP[q.t])); QMAP = Object.fromEntries(QB.map(q=>[q.id,q])); }
 const COURSES=[["ITN","Вступ до мереж"],["SRWE","Комутація, маршрутизація, бездротові мережі"],["ENSA","Корпоративні мережі, безпека, автоматизація"],["LNX","Після CCNA: Linux і DevOps"]];
 const GEN = window.GEN, CLI = window.CLI;
@@ -36,7 +38,7 @@ const INT_DAYS = [0,1,3,7,16,35], DAY = 864e5;
 // Реєстри для модулів: VIEWS[назва]={html(), after?()} — власні екрани; ACTS[data-act]=(el,ev)=>… — власні дії.
 const VIEWS = {}, ACTS = {};
 const LS = {sandbox:"ccna.sandbox.v1",snaps:"ccna.snaps.v1",custom:"ccna.custom.v1",prog:"ccna.prog.v1",exams:"ccna.exams.v1",sel:"ccna.sel.v1",opts:"ccna.opts.v1",daily:"ccna.daily.v1",flags:"ccna.flags.v1",labs:"ccna.labs.v1"};
-const TYPE_NAME = {sim:"Практичне завдання (CLI)", mc:"", order:"Розставте по порядку", match:"Зіставте", cmd:"Введіть команду", fill:"Заповніть пропуски", flash:"Картка"};
+const TYPE_NAME = {simlet:"Симлет: кілька питань до виводів команд",sim:"Практичне завдання (CLI)", mc:"", order:"Розставте по порядку", match:"Зіставте", cmd:"Введіть команду", fill:"Заповніть пропуски", flash:"Картка"};
 
 // Концепції для аналітики (за темою + ключовими словами)
 const CONCEPTS = {
@@ -47,7 +49,7 @@ const CONCEPTS = {
  SRWE5:[["PortFast і BPDU Guard",/portfast|bpdu/i],["Вибір root bridge",/root bridge|BID|пріоритет|priority|root primary/i],["Root port і вартість",/root port|вартіст|cost/i],["Ролі портів",/роль|alternate|backup|designated|Altn/i],["Стани й таймери",/стан|listening|learning|blocking|forward delay|таймер|discarding/i],["Петлі й шторми",/петл|шторм|storm|TTL|дублю|лягла/i],["Версії STP",/PVST|MST|RSTP|rapid/i]],
  SRWE6:[["Режими PAgP/LACP",/PAgP|LACP|active|passive|desirable|\bauto\b|mode on|\bon\b/i],["Вимоги до портів",/збіга|швидк|suspended|\(s\)|різн|FastEthernet/i],["Балансування",/баланс|load-balance|хеш|потік/i],["Налаштування й перевірка",/channel-group|summary|port-channel|show|BW/i]]
 };
-function textOf(q){ return [q.q, ...(q.o||[]).map(o=>o[0]), ...(q.items||[]), ...((q.pairs||[]).flat()), ...(Array.isArray(q.ans)?q.ans:[q.ans||""]), q.cfg||""].join(" "); }
+function textOf(q){ return [q.q, ...(q.parts||[]).flatMap(p=>[p.q,...p.o.map(o=>o[0])]), ...(q.o||[]).map(o=>o[0]), ...(q.items||[]), ...((q.pairs||[]).flat()), ...(Array.isArray(q.ans)?q.ans:[q.ans||""]), q.cfg||""].join(" "); }
 function conceptOf(id){
   const q=QMAP[id]; if(!q){ return GEN.conceptOf[id]||"Розрахунки"; }
   if(q.k) return q.k;

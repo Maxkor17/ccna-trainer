@@ -28,7 +28,7 @@ document.addEventListener("click", async ev=>{
   if(act==="obtrain"){ startSession("train", shuffle(customQs.filter(q=>q.type==="flash")).slice(0,opts.train), "Картки з нотаток"); return; }
   if(act==="install"){ if(installEvt){ installEvt.prompt(); installEvt.userChoice.finally(()=>{ installEvt=null; render(); }); } return; }
   if(act==="installhide"){ opts.installHide=true; lsSet(LS.opts,opts); render(); return; }
-  if(act==="ccna"){ const n=Number(el.dataset.n)||120; startSession("exam", pickCcna(n), n>=100?"CCNA 200-301":"CCNA (коротка)"); S.ccna=true; render(); return; }
+  if(act==="ccna"){ const n=Number(el.dataset.n)||120; startSession("exam", pickCcna(n), (n>=100?"CCNA 200-301 ":"CCNA (коротка) ")+bpVer()); S.ccna=true; S.bp=bpVer(); render(); return; }
   if(act==="plan"){ startPlan(); return; }
   if(act==="exam"){ const gk=genKeysFor(sel); const n=opts.exam; const ng=gk.length?Math.round(n*0.15):0; const list=shuffle(qsFor(sel).filter(q=>qtype(q)!=="flash")).slice(0,n-ng); for(let i=0;i<ng;i++){const g=GEN.make(gk[i%gk.length]); if(g) list.push(g);} startSession("exam", shuffle(list)); return; }
   if(act==="gen"){ const list=[]; for(let i=0;i<10;i++){ const g=GEN.make(el.dataset.k); if(g) list.push(g);} startSession("gen", list); return; }

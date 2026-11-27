@@ -63,13 +63,14 @@ function isCorrect(q, ans){
   if(t==="match") return Array.isArray(ans) && q.pairs.every((p,i)=>ans[i]===p[1]);
   if(t==="cmd") return typeof ans==="string" && q.ans.some(c=>cmdMatch(ans,c));
   if(t==="sim") return !!(ans&&ans.ok);
+  if(t==="simlet") return Array.isArray(ans) && q.parts.every((p,i)=>{ const c=ans[i]||[]; return c.length===p.a.length && c.every(x=>p.a.includes(x)); });
   if(t==="flash") return ans==="yes";
   if(t==="fill"){ const bl=fillBlanks(q); return Array.isArray(ans) && bl.every((alts,i)=>typeof ans[i]==="string"&&alts.some(c=>fillEq(ans[i],c))); }
   return false;
 }
 function fillBlanks(q){ return [...q.cfg.matchAll(/\[\[(.+?)\]\]/g)].map(m=>m[1].split("|")); }
 function fillEq(u,c){ u=(u||"").trim(); if(!u) return false; if(/^[\d.\/]+$/.test(c)) return u===c; return u.toLowerCase()===c.toLowerCase() || cmdMatch(u,c); }
-function hasAnswer(q,ans){ const t=qtype(q); if(t==="sim") return !!(ans&&ans.done); if(t==="flash") return ans==="yes"||ans==="no"; if(t==="fill") return Array.isArray(ans)&&fillBlanks(q).every((_,i)=>ans[i]&&ans[i].trim()); if(t==="cmd") return !!(ans&&ans.trim()); if(t==="match") return Array.isArray(ans)&&ans.filter(Boolean).length===q.pairs.length; if(t==="order") return Array.isArray(ans)&&ans.length===q.items.length; return Array.isArray(ans)&&ans.length===q.a.length; }
+function hasAnswer(q,ans){ const t=qtype(q); if(t==="sim") return !!(ans&&ans.done); if(t==="simlet") return Array.isArray(ans)&&q.parts.every((p,i)=>(ans[i]||[]).length===p.a.length); if(t==="flash") return ans==="yes"||ans==="no"; if(t==="fill") return Array.isArray(ans)&&fillBlanks(q).every((_,i)=>ans[i]&&ans[i].trim()); if(t==="cmd") return !!(ans&&ans.trim()); if(t==="match") return Array.isArray(ans)&&ans.filter(Boolean).length===q.pairs.length; if(t==="order") return Array.isArray(ans)&&ans.length===q.items.length; return Array.isArray(ans)&&ans.length===q.a.length; }
 function cmdMatch(input, canon){
   const norm=s=>s.trim().toLowerCase().replace(/\s*,\s*/g,",").replace(/\s+-\s+/g," - ");
   let u=norm(input).split(/\s+/), c=norm(canon).split(/\s+/);
@@ -87,6 +88,7 @@ function startSession(mode, list, title){
   S={mode, title, items:list, i:0, ans:{}, checked:{}, order:{}, start:Date.now(), deadline: mode==="exam"? Date.now()+list.length*60*1000 : null, confirmEnd:false};
   list.forEach((q,k)=>{ const t=qtype(q);
     if(t==="mc") S.order[k]=opts.shuffle? shuffle(q.o.map((_,i)=>i)) : q.o.map((_,i)=>i);
+    if(t==="simlet") S.order[k]=q.parts.map(p=>opts.shuffle? shuffle(p.o.map((_,i)=>i)) : p.o.map((_,i)=>i));
     if(t==="order"){ let o=shuffle(q.items.map((_,i)=>i)); if(o.every((v,i)=>v===i)) o.reverse(); S.order[k]=o; }
     if(t==="match") S.order[k]=q.choices? q.choices.slice() : shuffle([...new Set(q.pairs.map(p=>p[1]))]);
   });
@@ -98,7 +100,7 @@ function scrollTop(){try{window.scrollTo(0,0);}catch(e){}}
 function finishExam(){
   if(!S) return; const per={}; let ok=0;
   S.items.forEach((q,k)=>{ const a=S.ans[k]; const good=isCorrect(q,a); if(good) ok++; per[q.t]=per[q.t]||[0,0]; per[q.t][1]++; if(good) per[q.t][0]++; if(hasAnswer(q,a)) record(recId(q),good); });
-  const e={ts:Date.now(), n:S.items.length, correct:ok, pct:Math.round(ok/S.items.length*100), dur:Math.round((Date.now()-S.start)/1000), per, ccna:!!S.ccna,
+  const e={ts:Date.now(), n:S.items.length, correct:ok, pct:Math.round(ok/S.items.length*100), dur:Math.round((Date.now()-S.start)/1000), per, ccna:!!S.ccna, bp:S.bp||null,
     ids:S.items.map(q=>q.gen?null:q.id), ans:Object.fromEntries(Object.entries(S.ans).filter(([k])=>!S.items[k].gen).map(([k,v])=>[S.items[k].id,v]))};
   saveExam(e); S.result=e; view="result"; render(); scrollTop();
 }
@@ -150,6 +152,14 @@ function simBody(q,k,ans,checked,interactive){
 function renderBody(q, k, ans, checked, interactive){
   if(qtype(q)==="sim") return simBody(q,k,ans,checked,interactive);
   const t=qtype(q); let h="";
+  if(t==="simlet"){ const A=ans||[];
+    h+=`<div class="simx">${q.ex.map(([title,out],i)=>`<details ${i<2?"open":""}><summary class="small"><b>${esc(title)}</b></summary><pre>${esc(out)}</pre></details>`).join("")}</div>`;
+    h+=q.parts.map((p,pi)=>{ const ch=A[pi]||[]; const cs=new Set(p.a);
+      const ord=(S&&S.order[k]&&S.order[k][pi])||p.o.map((_,i)=>i);
+      return `<div class="simq"><div style="margin:12px 0 6px"><b>${pi+1}.</b> ${esc(p.q)}${p.a.length>1?` <span class="small muted">(оберіть ${p.a.length})</span>`:""}</div>`+ord.map((oi,pos)=>{ const [text,ex]=p.o[oi]; let cls="opt"; const sel=ch.includes(oi);
+        if(checked){ cls+=" locked"; if(cs.has(oi)) cls+=sel?" ok":" miss"; else if(sel) cls+=" bad"; } else if(sel) cls+=" sel"; const tag=interactive&&!checked?"button":"div";
+        return `<${tag} class="${cls}" ${tag==="button"?`data-act="spick" data-p="${pi}" data-i="${oi}"`:""}><span class="mk">${letters[pos]}.</span>${esc(text)}${checked?`<span class="ex">${cs.has(oi)?"✅ ":"❌ "}${esc(ex)}</span>`:""}</${tag}>`; }).join("")+`</div>`; }).join("");
+  }
   if(t==="mc"){
     const order=S&&S.order[k]? S.order[k] : q.o.map((_,i)=>i); const chosen=ans||[]; const cs=correctSet(q);
     if(q.a.length>1) h+=`<div class="small muted">Оберіть ${q.a.length}.</div>`;
@@ -222,3 +232,7 @@ function reviewItem(q, ans, open){
   const saveS=S; S=null; const body=renderBody(q,0,ans||(qtype(q)==="mc"?[]:qtype(q)==="cmd"?"":[]),true,false); S=saveS;
   return `<details ${open?"open":""}><summary>${ans===undefined?"":ok?"✅ ":"❌ "}<span class="small muted">${tlabel(q.t)}</span> ${esc(q.q)}</summary>${q.fig?topoSVG(q.fig):""}${q.c?`<pre>${esc(q.c)}</pre>`:""}${body}${flagBtn(q)}</details>`;
 }
+// Вибір варіанта в частині симлета
+ACTS.spick = el => { const k=S.i; if(S.mode!=="exam"&&S.checked[k]) return; const q=S.items[k]; const pi=Number(el.dataset.p), i=Number(el.dataset.i);
+  const A=Array.from({length:q.parts.length},(_,j)=>((S.ans[k]||[])[j]||[]).slice()); let ch=A[pi]; const need=q.parts[pi].a.length;
+  if(need>1){ ch=ch.includes(i)?ch.filter(x=>x!==i):ch.concat(i); if(ch.length>need) ch.shift(); } else ch=[i]; A[pi]=ch; S.ans[k]=A; S.confirmEnd=false; render(); };

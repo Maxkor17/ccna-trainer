@@ -39,7 +39,7 @@ function renderResult(){
   const e=S.result;
   const rows=Object.entries(e.per).sort((a,b)=>TOPICS.findIndex(t=>t.id===a[0])-TOPICS.findIndex(t=>t.id===b[0]))
     .map(([t,[c,n]])=>`<tr><td>${tlabel(t)} · ${esc(TMAP[t].name)}</td><td class="num">${c}/${n}</td><td class="num">${Math.round(c/n*100)}%</td></tr>`).join("");
-  let ccna=""; if(e.ccna){ const sc=Math.round(300+700*e.correct/e.n); const dom={}; for(const [t,[c,n]] of Object.entries(e.per)){ const d=domainOf(t); dom[d]=dom[d]||[0,0]; dom[d][0]+=c; dom[d][1]+=n; }
+  let ccna=""; if(e.ccna){ const sc=Math.round(300+700*e.correct/e.n); const dom={}; for(const [t,[c,n]] of Object.entries(e.per)){ const d=domainOf(t,e.bp); dom[d]=dom[d]||[0,0]; dom[d][0]+=c; dom[d][1]+=n; }
     ccna=`<p class="big" style="color:var(${sc>=825?"--ok":sc>=750?"--warn":"--bad"})">${sc} / 1000</p><p style="margin:0 0 8px"><b>${sc>=825?"✅ Прохідний рівень (≈ 825)":"❌ Нижче прохідного рівня (≈ 825)"}</b></p>
       <table><tr><th>Домен</th><th class="num">Вірно</th><th class="num">%</th></tr>${DOMAINS.map(([d,w])=>dom[d]?`<tr><td>${esc(d)} <span class="small muted">(${Math.round(w*100)}%)</span></td><td class="num">${dom[d][0]}/${dom[d][1]}</td><td class="num">${Math.round(dom[d][0]/dom[d][1]*100)}%</td></tr>`:"").join("")}</table>
       <p class="small muted">Справжня шкала Cisco не публікується; тут бал = 300 + 700 × частка правильних.</p>`; }

@@ -54,14 +54,15 @@ function renderHome(){
     <p class="small muted" style="margin:6px 0 8px">Налаштовуйте пристрої командами IOS: від одного комутатора до мережі з маршрутизатором і ПК (ping, tracert).</p>
     <button class="primary" data-act="labs">Відкрити лаби</button></div>
   ${installCard()}
-  <div class="card"><h2>Інструменти</h2><div class="tools"><button data-act="speedmenu">⚡ Швидкісні тренування</button><button data-act="confuse">🧠 Що я плутаю</button><button data-act="glossary">🇬🇧 Терміни EN</button><button data-act="progress">🏆 Активність і досягнення</button><button data-act="stpviz">🌳 STP покроково</button><button data-act="obsexport">📒 Експорт в Obsidian</button><button data-act="labs">🌐 Лаби й пісочниця</button></div></div>
+  <div class="card"><h2>Інструменти</h2><div class="tools"><button data-act="speedmenu">⚡ Швидкісні тренування</button><button data-act="confuse">🧠 Що я плутаю</button><button data-act="glossary">🇬🇧 Терміни EN</button><button data-act="progress">🏆 Активність і досягнення</button><button data-act="stpviz">🌳 STP покроково</button><button data-act="bpview">🗺 Карта покриття CCNA</button><button data-act="obsexport">📒 Експорт в Obsidian</button><button data-act="labs">🌐 Лаби й пісочниця</button></div></div>
   ${(()=>{ const pi=planInfo(); return `<div class="card"><h2>🗓 План до екзамену</h2>${pi?`<p style="margin:0 0 6px">${pi.days>0?`До екзамену <b>${pi.days}</b> дн. (${esc(new Date(opts.examDate).toLocaleDateString("uk-UA"))})`:pi.days===0?"Екзамен сьогодні — успіху!":"Дата екзамену минула"} · готовність <b>${Math.round(pi.avg*100)}%</b></p>
     <p class="small muted" style="margin:0 0 6px">Нових питань лишилося: ${pi.unseen}, до повторення сьогодні: ${pi.due}. Щоб устигнути, робіть ≈ <b>${pi.perDay}</b> питань на день${pi.days>3?" (останні 3 дні — лише повторення й симуляції)":""}.</p>
     ${pi.weak.length?`<p class="small" style="margin:0 0 8px">Найслабші теми: ${pi.weak.map(w=>`${tlabel(w.id)} ${esc(TMAP[w.id].name)} — ${Math.round(w.p*100)}%`).join("; ")}</p>`:""}
     <div class="row"><button class="primary" data-act="plan">Почати план на сьогодні</button><input type="date" id="examdate" value="${esc(opts.examDate)}" style="width:auto"></div>`
     :`<p class="small muted" style="margin:0 0 8px">Вкажіть дату екзамену — тренажер щодня складатиме набір із повторень і найслабших тем і покаже, чи встигаєте.</p><input type="date" id="examdate" style="width:auto">`}</div>`; })()}
-  <div class="card"><h2>🎯 Симуляція CCNA 200-301</h2>
-    <p class="small muted" style="margin:0 0 8px">Як справжній іспит: питання з усіх курсів за вагами доменів Cisco (основи 20%, доступ 20%, IP-зв'язність 25%, IP-сервіси 10%, безпека 15%, автоматизація 10%), без повернення назад, бал за шкалою 300–1000 (прохідний ≈ 825).</p>
+  ${Object.keys(prog).length>=20?forecastCard(true):""}
+  <div class="card"><h2>🎯 Симуляція CCNA 200-301 <span class="small muted">${esc(bpVer())}</span></h2>
+    <p class="small muted" style="margin:0 0 8px">Як справжній іспит: питання з усіх курсів за вагами доменів Cisco ${esc(bpVer())} (${SIM_DOMAINS[bpVer()].map(([n,w])=>n.toLowerCase()+" "+Math.round(w*100)+"%").join(", ")}), без повернення назад, бал за шкалою 300–1000 (прохідний ≈ 825).</p>
     <div class="row"><button class="primary" data-act="ccna" data-n="120">Повна: 120 питань / 120 хв</button><button data-act="ccna" data-n="40">Коротка: 40 / 40 хв</button></div></div>
   <div class="card"><h2>Екзамен</h2>
     <p class="small muted" style="margin:0 0 8px">Без підказок, 1 хв на питання, розбір наприкінці.</p>
@@ -94,10 +95,10 @@ const DOMAINS=[["Основи мереж",0.20,["ITN1","ITN3","ITN4","ITN5","ITN
  ["IP-сервіси",0.10,["ITN15","SRWE7","SRWE8","ENSA6","ENSA9","ENSA10"]],
  ["Основи безпеки",0.15,["ITN16","ITN17","SRWE10","SRWE11","ENSA3","ENSA4","ENSA5","ENSA8"]],
  ["Автоматизація",0.10,["ENSA13","ENSA14"]]];
-const domainOf=t=>{ const d=DOMAINS.find(x=>x[2].includes(t)); return d?d[0]:"Інше"; };
+const domainOf=(t,ver)=>{ const D=(typeof SIM_DOMAINS!=="undefined"&&SIM_DOMAINS[ver||"v1.1"])||DOMAINS; const d=D.find(x=>x[2].includes(t)); return d?d[0]:"Інше"; };
 function pickCcna(n){
   const out=[]; const used=new Set();
-  for(const [name,w,ts] of DOMAINS){ const want=Math.round(n*w); const set=new Set(ts);
+  for(const [name,w,ts] of (SIM_DOMAINS[bpVer()]||DOMAINS)){ const want=Math.round(n*w); const set=new Set(ts);
     const gk=GEN.forTopics(set); const ng=gk.length?Math.round(want*0.15):0;
     const qs=shuffle(QB.filter(q=>set.has(q.t)&&!used.has(q.id)&&qtype(q)!=="flash")).slice(0,want-ng); qs.forEach(q=>used.add(q.id)); out.push(...qs);
     for(let i=0;i<ng;i++){ const g=GEN.make(gk[i%gk.length]); if(g) out.push(g); } }

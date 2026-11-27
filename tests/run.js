@@ -2,7 +2,7 @@
 // Запуск: node tests/run.js  (exit code 1 при будь-якій помилці)
 const path=require("path"); const P=f=>path.join(__dirname,"..","public",f);
 global.window={}; global.btoa=s=>Buffer.from(s).toString("base64"); global.atob=s=>Buffer.from(s,"base64").toString();
-const files=["wlc","bash","questions-linux","questions-itn","questions-srwe","questions-notes","questions-extra","questions-srwe2","questions-ensa","questions-netacad","questions-figs","questions-en","glossary","cheats","pairs","gen","gen2","gen3","api","cli"];
+const files=["wlc","bash","questions-linux","questions-itn","questions-srwe","questions-notes","questions-extra","questions-srwe2","questions-ensa","questions-netacad","questions-ensa2","questions-v2","questions-simlet","questions-practice","questions-figs","questions-en","glossary","cheats","pairs","gen","gen2","gen3","api","cli"];
 for(const f of files) require(P(f+".js"));
 for(const f of require("fs").readdirSync(path.join(__dirname,"..","public")).filter(f=>/^tr-.*\.js$/.test(f))) require(P(f));
 let fails=0, checks=0; const fail=m=>{ fails++; console.error("✗ "+m); }; const ok=(c,m)=>{ checks++; if(!c) fail(m); };
@@ -20,13 +20,14 @@ for(const b of banks) for(const q of window[b]){ total++;
   else if(t==="match") ok(Array.isArray(q.pairs)&&q.pairs.length>=2,q.id+": match без pairs");
   else if(t==="cmd") ok(Array.isArray(q.ans)&&q.ans.length,q.id+": cmd без ans");
   else if(t==="fill") ok(/\[\[.+?\]\]/.test(q.cfg||""),q.id+": fill без пропусків");
+  else if(t==="simlet") ok(Array.isArray(q.ex)&&q.ex.length&&q.ex.every(x=>x[0]&&x[1])&&Array.isArray(q.parts)&&q.parts.length>=2&&q.parts.every(p=>p.q&&p.o.length>=2&&p.a.length&&p.a.every(i=>i>=0&&i<p.o.length)),q.id+": некоректний simlet");
   else fail(q.id+": невідомий тип "+t); }
 console.log("Питань у банках:",total);
 // переклад
 const CYR=/[а-яіїєґ]/i; const allQ={}; for(const b of banks) for(const q of window[b]) allQ[q.id]=q;
 if(window.QB_TR){ for(const [id,tr] of Object.entries(window.QB_TR)){ const q=allQ[id]; ok(!!q,"переклад для неіснуючого "+id); if(!q) continue; ok(!CYR.test(tr.q),"переклад "+id+": кирилиця в питанні");
   if(q.o){ ok(Array.isArray(tr.o)&&tr.o.length===q.o.length,"переклад "+id+": кількість варіантів "+(tr.o||[]).length+"≠"+q.o.length); (tr.o||[]).forEach((o,i)=>{ const t=o[0]===0?(q.o[i]||[])[0]:o[0]; ok(!CYR.test(t||""),"переклад "+id+": варіант "+i+" не перекладено: "+t); ok(!CYR.test(o[1]||""),"переклад "+id+": пояснення "+i); }); }
-  if(q.items) ok(Array.isArray(tr.items)&&tr.items.length===q.items.length&&!tr.items.some(x=>CYR.test(x)),"переклад "+id+": items"); if(q.pairs) ok(Array.isArray(tr.pairs)&&tr.pairs.length===q.pairs.length&&!tr.pairs.flat().some(x=>CYR.test(x)),"переклад "+id+": pairs"); if(tr.e) ok(!CYR.test(tr.e),"переклад "+id+": e"); if(q.e&&CYR.test(q.e)) ok(!!tr.e,"переклад "+id+": бракує пояснення"); if(q.cfg&&CYR.test(q.cfg)) ok(!!tr.cfg,"переклад "+id+": cfg кирилицею"); if(tr.cfg){ const bl=x=>(x.match(/\[\[[^\]]+\]\]/g)||[]).join("|"); ok(bl(tr.cfg)===bl(q.cfg),"переклад "+id+": пропуски cfg"); } }
+  if(q.items) ok(Array.isArray(tr.items)&&tr.items.length===q.items.length&&!tr.items.some(x=>CYR.test(x)),"переклад "+id+": items"); if(q.pairs) ok(Array.isArray(tr.pairs)&&tr.pairs.length===q.pairs.length&&!tr.pairs.flat().some(x=>CYR.test(x)),"переклад "+id+": pairs"); if(tr.e) ok(!CYR.test(tr.e),"переклад "+id+": e"); if(q.parts) ok(Array.isArray(tr.parts)&&tr.parts.length===q.parts.length&&tr.parts.every((p,i)=>!CYR.test(p.q)&&p.o.length===q.parts[i].o.length&&p.o.every(o=>!CYR.test(o[0])&&!CYR.test(o[1]))),"переклад "+id+": parts"); if(q.ex) ok(q.ex.every(x=>!CYR.test(x[1])),"simlet "+id+": кирилиця у виводі"); if(q.e&&CYR.test(q.e)) ok(!!tr.e,"переклад "+id+": бракує пояснення"); if(q.cfg&&CYR.test(q.cfg)) ok(!!tr.cfg,"переклад "+id+": cfg кирилицею"); if(tr.cfg){ const bl=x=>(x.match(/\[\[[^\]]+\]\]/g)||[]).join("|"); ok(bl(tr.cfg)===bl(q.cfg),"переклад "+id+": пропуски cfg"); } }
   const untr=Object.keys(allQ).filter(id=>!window.QB_TR[id]&&allQ[id].src!=="en"&&!id.startsWith("lx")); console.log("Перекладів:",Object.keys(window.QB_TR).length,"· без перекладу:",untr.length); }
 // ---- генератори ----
 const G=window.GEN;

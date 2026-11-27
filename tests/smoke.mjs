@@ -74,6 +74,22 @@ await step("нові лаби: EtherChannel, port-security, snooping, DHCPv6", a
   for (const id of ["net-ec-lacp", "net-psec", "net-snoop", "net-dhcpv6"]) { await page.evaluate(i => openLab(i), id); await page.waitForTimeout(60);
     const ti = page.locator("#tin"); await ti.fill("ipconfig /all"); await ti.press("Enter"); }
   await home(); });
+await step("симлет: відповіді на всі частини і перевірка", async () => {
+  await page.evaluate(() => startSession("train", [QB.find(q => q.type === "simlet")], "simlet"));
+  const parts = await page.evaluate(() => S.items[0].parts.length);
+  for (let i = 0; i < parts; i++) await page.locator(`[data-act="spick"][data-p="${i}"]`).first().click();
+  await page.locator("#checkbtn").click(); await page.waitForTimeout(100);
+  if (!(await page.evaluate(() => !!S.checked[0]))) throw new Error("симлет не перевірено"); await home(); });
+await step("карта покриття v1.1/v2.0 і прогноз", async () => {
+  await page.evaluate(() => { view = "bpview"; render(); }); await has("Карта покриття CCNA"); await has("Прогноз здачі");
+  await act('[data-act="bpver"][data-v="v1.1"]'); await has("Network Fundamentals".slice(0, 0) || "Основи мереж");
+  await act('[data-act="bpver"][data-v="v2.0"]'); await has("AI, операції й керування");
+  await page.locator('[data-act="bptrain"]').first().click(); await page.waitForTimeout(80);
+  if (await page.evaluate(() => view) !== "quiz") throw new Error("тренування за темою blueprint не стартувало");
+  await page.evaluate(() => { opts.bp = "auto"; }); await home(); });
+await step("англійський режим: симлет і нові питання перекладено", async () => {
+  const bad = await page.evaluate(() => { opts.lang = "en"; rebuildQB(); const CY = /[а-яіїєґ]/i; const r = QB.filter(q => /^(e\d+x|v2-|sl-|pf-|po-)/.test(q.id)).filter(q => CY.test(q.q) || (q.parts || []).some(p => CY.test(p.q))).map(q => q.id); opts.lang = "mix"; rebuildQB(); return r; });
+  if (bad.length) throw new Error("без перекладу: " + bad.join(", ")); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));
