@@ -66,8 +66,8 @@ add("user","exit",(s,a,ctx)=>{ctx.mode="user"; return "";});
 add("exec","disable",(s,a,ctx)=>{ctx.mode="user";});
 add("exec","exit",(s,a,ctx)=>{ctx.mode="user";});
 add("exec","configure terminal",(s,a,ctx)=>{ctx.mode="config"; return "Enter configuration commands, one per line.  End with CNTL/Z.";});
-add("exec","copy running-config startup-config",(s)=>{s.saved=JSON.parse(JSON.stringify(Object.assign({},s,{saved:false}))); return "Destination filename [startup-config]? \nBuilding configuration...\n[OK]";});
-add("exec","write memory",(s)=>{s.saved=JSON.parse(JSON.stringify(Object.assign({},s,{saved:false}))); return "Building configuration...\n[OK]";});
+add("exec","copy running-config startup-config",(s)=>{s.saved=dumpState(Object.assign({},s,{saved:false})); return "Destination filename [startup-config]? \nBuilding configuration...\n[OK]";});
+add("exec","write memory",(s)=>{s.saved=dumpState(Object.assign({},s,{saved:false})); return "Building configuration...\n[OK]";});
 add("exec","enable",()=>{});
 for(const m of ["user","exec"]){
   add(m,"ping <ip>",(s,a)=>s.net? s.net.pingCli(s,a[0]) : "Type escape sequence to abort.\nSending 5, 100-byte ICMP Echos to "+a[0]+", timeout is 2 seconds:\n.....\nSuccess rate is 0 percent (0/5)");

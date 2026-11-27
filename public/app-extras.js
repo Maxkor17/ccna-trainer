@@ -145,3 +145,27 @@ function checkLab(){
   const tk=LAB.ts&&LAB.ts.tk; if(tk&&ok&&tk.score!=null) LAB.res=`<div class="card"><h2>🎫 Тікет #${tk.id} закрито</h2><div class="kv"><span>Оцінка</span><b>${tk.score}/100</b></div><div class="kv"><span>Час</span><span>${tk.min} хв</span></div><div class="kv"><span>Команд</span><span>${LAB.hist.length}</span></div><div class="kv"><span>Перевірок</span><span>${tk.checks}</span></div><p class="small muted" style="margin:6px 0 0">Що було зламано: ${LAB.ts.faults.map(esc).join("; ")}</p></div>`+LAB.res;
   labs[LAB.sc.id]=rec; patch({labs:{[LAB.sc.id]:rec}}); $("#labres").innerHTML=LAB.res;
 }
+
+// ---------- Лаба Ansible (ENSA14) ----------
+let ANS=null;
+function ansInit(){ if(!ANS) ANS={lab:ANSIBLE.newLab(),src:lsGet("ccna.ansible.src",ANSIBLE.SAMPLE),out:"",dev:"S1"}; return ANS; }
+function ansProgress(){ const A=ansInit(); const done=ANSIBLE.TASKS.filter(t=>t.ok(A.lab)).map(t=>t.id); const prev=labs.ansible||{};
+  const all=[...new Set((prev.ids||[]).concat(done))]; const rec={ok:all.length===ANSIBLE.TASKS.length||!!prev.ok,n:all.length,ids:all,tries:(prev.tries||0)+1,ts:Date.now()}; if(rec.ok&&!prev.ok) rec.done=Date.now();
+  labs.ansible=rec; patch({labs:{ansible:rec}}); }
+VIEWS.ansible={ html:()=>{ const A=ansInit(); const ids=new Set((labs.ansible||{}).ids||[]);
+  return `<div class="card"><h2>🤖 Ansible: плейбуки для Cisco IOS</h2><p class="small muted" style="margin:0 0 8px">Ansible — агентless: керуючий вузол підключається до пристроїв по SSH (network_cli) і виконує завдання з YAML-плейбука. Тут плейбук виконується на маршрутизаторі R1 і комутаторах S1, S2 симулятора. Модулі: <code>cisco.ios.ios_command</code> (show-команди), <code>cisco.ios.ios_config</code> (<code>lines</code>, <code>parents</code>, <code>save_when</code>), <code>debug</code>; є <code>vars</code>, <code>loop</code>, <code>register</code> і <code>{{ змінні }}</code>.</p>
+   <ul class="checklist">${ANSIBLE.TASKS.map(t=>`<li>${t.ok(A.lab)||ids.has(t.id)?"✅":"⬜"} ${esc(t.t)}</li>`).join("")}</ul>
+   <details><summary class="small muted">Інвентар (inventory.ini)</summary><pre>${esc(ANSIBLE.INVENTORY)}</pre></details></div>
+  <div class="card"><h2>site.yml</h2><textarea id="ansrc" rows="18" spellcheck="false" style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;white-space:pre">${esc(A.src)}</textarea>
+   <div class="row" style="margin-top:8px"><button class="primary" data-act="ansrun">▶ ansible-playbook -i inventory.ini site.yml</button><button data-act="anssample">Приклад</button><button data-act="ansreset">Скинути мережу</button></div>
+   <p class="small muted" style="margin:6px 0 0">Відступи — лише пробіли (2 на рівень). Списки — через «- », словники — «ключ: значення».</p></div>
+  ${A.out?`<div class="term" id="ansout" style="max-height:none">${esc(A.out)}</div>`:""}
+  <div class="card"><h2>Стан пристроїв</h2><div class="chips">${ANSIBLE.GROUPS.all.map(d=>`<button class="seg ${A.dev===d?"on":""}" data-act="ansdev" data-d="${d}">${d}</button>`).join("")}</div><pre style="max-height:260px;overflow:auto">${esc(ansShowRun(A))}</pre></div>
+  <button class="ghost" data-act="labs">← До списку лаб</button>`; } };
+function ansShowRun(A){ const s=A.lab.ses[A.dev]; s.exec("end"); s.exec("enable"); return s.exec("show running-config"); }
+const ansSync=()=>{ const t=$("#ansrc"); if(t&&ANS){ ANS.src=t.value; lsSet("ccna.ansible.src",ANS.src); } };
+ACTS.ansible=()=>{ view="ansible"; render(); scrollTop(); };
+ACTS.ansrun=()=>{ ansSync(); const r=ANSIBLE.run(ANS.lab,ANS.src); ANS.out="$ ansible-playbook -i inventory.ini site.yml\n\n"+r.text; ansProgress(); render(); const o=$("#ansout"); if(o) o.scrollIntoView({block:"start"}); };
+ACTS.anssample=()=>{ if(!confirm("Замінити плейбук прикладом?")) return; ANS.src=ANSIBLE.SAMPLE; lsSet("ccna.ansible.src",ANS.src); render(); };
+ACTS.ansreset=()=>{ ansSync(); ANS.lab=ANSIBLE.newLab(); ANS.out=""; render(); };
+ACTS.ansdev=el=>{ ansSync(); ANS.dev=el.dataset.d; render(); };

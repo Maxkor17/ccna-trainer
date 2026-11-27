@@ -121,6 +121,9 @@ await step("тікет: скарга, таймер, оцінка після ви
   await page.evaluate(() => { view = "labs"; render(); }); await act('[data-act="tsstart"][data-tk="1"]'); await has("Скарга"); await has("⏱");
   const sc = await page.evaluate(() => { const sol = CLI.solveNet(LAB.sc); LAB.N = sol; LAB.ses = CLI.sessionsFor(sol); LAB.hist = ["show run"]; checkLab(); return LAB.ts.tk.score; });
   if (!(sc > 0)) throw new Error("немає оцінки: " + sc); await has("закрито"); await home(); });
+await step("Ansible: запуск плейбука, PLAY RECAP, прогрес", async () => {
+  await page.evaluate(() => { view = "labs"; render(); }); await act('[data-act="ansible"]'); await has("site.yml");
+  await act('[data-act="ansrun"]'); await has("PLAY RECAP"); await has("ok=1"); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));
