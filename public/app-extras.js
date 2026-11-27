@@ -120,6 +120,13 @@ function openLab(id){
 const TK_WHO=["Олена, бухгалтерія","Ігор, відділ продажів","Марта, HR","Сервіс-деск (моніторинг)","Андрій, склад","Черговий NOC"];
 function tkScore(tk,cmds,checks,gave){ const min=(Date.now()-tk.t0)/60000; if(gave) return 0;
   return Math.max(10,Math.round(100-Math.max(0,min-5)*3-Math.max(0,cmds-20)*0.7-Math.max(0,checks-1)*5)); }
+// ---- Інтервальне повторення лаб: 7 → 21 → 60 днів після успішного виконання ----
+const LAB_INT=[7,21,60];
+function labDue(id,now){ const r=labs[id]; if(!r||!r.ok||String(id).startsWith("ts-")) return false; const last=r.last||r.done||r.ts||0; return (now||Date.now())-last>=LAB_INT[Math.min(r.reps||0,LAB_INT.length-1)]*864e5; }
+function labNext(id,prev,ok){ const now=Date.now(); const rec=Object.assign({},prev,{ok:ok||!!prev.ok, tries:(prev.tries||0)+1, ts:now}); if(ok&&!prev.ok){ rec.done=now; rec.last=now; rec.reps=0; }
+  else if(ok&&prev.ok){ if(labDue(id,now)) rec.reps=(prev.reps||0)+1; rec.last=now; } return rec; }
+function labsDue(){ return ALLSCEN().filter(s=>!s.bash&&!s.sb&&TMAP[s.t]&&TMAP[s.t].g!=="LNX"&&labDue(s.id)).sort((a,b)=>(labs[a.id].last||labs[a.id].done||0)-(labs[b.id].last||labs[b.id].done||0)); }
+function labRecord(id,ok){ const prev=labs[id]||{tries:0}; const rec=labNext(id,prev,ok); labs[id]=rec; patch({labs:{[id]:rec}}); }
 function startTs(n,ticket){
   const pool=(CLI.NETSCEN||[]); let t=null, base=null;
   for(let k=0;k<10&&!t;k++){ base=pool[Math.floor(Math.random()*pool.length)]; t=CLI.troubleshoot(base,n); }
@@ -137,7 +144,7 @@ function startTs(n,ticket){
 function checkLab(){
   const r= LAB.sc.net? LAB.sc.check(LAB.N) : LAB.sc.check(LAB.ses[LAB.cur].state); const ok=r.every(x=>x[0]);
   LAB.res=`<div class="card"><h2>${ok?"✅ Усе виконано!":"Ще не все"}</h2><ul class="checklist">${r.map(([v,t])=>`<li>${v?"✅":"❌"} ${esc(t)}</li>`).join("")}</ul></div>`;
-  const prev=labs[LAB.sc.id]||{tries:0}; const rec={ok:ok||!!prev.ok, tries:(prev.tries||0)+1, ts:Date.now()}; if(ok&&!prev.ok) rec.done=Date.now();
+  const prev=labs[LAB.sc.id]||{tries:0}; const rec=labNext(LAB.sc.id,prev,ok);
   if(LAB.ts){ rec.solved=(prev.solved||0)+(ok&&!LAB.ts.done&&!LAB.showSol?1:0);
     const tk=LAB.ts.tk; if(tk&&!LAB.ts.done){ tk.checks++; if(ok){ const sc=tkScore(tk,LAB.hist.length,tk.checks,LAB.showSol); tk.score=sc; tk.min=Math.round((Date.now()-tk.t0)/6000)/10; const p=prev.tk||{n:0,best:0,sum:0}; rec.tk={n:p.n+1,best:Math.max(p.best||0,sc),sum:(p.sum||0)+sc,last:sc}; } }
     else if(prev.tk) rec.tk=prev.tk;

@@ -43,11 +43,17 @@ function topicStats(tid){
   for(const [g,t] of Object.entries(GEN.topicOf)) if(t===tid && prog[g]){ c+=prog[g].c; w+=prog[g].w; }
   return {n:qs.length, seen, acc:(c+w)? c/(c+w): null, mast, gen:Object.values(GEN.topicOf).includes(tid)};
 }
+// Адаптивна складність: теми з точністю > 85% (≥ 10 відповідей) отримують спершу складніші формати,
+// слабкі (< 60%) — спершу прості питання з однією відповіддю.
+function qHard(q){ const t=qtype(q); return t==="simlet"?3:(t==="cmd"||t==="fill")?2.5:(t==="order"||t==="match")?2:(Array.isArray(q.a)&&q.a.length>1)?1.5:q.fig?1:t==="flash"?-1:0; }
+function topicLevel(tid){ const st=topicStats(tid); const ans=Object.entries(prog).filter(([id])=>topicOfId(id)===tid).reduce((a,[,r])=>a+(r.c||0)+(r.w||0),0);
+  if(st.acc==null||ans<10) return 0; return st.acc>0.85?1:st.acc<0.6?-1:0; }
 function pickTraining(topics, n){
-  const now=Date.now(); const b=[[],[],[],[]];
+  const now=Date.now(); const b=[[],[],[],[]]; const lv={}; for(const t of topics) lv[t]=topicLevel(t);
   for(const q of qsFor(topics)){ const r=prog[q.id];
     if(!r) b[1].push(q); else if(r.k===0 && r.d<=now) b[0].push(q); else if(r.d<=now) b[2].push(q); else b[3].push(q); }
-  let all=[].concat(...b.map(shuffle));
+  const adapt=arr=>arr.map((q,i)=>[q,i]).sort((x,y)=>{ const lx=lv[x[0].t]||0, ly=lv[y[0].t]||0; const hx=lx*qHard(x[0]), hy=ly*qHard(y[0]); return hy-hx||x[1]-y[1]; }).map(x=>x[0]);
+  let all=[].concat(...b.map(x=>adapt(shuffle(x))));
   const gk=genKeysFor(topics);
   const want = n>0? n : all.length;
   const ng = gk.length? Math.max(1, Math.round(want*0.2)) : 0;

@@ -96,7 +96,7 @@ document.addEventListener("click", async ev=>{
   if(act==="check"){ doCheck(); return; }
   if(act==="end2"){ finishExam(); return; }
   if(act==="simdev"){ const st=simState(S.i); st.cur=el.dataset.d; render(); return; }
-  if(act==="simdone"){ const st=simState(S.i); const res= st.N? st.sc.check(st.N) : st.sc.check(st.ses[st.cur].state); const ok=res.every(x=>x[0]); S.ans[S.i]={done:true,ok,res}; if(S.mode!=="exam"){ doCheck(); } else render(); return; }
+  if(act==="simdone"){ const st=simState(S.i); const res= st.N? st.sc.check(st.N) : st.sc.check(st.ses[st.cur].state); const ok=res.every(x=>x[0]); S.ans[S.i]={done:true,ok,res}; if(st.sc&&st.sc.id&&!String(st.sc.id).startsWith("ts-")&&S.mode!=="exam") labRecord(st.sc.id,ok); if(S.mode!=="exam"){ doCheck(); } else render(); return; }
   if(act==="next"){ if(S.mode!=="exam" && S.i>=S.items.length-1){ showSummary(); return; } S.i=Math.min(S.i+1,S.items.length-1); S.confirmEnd=false; render(); scrollTop(); return; }
   if(act==="prev"){ S.i=Math.max(0,S.i-1); S.confirmEnd=false; render(); scrollTop(); return; }
   if(act==="jump"){ S.i=Number(el.dataset.k); S.confirmEnd=false; render(); return; }

@@ -30,11 +30,11 @@ function dayWeakTopic() { const cand = TOPICS.filter(t => t.g !== "LNX").map(t =
 function daySession() { const used = new Set(); const out = []; const add = q => { const id = recId(q); if (!q || used.has(id)) return; used.add(id); out.push(q); };
   reviewQueue().slice(0, 10).forEach(add); const wt = dayWeakTopic(); pickTraining(new Set([wt]), 8).forEach(add);
   const gk = GEN.forTopics(new Set([wt, ...[...sel].filter(t => TMAP[t] && TMAP[t].g !== "LNX")])); for (let i = 0; i < Math.min(2, gk.length); i++) { const g = GEN.make(gk[Math.floor(Math.random() * gk.length)]); if (g) add(g); }
-  const labC = ALLSCEN().filter(s => !s.bash && !s.sb && TMAP[s.t] && TMAP[s.t].g !== "LNX" && !(labs[s.id] && labs[s.id].ok)); const lab = labC.find(s => s.t === wt) || labC.find(s => sel.has(s.t)) || labC[0];
-  const sim = lab && simQ(lab.id); return { list: out.concat(sim ? [sim] : []), wt, lab, nRev: Math.min(10, reviewQueue().length) }; }
+  const labC = ALLSCEN().filter(s => !s.bash && !s.sb && TMAP[s.t] && TMAP[s.t].g !== "LNX" && !(labs[s.id] && labs[s.id].ok)); const due = labsDue(); const lab = due[0] || labC.find(s => s.t === wt) || labC.find(s => sel.has(s.t)) || labC[0];
+  const sim = lab && simQ(lab.id); if (sim && due[0] === lab) sim.q = "🔁 Повторення лаби: " + lab.title; return { list: out.concat(sim ? [sim] : []), wt, lab, rep: due[0] === lab, nRev: Math.min(10, reviewQueue().length) }; }
 function dayCard() { const rq = reviewQueue().length; const wt = dayWeakTopic();
   return `<div class="card daycard"><div class="row"><h2 class="grow" style="margin:0">▶ Сесія дня</h2><button class="primary" data-act="dayrun">Почати</button></div>
-    <p class="small muted" style="margin:6px 0 0">Одна кнопка замість вибору: ${rq ? `повторення за розкладом (${Math.min(10, rq)}), ` : ""}найслабша тема <b>${tlabel(wt)} ${esc(TMAP[wt].name)}</b>, 2 розрахунки й одна CLI-лаба наприкінці. ≈ 20–30 хв.</p></div>`; }
+    <p class="small muted" style="margin:6px 0 0">Одна кнопка замість вибору: ${rq ? `повторення за розкладом (${Math.min(10, rq)}), ` : ""}найслабша тема <b>${tlabel(wt)} ${esc(TMAP[wt].name)}</b>, 2 розрахунки й ${labsDue().length ? `повторення лаби (на черзі: ${labsDue().length})` : "одна нова CLI-лаба"} наприкінці. ≈ 20–30 хв.</p></div>`; }
 ACTS.dayrun = () => { const d = daySession(); if (!d.list.length) return; startSession("train", d.list, "Сесія дня"); };
 
 // ---- 10. Власні пояснення ----
