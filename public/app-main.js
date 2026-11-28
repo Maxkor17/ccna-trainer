@@ -28,9 +28,9 @@ document.addEventListener("click", async ev=>{
   if(act==="obtrain"){ startSession("train", shuffle(customQs.filter(q=>q.type==="flash")).slice(0,opts.train), "Картки з нотаток"); return; }
   if(act==="install"){ if(installEvt){ installEvt.prompt(); installEvt.userChoice.finally(()=>{ installEvt=null; render(); }); } return; }
   if(act==="installhide"){ opts.installHide=true; lsSet(LS.opts,opts); render(); return; }
-  if(act==="ccna"){ const n=Number(el.dataset.n)||120; const en=el.dataset.en==="1";
-    if(en&&!window.__trLoaded){ el.disabled=true; el.textContent="⏳ Завантажую англійські тексти…"; loadTR().then(()=>startCcna(n,en)).catch(e=>{ el.disabled=false; alert("Не вдалося завантажити переклади: "+e.message); }); return; }
-    startCcna(n,en); return; }
+  if(act==="ccna"){ const n=Number(el.dataset.n)||120; const en=el.dataset.en==="1"; const bp=el.dataset.bp||"";
+    if(en&&!window.__trLoaded){ el.disabled=true; el.textContent="⏳ Завантажую англійські тексти…"; loadTR().then(()=>startCcna(n,en,bp)).catch(e=>{ el.disabled=false; alert("Не вдалося завантажити переклади: "+e.message); }); return; }
+    startCcna(n,en,bp); return; }
   if(act==="plan"){ startPlan(); return; }
   if(act==="exam"){ const gk=genKeysFor(sel); const n=opts.exam; const ng=gk.length?Math.round(n*0.15):0; const list=shuffle(qsFor(sel).filter(q=>qtype(q)!=="flash")).slice(0,n-ng); for(let i=0;i<ng;i++){const g=GEN.make(gk[i%gk.length]); if(g) list.push(g);} startSession("exam", shuffle(list)); return; }
   if(act==="gen"){ const list=[]; for(let i=0;i<10;i++){ const g=GEN.make(el.dataset.k); if(g) list.push(g);} startSession("gen", list); return; }
@@ -147,8 +147,8 @@ async function backupAct(act,el){
   if(act==="reset"){ if(el.dataset.confirm!=="1"){ el.dataset.confirm="1"; el.textContent="Точно скинути? Натисніть ще раз"; el.classList.add("primary"); return; } prog={}; saveAll(); el.textContent="Скинуто"; el.disabled=true; }
 }
 
-function startCcna(n,en){ const prev=opts.lang; if(en&&prev!=="en"){ opts.lang="en"; rebuildQB(); }
-  startSession("exam", pickCcna(n,en), (n>=100?"CCNA 200-301 ":"CCNA (коротка) ")+bpVer()+(en?" · English":"")); S.ccna=true; S.bp=bpVer(); if(en){ S.en=true; S.enPrev=prev; } render(); }
+function startCcna(n,en,bp){ const prev=opts.lang, pbp=opts.bp; if(en&&prev!=="en"){ opts.lang="en"; rebuildQB(); } if(bp) opts.bp=bp;
+  try{ startSession("exam", pickCcna(n,en), (n>=100?"CCNA 200-301 ":"CCNA (коротка) ")+bpVer()+(en?" · English":"")); S.ccna=true; S.bp=bpVer(); }finally{ opts.bp=pbp; } if(en){ S.en=true; S.enPrev=prev; } render(); }
 customQs=lsGet(LS.custom,[]); rebuildQB(); applyLook();
 if(opts.lang==="en") loadTR().then(()=>{ rebuildQB(); if(!S) render(); }).catch(()=>{});
 render();

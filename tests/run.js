@@ -95,5 +95,18 @@ for(const sc of window.BASH.SCEN){ const ses=window.BASH.start(sc); ok(!sc.check
 { const src=app.match(/function mergeDay\(o,v\)\{[\s\S]*?\n  return r; \}/); ok(!!src,"mergeDay не знайдено в app-*.js");
   if(src){ const mergeDay=new Function(src[0]+"; return mergeDay;")(); const r=mergeDay({n:5,c:4,m:10,log:[{ts:1,min:30,k:"pt"}],note:"a",jts:5},{n:3,c:3,m:12,log:[{ts:1,min:30,k:"pt"},{ts:2,min:15,k:"na"}],note:"b",jts:9});
     ok(r.n===5&&r.c===4,"mergeDay: відповіді"); ok(r.m===12,"mergeDay: хвилини"); ok(r.log.length===2,"mergeDay: журнал без дублів"); ok(r.note==="b","mergeDay: новіший чек-ін"); } }
+// ---- співбесіда ----
+{ require(P("interview-data.js")); require(P("interview-data2.js")); const I=window.INTERVIEW; ok(I.Q.length>=80,"співбесіда: питань "+I.Q.length); ok(I.SC.length>=4,"співбесіда: ситуацій");
+  const seen=new Set(); for(const q of I.Q){ ok(!seen.has(q.id),"співбесіда: дубль "+q.id); seen.add(q.id); ok(!!I.CATS[q.cat]&&I.LVL[q.lvl],"співбесіда: категорія/рівень "+q.id); ok(q.ua&&q.en&&q.model&&q.points.length>=3,"співбесіда: поля "+q.id);
+    ok(!/[А-Яа-яІіЇїЄєҐґ]/.test(q.en),"співбесіда: кирилиця в EN "+q.id);
+    let re=[]; try{ re=q.points.map(p=>new RegExp(p.k,"i")); }catch(e){ fail("співбесіда: регулярка "+q.id+": "+e.message); continue; }
+    const hit=re.filter(r=>r.test(q.model)).length; ok(hit/re.length>=0.7,"співбесіда: еталон "+q.id+" покриває "+hit+"/"+re.length);
+    ok(re.filter(r=>r.test("Не знаю, треба подумати про це питання")).length===0,"співбесіда: хибна автопозначка "+q.id); }
+  for(const s of I.SC){ ok(s.steps.length>=3&&s.steps.every(x=>x.say&&x.reveal&&x.points.length>=3),"ситуація "+s.id); for(const st of s.steps) for(const [,k] of st.points) try{ new RegExp(k,"i"); }catch(e){ fail("ситуація "+s.id+": "+k); } } }
+// ---- перехід v1.1 → v2.0: посилання на пункти існують ----
+{ const bp=require("fs").readFileSync(P("app-blueprint.js"),"utf8"); const ids=v=>{ const blk=bp.split('"'+v+'": { name')[1].split(/\n  "v|\n\};/)[0]; return new Set([...blk.matchAll(/\["(\d\.\d+)", "/g)].map(m=>m[1])); };
+  const v1=ids("v1.1"), v2=ids("v2.0"); ok(v1.size>=50&&v2.size>=25,"blueprint: пункти v1.1 "+v1.size+", v2.0 "+v2.size);
+  const diff=bp.match(/const BP_DIFF = (\[[\s\S]*?\n\]);/); ok(!!diff,"BP_DIFF не знайдено");
+  if(diff){ const D=new Function("return "+diff[1])(); for(const [k,t,,n2,n1] of D){ ok(["new","up","gone"].includes(k),"BP_DIFF тип "+t); if(n2) ok(v2.has(n2),"BP_DIFF "+t+": немає v2.0 "+n2); if(n1) ok(v1.has(n1),"BP_DIFF "+t+": немає v1.1 "+n1); } } }
 console.log(fails? "\n❌ Помилок: "+fails+" (перевірок "+checks+")" : "\n✅ Усі перевірки пройдено ("+checks+")");
 process.exit(fails?1:0);
