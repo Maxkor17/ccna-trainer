@@ -123,3 +123,13 @@ textarea.jt{min-height:64px;font:inherit;font-size:14px;background:var(--card);m
 .audbtn.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 15%,transparent)}
 .audbtn.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 15%,transparent)}
 .audbtn:disabled{opacity:1;color:var(--text)}
+/* читання виводів, знайди помилку, конструктор команд, довідники */
+.shout{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:8px 4px;overflow-x:auto;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:8px 0}
+.shl{white-space:pre;padding:0 6px;border-radius:4px;min-width:max-content}.shl[data-act]{cursor:pointer}.shl[data-act]:hover{background:var(--accent-soft)}.shl.on{background:var(--accent-soft)}.shl.key{box-shadow:inset 3px 0 0 var(--warn);background:var(--warn-soft)}
+.shl.bad{box-shadow:inset 3px 0 0 var(--bad);background:var(--bad-soft)}.shl.okl{box-shadow:inset 3px 0 0 var(--ok);background:var(--ok-soft)}
+.shn{font:13px/1.4 system-ui,sans-serif;white-space:normal;background:var(--card);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;padding:6px 8px;margin:2px 6px 6px;max-width:560px}
+.tiles{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.tile{font:13px ui-monospace,Menlo,Consolas,monospace;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);cursor:pointer}.tile.used{opacity:.3;pointer-events:none}
+.cmdline{min-height:40px;font:14px ui-monospace,Menlo,Consolas,monospace;background:var(--term);color:var(--term-text);border-radius:8px;padding:8px 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.cmdline .tile{background:transparent;color:inherit;border-color:#3b4652}
+.rb-step{border-left:3px solid var(--accent);padding:4px 10px;margin:8px 0}.rb-hist{font-size:12px;color:var(--muted)}
+@media print{header,.tabs,button,.ghost,.chips{display:none!important}.card{break-inside:avoid;box-shadow:none;border:1px solid #ccc}body{background:#fff}}
+mark.trap{background:var(--warn-soft);color:inherit;border-bottom:2px solid var(--warn);padding:0 2px;border-radius:3px}

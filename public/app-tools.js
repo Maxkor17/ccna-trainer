@@ -35,7 +35,7 @@ async function importGithub(){
   opts.obRepo=repo; opts.obPath=pre; opts.obBranch=br; lsSet(LS.opts,opts);
   try{ say("Читаю репозиторій…"); if(!br) br=(await ghJson("https://api.github.com/repos/"+repo,tok)).default_branch;
     const tree=await ghJson("https://api.github.com/repos/"+repo+"/git/trees/"+encodeURIComponent(br)+"?recursive=1",tok);
-    const md=(tree.tree||[]).filter(x=>x.type==="blob"&&/\.md$/i.test(x.path)&&(!pre||x.path===pre||x.path.startsWith(pre+"/"))&&!/(^|\/)\.(obsidian|trash)\//.test(x.path));
+    const wdir=(opts.obWriteDir||"CCNA/Тренажер").replace(/^\/|\/$/g,""); const md=(tree.tree||[]).filter(x=>x.type==="blob"&&/\.md$/i.test(x.path)&&(!pre||x.path===pre||x.path.startsWith(pre+"/"))&&!/(^|\/)\.(obsidian|trash)\//.test(x.path)&&!(x.path.startsWith(wdir+"/")&&!/Вхідні картки\.md$/.test(x.path)));
     if(!md.length){ say("У "+repo+(pre?"/"+pre:"")+" не знайдено .md-файлів"); return; }
     const old=lsGet(GH_SHA,{}); const key=repo+"@"+br+":"; const todo=md.filter(x=>old[key+x.path]!==x.sha).slice(0,500);
     if(!todo.length){ say("Без змін: усі "+md.length+" нотаток уже імпортовано"); return; }
@@ -66,7 +66,7 @@ async function pushVault(silent){ const m=$("#obmsg"); const say=t=>{ if(m) m.te
   const tok=(()=>{ try{ return localStorage.getItem(GH_TOK)||""; }catch(e){ return ""; } })(); const repo=opts.obRepo; if(!tok||!repo){ if(!silent) say("Спершу вкажіть репозиторій і токен з правом запису (розділ «Імпорт з GitHub»)"); return; }
   const dir=(opts.obWriteDir||"CCNA/Тренажер").replace(/^\/|\/$/g,""); const wk=typeof reviewWeek==="function"?reviewWeek():null;
   try{ if(!silent) say("Записую у vault…"); let br=opts.obBranch; if(!br) br=(await ghJson("https://api.github.com/repos/"+repo,tok)).default_branch;
-    const files=[[dir+"/Слабкі місця.md",obsidianMd()],[dir+"/Картки з помилок.md",errCardsMd()]]; if(wk) files.push([dir+"/Тиждень "+wk+".md",weekMd(wk)]);
+    const files=[[dir+"/Слабкі місця.md",obsidianMd()],[dir+"/Картки з помилок.md",errCardsMd()]]; if(wk) files.push([dir+"/Тиждень "+wk+".md",weekMd(wk)]); if(typeof vaultExtraFiles==="function") files.push(...vaultExtraFiles(dir));
     const res=[]; for(const [p,t] of files) res.push(await ghPut(repo,br,p,t,tok));
     opts.obPushed=Date.now(); lsSet(LS.opts,opts); const ch=res.filter(x=>x!=="same").length; if(!silent) say(ch?"Записано у "+repo+"/"+dir+": змінених файлів "+ch+" з "+res.length:"У vault усе актуально — змін немає"); }
   catch(e){ if(!silent) say("Помилка запису у vault: "+e.message); } }
@@ -84,8 +84,9 @@ function renderObsidian(){ const fl=customQs.filter(q=>q.type==="flash").length;
      <label class="small muted">Токен для приватного репозиторію (fine-grained, лише Contents: read)</label><input type="password" id="ghtok" autocomplete="off" value="${(()=>{ try{ return localStorage.getItem(GH_TOK)?"••••":""; }catch(e){ return ""; } })()}" placeholder="github_pat_… (зберігається лише на цьому пристрої)">
      <div class="row" style="margin-top:8px"><button class="primary" data-act="ghimport">⬇ Імпортувати з GitHub</button><button class="ghost" data-act="ghforget">Забути токен і кеш</button></div>
      <p class="small muted" style="margin:6px 0 0">Повторний імпорт завантажує лише змінені файли. Токен не синхронізується в хмару тренажера.</p>
-     <h3 style="margin:12px 0 4px">⬆ Запис у vault</h3><p class="small muted" style="margin:0 0 6px">Тренажер комітить у репозиторій три нотатки: «Слабкі місця», «Картки з помилок» (формат питання::відповідь для плагіна Spaced Repetition) і огляд тижня. Потрібен токен з правом Contents: Read and write. Obsidian Git підтягне їх у vault.</p>
+     <h3 style="margin:12px 0 4px">⬆ Запис у vault</h3><p class="small muted" style="margin:0 0 6px">Тренажер комітить у репозиторій: «Слабкі місця», «Картки з помилок» (питання::відповідь для плагіна Spaced Repetition), огляд тижня, нотатку «SRWE — готовність» з таблицею модулів і окремі нотатки «Помилки <модуль>» з розділом «## Картки» і тегом #flashcards/SRWE. Свої нотатки тренажера при імпорті пропускаються, крім «Вхідні картки». Потрібен токен з правом Contents: Read and write. Obsidian Git підтягне їх у vault.</p>
      <label class="small muted">Папка у vault</label><input type="text" id="ghwdir" value="${esc(opts.obWriteDir||"CCNA/Тренажер")}">
+     <h3 style="margin:12px 0 4px">📝 Obsidian на цьому пристрої</h3><p class="small muted" style="margin:0 0 6px">Вкажіть назву vault (як у списку сховищ Obsidian) — після помилки з'явиться кнопка, що дописує картку в «Вхідні картки», а картки з нотаток відкриватимуть свою нотатку.</p><div class="row"><input type="text" id="obvault" placeholder="назва vault" value="${esc(opts.obVault||"")}" class="grow"><button class="mini" data-act="obvault">Зберегти</button></div>
      <div class="row" style="margin-top:8px"><button data-act="ghpush">⬆ Записати у vault</button><label class="small"><input type="checkbox" data-act="ghauto" ${opts.obAutoPush?"checked":""}> автоматично раз на день</label></div>${opts.obPushed?`<p class="small muted" style="margin:4px 0 0">Останній запис: ${new Date(opts.obPushed).toLocaleString("uk-UA")}</p>`:""}</div></details>
     <p class="small muted" id="obmsg" style="margin:8px 0 0">Карток з нотаток: ${fl}${opts.obLast?" · останній імпорт "+new Date(opts.obLast).toLocaleString("uk-UA"):""}</p>${fl?`<button class="mini" data-act="obtrain" style="margin-top:6px">Тренувати картки</button>`:""}</div>`; }
 function renderCustom(){
