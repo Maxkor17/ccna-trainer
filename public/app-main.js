@@ -28,6 +28,7 @@ document.addEventListener("click", async ev=>{
   if(act==="obtrain"){ startSession("train", shuffle(customQs.filter(q=>q.type==="flash")).slice(0,opts.train), "Картки з нотаток"); return; }
   if(act==="install"){ if(installEvt){ installEvt.prompt(); installEvt.userChoice.finally(()=>{ installEvt=null; render(); }); } return; }
   if(act==="installhide"){ opts.installHide=true; lsSet(LS.opts,opts); render(); return; }
+  if(act==="ccna"&&el.dataset.en==="1"&&!window.__trLoaded){ el.disabled=true; el.textContent="⏳ Завантажую англійські тексти…"; loadTR().then(()=>{ el.disabled=false; el.click(); }).catch(e=>{ el.disabled=false; alert("Не вдалося завантажити переклади: "+e.message); }); return; }
   if(act==="ccna"){ const n=Number(el.dataset.n)||120; const en=el.dataset.en==="1"; const prev=opts.lang; if(en&&prev!=="en"){ opts.lang="en"; rebuildQB(); }
     startSession("exam", pickCcna(n,en), (n>=100?"CCNA 200-301 ":"CCNA (коротка) ")+bpVer()+(en?" · English":"")); S.ccna=true; S.bp=bpVer(); if(en){ S.en=true; S.enPrev=prev; } render(); return; }
   if(act==="plan"){ startPlan(); return; }
@@ -36,7 +37,7 @@ document.addEventListener("click", async ev=>{
   if(act==="cheat"){ const tid=($("#modsel")||{}).value||opts.modTopic; opts.modTopic=tid; lsSet(LS.opts,opts); view="cheat"; render(); scrollTop(); return; }
   if(act==="module2"){ startSession("module", pickModule(opts.modTopic), "Тест модуля "+tlabel(opts.modTopic)); return; }
   if(act==="module"){ const tid=($("#modsel")||{}).value||opts.modTopic; opts.modTopic=tid; lsSet(LS.opts,opts); startSession("module", pickModule(tid), "Тест модуля "+tlabel(tid)); return; }
-  if(act==="setopt"){ const k=el.dataset.k; let v=el.dataset.v; if(v==="true"||v==="false") v=(v==="true"); else if(/^\d+$/.test(v)) v=Number(v); opts[k]=v; lsSet(LS.opts,opts); if(k==="goal"||k==="tgoal") pushSync(); if(k==="lang") rebuildQB(); applyLook(); render(); return; }
+  if(act==="setopt"){ const k=el.dataset.k; let v=el.dataset.v; if(v==="true"||v==="false") v=(v==="true"); else if(/^\d+$/.test(v)) v=Number(v); opts[k]=v; lsSet(LS.opts,opts); if(k==="goal"||k==="tgoal") pushSync(); if(k==="lang"){ rebuildQB(); if(v==="en") loadTR().then(()=>{ rebuildQB(); render(); }).catch(e=>alert("Не вдалося завантажити переклади: "+e.message)); } applyLook(); render(); return; }
   if(act==="cadd"){ customDraft=null; customEdit=null; render(); return; }
   if(act==="csave"){ saveCustom(); return; }
   if(act==="cedit"){ customEdit=el.dataset.id; render(); scrollTop(); return; }
@@ -147,6 +148,7 @@ async function backupAct(act,el){
 }
 
 customQs=lsGet(LS.custom,[]); rebuildQB(); applyLook();
+if(opts.lang==="en") loadTR().then(()=>{ rebuildQB(); if(!S) render(); }).catch(()=>{});
 render();
 initStore(); setTimeout(sbOpenShared,400); addEventListener("hashchange",sbOpenShared); setTimeout(()=>{ if(store.mode!=="db") autoBackup(); },8000);
 if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});

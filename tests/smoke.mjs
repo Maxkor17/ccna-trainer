@@ -131,7 +131,7 @@ await step("Ansible: запуск плейбука, PLAY RECAP, прогрес",
   await act('[data-act="ansrun"]'); await has("PLAY RECAP"); await has("ok=1"); await home(); });
 await step("CCNA англійською: англійські питання, час на питання, мова відновлюється", async () => {
   const before = await page.evaluate(() => opts.lang);
-  await page.evaluate(() => { view = "home"; render(); }); await act('[data-act="ccna"][data-n="40"][data-en="1"]');
+  await page.evaluate(() => { view = "home"; render(); }); await act('[data-act="ccna"][data-n="40"][data-en="1"]'); await page.waitForFunction(() => typeof S !== "undefined" && S && S.en, null, { timeout: 8000 });
   const cyr = await page.evaluate(() => S.items.filter(q => /[а-яіїєґ]/i.test(q.q)).length); if (cyr) throw new Error("питань з кирилицею: " + cyr);
   await page.waitForTimeout(1100); await page.evaluate(() => { S.i = 1; render(); finishExam(); }); await has("Час на питання");
   const after = await page.evaluate(() => opts.lang); if (after !== before) throw new Error("мова не відновилась: " + after); await home(); });
@@ -221,6 +221,12 @@ print("REST", r.status_code)`; });
   const out = await page.evaluate(() => PYL.out); if (!/R1#[\s\S]*S2#[\s\S]*\+ntp server 10\.1\.1\.123[\s\S]*REST 200/.test(out)) throw new Error(out.slice(0, 400));
   const done = await page.evaluate(() => PYLAB.TASKS.filter(t => t.ok(PYL.lab)).map(t => t.id)); if (!done.includes("loop") || !done.includes("napalm") || !done.includes("rget")) throw new Error("завдання: " + done);
   await page.unroute(/cdn\.jsdelivr\.net\/npm\/pyodide@/); await home(); });
+await step("поширення пісочниці посиланням: упакування → відкриття", async () => {
+  page.once("dialog", d => d.accept());
+  const r = await page.evaluate(async () => { const d = { devs: { R1: { type: "router" }, S1: { type: "switch" }, PC1: { type: "pc", ip: "192.168.1.10", mask: "255.255.255.0", gw: "192.168.1.1" } }, links: [["R1", "Gi0/0", "S1", "Gi0/1"], ["PC1", "Fa0", "S1", "Fa0/1"]] };
+    const code = await packSb(d); history.replaceState(null, "", location.pathname + "#sb=" + code); await sbOpenShared(); await new Promise(r => setTimeout(r, 100));
+    return { len: code.length, view, devs: LAB && LAB.N ? Object.keys(LAB.N.dev).sort().join(",") : "" }; });
+  if (r.view !== "lab" || r.devs !== "PC1,R1,S1") throw new Error(JSON.stringify(r)); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));

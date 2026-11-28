@@ -32,6 +32,9 @@ function trq(q){ const t=window.QB_TR&&window.QB_TR[q.id]; if(!t) return q;
   ["items","pairs","e","cfg","cats"].forEach(k=>{ if(t[k]!=null) n[k]=t[k]; });
   if(t.parts&&q.parts) n.parts=q.parts.map((p,i)=>{ const r=t.parts[i]; return r? Object.assign({},p,{q:r.q,o:p.o.map((x,j)=>r.o&&r.o[j]?[r.o[j][0],r.o[j][1]]:x)}) : p; });
   if(t.intro) n.intro=t.intro; return n; }
+// Переклади (tr-*.js, ≈ 75 КБ) потрібні лише англійському режиму — вантажимо їх на вимогу.
+const TR_FILES=["tr-itn.js","tr-srwe.js","tr-srwe2.js","tr-ensa.js","tr-netacad.js","tr-figs.js","tr-notes.js","tr-extra.js"]; let trP=null;
+function loadTR(){ if(window.__trLoaded) return Promise.resolve(); if(!trP){ trP=Promise.all(TR_FILES.map(f=>new Promise((res,rej)=>{ const s=document.createElement("script"); s.src=f; s.onload=res; s.onerror=()=>rej(new Error("не завантажено "+f)); document.head.appendChild(s); }))).then(()=>{ window.__trLoaded=true; }); trP.catch(()=>{ trP=null; }); } return trP; }
 function rebuildQB(){ const base=opts.lang==="en"?QB_BASE.map(trq):QB_BASE; QB = base.concat(customQs.filter(q=>TMAP[q.t])); QMAP = Object.fromEntries(QB.map(q=>[q.id,q])); }
 const COURSES=[["ITN","Вступ до мереж"],["SRWE","Комутація, маршрутизація, бездротові мережі"],["ENSA","Корпоративні мережі, безпека, автоматизація"],["LNX","Після CCNA: Linux, DevOps, автоматизація, безпека"]];
 const GEN = window.GEN, CLI = window.CLI;
