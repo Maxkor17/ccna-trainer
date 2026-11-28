@@ -122,3 +122,4 @@ textarea.jt{min-height:64px;font:inherit;font-size:14px;background:var(--card);m
 .audbtn b{font-size:1.4em;min-width:1.4em}
 .audbtn.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 15%,transparent)}
 .audbtn.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 15%,transparent)}
+.audbtn:disabled{opacity:1;color:var(--text)}
