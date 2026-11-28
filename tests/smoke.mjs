@@ -227,6 +227,31 @@ await step("поширення пісочниці посиланням: упак
     const code = await packSb(d); history.replaceState(null, "", location.pathname + "#sb=" + code); await sbOpenShared(); await new Promise(r => setTimeout(r, 100));
     return { len: code.length, view, devs: LAB && LAB.N ? Object.keys(LAB.N.dev).sort().join(",") : "" }; });
   if (r.view !== "lab" || r.devs !== "PC1,R1,S1") throw new Error(JSON.stringify(r)); await home(); });
+await step("співбесіда: питання, диктування, автопозначки, повторення", async () => {
+  await page.evaluate(() => { class FakeRec { start() { setTimeout(() => { this.onresult && this.onresult({ resultIndex: 0, results: [Object.assign([{ transcript: "ну VLAN ділить мережу на широкомовні домени, між комутаторами trunk 802.1Q з тегом, native VLAN без тегу, а між VLAN маршрутизація через SVI" }], { isFinal: true })] }); }, 10); } stop() { setTimeout(() => this.onend && this.onend(), 5); } }
+    window.SpeechRecognition = FakeRec; localStorage.setItem("ccna.iv", JSON.stringify({ cats: ["net"], lvl: 1, n: 2, en: false })); opts.homeTab = "prac"; view = "home"; render(); });
+  await has("Технічна співбесіда"); await act('[data-act="interview"]'); await has("Співбесіди-ситуації");
+  await page.evaluate(() => { ivStart("q"); IV.items[0] = INTERVIEW.Q.find(q => q.id === "n-vlan"); render(); });
+  await act('[data-act="ivmic"]'); await page.waitForTimeout(80); await act('[data-act="ivmic"]'); await page.waitForTimeout(40);
+  const v = await page.$eval("#ivans", e => e.value); if (!/trunk/.test(v)) throw new Error("диктування не потрапило в поле: " + v);
+  await act('[data-act="ivdone"]'); await has("Еталонна відповідь"); await has("слів-паразитів");
+  const c = await page.evaluate(() => IV.checks.filter(Boolean).length); if (c < 4) throw new Error("автопозначок замало: " + c);
+  await page.locator('[data-act="ivchk"]:not(:checked)').first().click(); await act('[data-act="ivnext"]');
+  await page.evaluate(() => { IV.ans = ""; }); await act('[data-act="ivdone"]'); await act('[data-act="ivnext"]'); await has("Підсумок співбесіди");
+  const r = await page.evaluate(() => [prog["iv:n-vlan"] && prog["iv:n-vlan"].c, ivDue().length]); if (r[0] !== 1) throw new Error("SR: " + JSON.stringify(r));
+  await act('[data-act="ivquit"]'); await act('[data-act="ivsc"][data-id="sc-dhcp"]'); await has("Інтерв'юер"); await act('[data-act="ivdone"]'); await has("Що відповідає інтерв'юер"); await has("169.254.12.7");
+  await act('[data-act="ivnext"]'); await has("2/3"); await page.evaluate(() => { IV = null; opts.homeTab = "all"; }); await home(); });
+await step("перехід на v2.0: що змінюється, симуляція потрібної версії", async () => {
+  await page.evaluate(() => { opts.homeTab = "prac"; view = "home"; render(); }); await act('[data-act="bpdiff"]'); await has("Нове у v2.0"); await has("OSPFv3"); await has("Немає у списку тем v2.0");
+  const pbp = await page.evaluate(() => opts.bp); await act('[data-act="ccna"][data-n="40"][data-bp="v2.0"]'); const r = await page.evaluate(() => [S && S.bp, S && S.items.length, opts.bp]);
+  if (r[0] !== "v2.0" || r[1] !== 40 || r[2] !== pbp) throw new Error(JSON.stringify(r)); await page.evaluate(() => { S = null; opts.homeTab = "all"; }); await home(); });
+await step("фінішний тиждень: план за датою, позначки, чек-лист", async () => {
+  await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() + 6); opts.examDate = dkey(d); exams.unshift({ ts: Date.now(), n: 120, correct: 100, pct: 83, dur: 6600, per: {}, ccna: true, bp: bpVer(), en: true }); view = "home"; opts.homeTab = "today"; render(); });
+  await has("Фінішний тиждень"); await act('[data-act="final"]'); await has("Чек-лист готовності"); await has("День іспиту"); await has("Логістика"); await has("Темп ≤ 60 с");
+  const p = await page.evaluate(() => { const p = fwPlan(); return [p.items.length, p.items[0].k, p.items.filter(x => x.tasks.some(t => t[0] === "mock")).length]; }); if (p[0] !== 7 || p[1] !== 6 || p[2] < 2) throw new Error(JSON.stringify(p));
+  const cb = page.locator('[data-act="fwdone"]:not([disabled])').first(); await cb.click(); await page.waitForTimeout(60);
+  const f = await page.evaluate(() => Object.entries(flags).filter(([k, v]) => k.startsWith("fw:") && v.done).length); if (f < 1) throw new Error("позначка дня не збереглася");
+  await page.evaluate(() => { exams.shift(); opts.examDate = ""; opts.homeTab = "all"; }); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));

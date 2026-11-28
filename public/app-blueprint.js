@@ -148,7 +148,7 @@ VIEWS.bpview = { html: () => {
   return `<div class="card"><div class="row"><h2 class="grow" style="margin:0">🗺 Карта покриття CCNA</h2><button class="mini ghost" data-act="home">✕</button></div>
     <p class="small muted" style="margin:6px 0">Офіційні теми іспиту і що з них є в тренажері: питання, лаби, ваша готовність. v1.1 — останній день складання 02.02.2027, v2.0 — з 03.02.2027.${opts.examDate ? " Дата вашого іспиту: " + esc(new Date(opts.examDate).toLocaleDateString("uk-UA")) + "." : " Вкажіть дату іспиту в «Плані до екзамену», щоб версія обиралася автоматично."}</p>
     <div class="chips">${seg}</div>
-    <p class="small" style="margin:4px 0 0">Зараз: <b>${esc(BLUEPRINTS[ver].name)}</b> (${BLUEPRINTS[ver].until}). Тем з малим покриттям (&lt; 6 питань): ${thin.length}.</p></div>
+    <p class="small" style="margin:4px 0 0">Зараз: <b>${esc(BLUEPRINTS[ver].name)}</b> (${BLUEPRINTS[ver].until}). Тем з малим покриттям (&lt; 6 питань): ${thin.length}.</p><button class="mini" data-act="bpdiff" style="margin-top:6px">🔄 Що змінюється у v2.0</button></div>
   ${forecastCard(false)}
   ${cov.map(d => `<div class="card"><div class="row"><h2 class="grow" style="margin:0">${d.id}.0 ${esc(d.ua)} <span class="small muted">${Math.round(d.w * 100)}%</span></h2><b style="color:${pctC(d.ready)}">${Math.round(d.ready * 100)}%</b></div>
     <p class="small muted" style="margin:2px 0 6px">${esc(d.n)}</p>
@@ -161,3 +161,45 @@ ACTS.bptrain = (el, ev) => { if (ev) ev.preventDefault(); const [ver, id] = el.d
   const m = bpItemMatch(it); const list = QB.filter(q => m(textOf(q), q.t) && qtype(q) !== "flash"); const now = Date.now();
   const pri = q => { const r = prog[q.id]; return !r ? 1 : r.k === 0 ? 0 : r.d <= now ? 2 : 3; }; const pick = shuffle(list).sort((a, b) => pri(a) - pri(b)).slice(0, 20);
   startSession("train", shuffle(pick), id + " " + it[1].split(":")[0]); render(); scrollTop(); };
+// ---- Перехід v1.1 → v2.0: що з'являється, що посилюється, чого немає у списку тем ----
+// [тип, тема, пояснення, пункт v2.0, пункт v1.1]; тип: new — нова тема, up — посилена (діагностика замість «опишіть»), gone — немає у списку тем v2.0.
+const BP_DIFF = [
+  ["new", "OSPFv3", "Крім OSPFv2 потрібно налаштовувати й перевіряти OSPFv3 для IPv6 в одній області.", "3.3", "3.4"],
+  ["new", "Стан HSRP і VRRP", "v1.1 вимагав лише описати FHRP; у v2.0 — інтерпретувати стан HSRP і VRRP (show standby, show vrrp).", "3.4", "3.5"],
+  ["new", "DNS-записи", "Діагностика записів A, AAAA, CNAME, MX, NS, PTR — замість загального «роль DNS».", "4.4", "4.3"],
+  ["new", "SFTP і SCP", "Копіювання конфігурацій і образів ПЗ захищеними протоколами; TFTP/FTP окремим пунктом більше не згадуються.", "4.2", "4.9"],
+  ["new", "AAA-клієнт TACACS+/RADIUS", "Налаштування локальних користувачів і AAA-клієнта на пристрої, а не лише опис AAA.", "4.1", "5.8"],
+  ["new", "Storm control і RA guard", "Додано до безпеки L2 поряд із DHCP snooping, DAI і port security.", "4.7", "5.7"],
+  ["new", "Агентний AI і промпти", "Роль агентного AI в мережевих операціях і складання промптів до GenAI (персона, формат, інструкції).", "5.1", "6.4"],
+  
+  ["up", "Діагностика замість опису", "Багато пунктів сформульовано як troubleshoot: інтерфейси й кабелі, IPv4/IPv6, DHCPv4, статика, L2/L3. Тренуйте лаби «знайди несправність».", "2.4", "1.4"],
+  ["up", "Гіпервізори й контейнери", "У v1.1 віртуалізація йшла разом із VRF; у v2.0 — окремий пункт про гіпервізори, віртуальні машини й контейнери.", "1.2", "1.12"],
+  ["up", "Extended ping і packet capture", "Інструменти діагностики L2/L3 названо явно: show, ping, extended ping, traceroute, захоплення пакетів.", "2.4", null],
+  ["up", "Підключення клієнтів", "Дротові й бездротові клієнти на Windows, macOS, Linux — перевірка й діагностика.", "1.6", "1.10"],
+  ["up", "Порти до кінцевих вузлів", "VLAN, PoE, voice, LACP для ПК, принтерів, IoT, AP, VoIP і віртуальних хостів.", "2.2", "2.1"],
+  ["up", "DHCPv4 на IOS", "Діагностика клієнта, сервера й relay.", "1.7", "4.6"],
+  ["gone", "GUI WLC і режими AP", "Налаштування WLAN у GUI контролера, режими AP і підключення компонентів WLAN.", null, "2.9"],
+  ["gone", "QoS", "Класифікація, маркування, черги, policing і shaping.", null, "4.7"],
+  ["gone", "NTP", "NTP client/server окремим пунктом.", null, "4.2"],
+  ["gone", "TCP і UDP", "Порівняння TCP і UDP окремим пунктом.", null, "1.5"],
+  ["gone", "MAC learning і MAC-таблиця", "Опис комутації кадрів окремим пунктом.", null, "1.13"],
+  ["gone", "Програма безпеки й парольна політика", "Обізнаність, навчання, фізичний доступ; MFA, сертифікати, біометрія.", null, "5.2"],
+  ["gone", "SDN, REST і JSON як окремі пункти", "Контролерні мережі, northbound/southbound API, CRUD і JSON; у v2.0 є ширший пункт про підходи до керування й IaC.", "5.3", "6.3"]
+];
+function bpItem(ver, id) { return id ? BLUEPRINTS[ver].domains.flatMap(d => d.items).find(x => x[0] === id) : null; }
+VIEWS.bpdiff = { html: () => {
+  const c2 = bpCoverage("v2.0").flatMap(d => d.items), c1 = bpCoverage("v1.1").flatMap(d => d.items); const st = (C, id) => C.find(x => x.id === id);
+  const left = Math.ceil((new Date(BP_SWITCH) - new Date(dkey())) / 86400000); const ver = bpVer();
+  const row = ([k, t, e, n2, n1]) => { const x = k === "gone" ? st(c1, n1) : st(c2, n2); const vv = k === "gone" ? "v1.1" : "v2.0", id = k === "gone" ? n1 : n2;
+    return `<div class="kv" style="align-items:flex-start"><span><b>${esc(t)}</b> <span class="small muted">${n2 ? "v2.0 " + n2 : ""}${n2 && n1 ? " ← " : ""}${n1 ? "v1.1 " + n1 : ""}</span><br><span class="small">${esc(e)}</span>${x ? `<br><span class="small muted">у тренажері: питань ${x.n}${x.labs ? ` · лаб ${x.labsDone}/${x.labs}` : ""}${x.ready != null ? ` · готовність ${Math.round(x.ready * 100)}%` : ""}</span>` : ""}</span>
+      ${x && x.n ? `<button class="mini" data-act="bptrain" data-item="${vv}|${id}">▶</button>` : ""}</div>`; };
+  const grp = (k, h, note) => `<div class="card"><h2>${h}</h2>${note ? `<p class="small muted" style="margin:0 0 6px">${note}</p>` : ""}${BP_DIFF.filter(x => x[0] === k).map(row).join("")}</div>`;
+  return `<div class="card"><div class="row"><h2 class="grow" style="margin:0">🔄 Перехід на CCNA v2.0</h2><button class="mini ghost" data-act="home">✕</button></div>
+    <p class="small" style="margin:6px 0">${left > 0 ? `До переходу ${left} дн.: v1.1 можна складати до 02.02.2027, з 03.02.2027 — лише v2.0.` : "Іспит уже складається за v2.0."} Ваш іспит: <b>${esc(ver)}</b>${opts.examDate ? " (" + esc(new Date(opts.examDate).toLocaleDateString("uk-UA")) + ")" : " — вкажіть дату в «Плані до екзамену»"}.</p>
+    <p class="small muted" style="margin:0 0 8px">Ваги v2.0: ${SIM_DOMAINS["v2.0"].map(([n, w]) => n[0].toLowerCase() + n.slice(1) + " " + Math.round(w * 100) + "%").join(", ")}. Порівняння зроблено за переліком тем у тренажері; перед іспитом звіртеся з офіційним PDF Cisco «CCNA Exam Topics».</p>
+    <div class="row"><button class="primary" data-act="ccna" data-n="40" data-bp="v2.0">Коротка симуляція v2.0</button><button data-act="ccna" data-n="120" data-bp="v2.0">Повна v2.0</button><button data-act="ccna" data-n="40" data-bp="v1.1">Коротка v1.1</button></div></div>
+  ${grp("new", "🆕 Нове у v2.0", "Цього не було в v1.1 або було лише «опишіть». Пріоритет, якщо складаєте після 03.02.2027.")}
+  ${grp("up", "⬆ Посилено", "Тема лишилась, але тепер потрібно діагностувати, а не лише пояснити.")}
+  ${grp("gone", "➖ Немає у списку тем v2.0", "Цих пунктів немає в переліку тем v2.0, але Cisco попереджає, що на іспиті можуть траплятися й суміжні теми, а знання знадобляться на роботі. Якщо складаєте v2.0 — приділіть їм менше часу, але не викидайте.")}
+  <button class="ghost" data-act="bpview">🗺 Карта покриття</button>`; } };
+ACTS.bpdiff = () => { view = "bpdiff"; render(); scrollTop(); };

@@ -41,14 +41,16 @@ function renderHome(){
   <div class="card"><h2>Повтор помилок <span class="muted">(${rq})</span></h2>
     <p class="small muted" style="margin:0 0 8px">Питання з помилками повертаються через 1, 3, 7, 16 і 35 днів.</p>
     <button class="primary" data-act="review" ${rq?"":"disabled"}>${rq?"Повторити":"Немає питань на сьогодні"}</button></div>
+  ${fwCard()}
   ${(()=>{ const pi=planInfo(); return `<div class="card"><h2>🗓 План до екзамену</h2>${pi?`<p style="margin:0 0 6px">${pi.days>0?`До екзамену <b>${pi.days}</b> дн. (${esc(new Date(opts.examDate).toLocaleDateString("uk-UA"))})`:pi.days===0?"Екзамен сьогодні — успіху!":"Дата екзамену минула"} · готовність <b>${Math.round(pi.avg*100)}%</b></p>
     <p class="small muted" style="margin:0 0 6px">Нових питань лишилося: ${pi.unseen}, до повторення сьогодні: ${pi.due}. Щоб устигнути, робіть ≈ <b>${pi.perDay}</b> питань на день${pi.days>3?" (останні 3 дні — лише повторення й симуляції)":""}.</p>
     ${pi.weak.length?`<p class="small" style="margin:0 0 8px">Найслабші теми: ${pi.weak.map(w=>`${tlabel(w.id)} ${esc(TMAP[w.id].name)} — ${Math.round(w.p*100)}%`).join("; ")}</p>`:""}
-    <div class="row"><button class="primary" data-act="plan">Почати план на сьогодні</button><input type="date" id="examdate" value="${esc(opts.examDate)}" style="width:auto"></div>`
+    <div class="row"><button class="primary" data-act="plan">Почати план на сьогодні</button><button data-act="final">${pi.days>=0&&pi.days<=14?"🏁 Фінішний тиждень":"✅ Чек-лист готовності"}</button><input type="date" id="examdate" value="${esc(opts.examDate)}" style="width:auto"></div>`
     :`<p class="small muted" style="margin:0 0 8px">Вкажіть дату екзамену — тренажер щодня складатиме набір із повторень і найслабших тем і покаже, чи встигаєте.</p><input type="date" id="examdate" style="width:auto">`}</div>`; })()}
 `,
    prac:()=>`${(()=>{ const all=ccAll(), due=ccDue(); return `<div class="card"><div class="row"><h2 class="grow" style="margin:0">🃏 Картки команд</h2><span class="small muted">${all.length} карток · на сьогодні ${due.length}</span></div><p class="small muted" style="margin:6px 0 8px">Команди, які ви успішно вводили в лабах, повертаються як «введіть команду, щоб…» з інтервальним повторенням. CLI запам'ятовується руками.</p><button class="primary" data-act="ccrun" ${due.length?"":"disabled"}>${due.length?"Повторити "+Math.min(20,due.length):all.length?"Усе повторено на сьогодні":"Пройдіть лабу — картки з'являться"}</button></div>`; })()}
   <div class="card"><h2>🎧 Аудіорежим</h2><p class="small muted" style="margin:0 0 8px">Тренажер читає питання й варіанти вголос, ви відповідаєте великими кнопками, потім чуєте правильну відповідь і пояснення. Для дороги й прогулянок: 20 питань із повторень і вибраних тем.</p><button class="primary" data-act="audstart">▶ Слухати</button></div>
+  <div class="card"><h2>🎤 Технічна співбесіда</h2><p class="small muted" style="margin:0 0 8px">${INTERVIEW.Q.length} відкритих питань (мережі, Linux, Windows/AD, DevOps, безпека, поведінкові) і ${INTERVIEW.SC.length} співбесіди-ситуації. Відповідайте вголос чи текстом, звіряйтеся з ключовими пунктами й еталоном. ${ivDue().length?"На повторення: "+ivDue().length:""}</p><button class="primary" data-act="interview">▶ Почати</button></div>
 <div class="card"><h2>Тест модуля</h2>
     <p class="small muted" style="margin:0 0 8px">20 питань по одному модулю: спершу 🎓 NetAcad і слабкі місця, потім нові та розрахунки.</p>
     <select class="full" id="modsel">${COURSES.map(([g])=>`<optgroup label="${g}">${TOPICS.filter(t=>t.g===g).map(t=>`<option value="${t.id}" ${opts.modTopic===t.id?"selected":""}>${g} ${t.n}. ${esc(t.name)} (${QB.filter(q=>q.t===t.id).length})</option>`).join("")}</optgroup>`).join("")}</select>
@@ -63,9 +65,10 @@ function renderHome(){
     <p class="small muted" style="margin:6px 0 8px">Налаштовуйте пристрої командами IOS: від одного комутатора до мережі з маршрутизатором і ПК (ping, tracert).</p>
     <button class="primary" data-act="labs">Відкрити лаби</button></div>
   <div class="card"><h2>🎯 Симуляція CCNA 200-301 <span class="small muted">${esc(bpVer())}</span></h2>
-    <p class="small muted" style="margin:0 0 8px">Як справжній іспит: питання з усіх курсів за вагами доменів Cisco ${esc(bpVer())} (${SIM_DOMAINS[bpVer()].map(([n,w])=>n.toLowerCase()+" "+Math.round(w*100)+"%").join(", ")}), без повернення назад, бал за шкалою 300–1000 (прохідний ≈ 825).</p>
+    <p class="small muted" style="margin:0 0 8px">Як справжній іспит: питання з усіх курсів за вагами доменів Cisco ${esc(bpVer())} (${SIM_DOMAINS[bpVer()].map(([n,w])=>n[0].toLowerCase()+n.slice(1)+" "+Math.round(w*100)+"%").join(", ")}), без повернення назад, бал за шкалою 300–1000 (прохідний ≈ 825).</p>
     <div class="row"><button class="primary" data-act="ccna" data-n="120">Повна: 120 питань / 120 хв</button><button data-act="ccna" data-n="40">Коротка: 40 / 40 хв</button></div>
     <div class="row" style="margin-top:6px"><button data-act="ccna" data-n="120" data-en="1">🇬🇧 Повна англійською</button><button data-act="ccna" data-n="40" data-en="1">🇬🇧 Коротка англійською</button></div>
+    <div class="row" style="margin-top:6px"><button class="linkbtn" data-act="bpdiff">🔄 Що змінюється у v2.0 і симуляції обох версій</button></div>
     <p class="small muted" style="margin:6px 0 0">Справжній іспит — лише англійською. В англійському режимі питання й варіанти англійські, а в результатах видно час на кожне питання.</p></div>
   <div class="card"><h2>Екзамен</h2>
     <p class="small muted" style="margin:0 0 8px">Без підказок, 1 хв на питання, розбір наприкінці.</p>
