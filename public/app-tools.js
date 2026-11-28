@@ -65,7 +65,7 @@ async function ghPut(repo,br,path,text,tok){ const url="https://api.github.com/r
 async function pushVault(silent){ const m=$("#obmsg"); const say=t=>{ if(m) m.textContent=t; };
   const tok=(()=>{ try{ return localStorage.getItem(GH_TOK)||""; }catch(e){ return ""; } })(); const repo=opts.obRepo; if(!tok||!repo){ if(!silent) say("Спершу вкажіть репозиторій і токен з правом запису (розділ «Імпорт з GitHub»)"); return; }
   const dir=(opts.obWriteDir||"CCNA/Тренажер").replace(/^\/|\/$/g,""); const wk=typeof reviewWeek==="function"?reviewWeek():null;
-  try{ if(!silent) say("Записую у vault…"); let br=opts.obBranch; if(!br) br=(await ghJson("https://api.github.com/repos/"+repo,tok)).default_branch;
+  try{ if(!silent) say("Записую у vault…"); if(typeof loadLazy==="function") await loadLazy("tools").catch(()=>{}); let br=opts.obBranch; if(!br) br=(await ghJson("https://api.github.com/repos/"+repo,tok)).default_branch;
     const files=[[dir+"/Слабкі місця.md",obsidianMd()],[dir+"/Картки з помилок.md",errCardsMd()]]; if(wk) files.push([dir+"/Тиждень "+wk+".md",weekMd(wk)]); if(typeof vaultExtraFiles==="function") files.push(...vaultExtraFiles(dir));
     const res=[]; for(const [p,t] of files) res.push(await ghPut(repo,br,p,t,tok));
     opts.obPushed=Date.now(); lsSet(LS.opts,opts); const ch=res.filter(x=>x!=="same").length; if(!silent) say(ch?"Записано у "+repo+"/"+dir+": змінених файлів "+ch+" з "+res.length:"У vault усе актуально — змін немає"); }
