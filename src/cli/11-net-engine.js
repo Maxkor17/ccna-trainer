@@ -95,7 +95,9 @@ function Net(def){
       if(ia&&ib&&!ia.shutdown&&!ib.shutdown&&operTrunk(ia)&&operTrunk(ib)&&ia.nativeVlan!==ib.nativeVlan){
         msgs.push([l.a,"%CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on "+longIf(l.pa)+" ("+ia.nativeVlan+"), with "+l.b+" "+longIf(l.pb)+" ("+ib.nativeVlan+")."]);
         msgs.push([l.b,"%CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on "+longIf(l.pb)+" ("+ib.nativeVlan+"), with "+l.a+" "+longIf(l.pa)+" ("+ia.nativeVlan+")."]); } }
+    try{ msgs.push(...N.debugMsgs()); }catch(e){}
     const out=[]; for(const m of msgs){ const k=m.join("|"); if(!N.seenMsgs.has(k)){ N.seenMsgs.add(k); out.push(m); } }
+    if(N._dq&&N._dq.length) out.push(...N._dq.splice(0));
     { const t=new Date(); const st=t.toLocaleString("en-US",{month:"short"})+" "+String(t.getDate()).padStart(2," ")+" "+t.toTimeString().slice(0,8)+"."+String(t.getMilliseconds()).padStart(3,"0");
       for(const [dn,txt] of out){ const d=N.dev[dn]; if(d&&!isHost(d)&&d.type!=="hub"){ const lb=d.logBuf||[]; if(lb.length&&lb[lb.length-1].endsWith(": "+txt)) continue; d.logBuf=lb.concat(["*"+st+": "+txt]).slice(-60); } } }
     N.seenMsgs=new Set([...N.seenMsgs].filter(k=>msgs.some(m=>m.join("|")===k)));
@@ -394,6 +396,29 @@ function Net(def){
         const mac=e.mac||(isHost(N.dev[e.dev])?macOf(e.dev,"Fa0"):macOf(e.dev,e.ifn)); const k=v+"|"+mac; if(seen.has(k)) continue; seen.add(k); rows.push([v,mac,first.out]); } }
     rows.sort((a,b)=>a[0]-b[0]||a[2].localeCompare(b[2],undefined,{numeric:true})); for(const x of s.macStatic||[]){ const k=x.v+"|"+x.mac; const ix=rows.findIndex(r=>r[0]+"|"+r[1]===k); if(ix>=0) rows.splice(ix,1); rows.unshift([x.v,x.mac,x.port,"STATIC"]); }
     return "          Mac Address Table\n-------------------------------------------\n\nVlan    Mac Address       Type        Ports\n----    -----------       --------    -----\n"+rows.map(r=>String(r[0]).padStart(4)+"    "+r[1].padEnd(18)+(r[3]||"DYNAMIC").padEnd(12)+r[2]).join("\n")+"\nTotal Mac Addresses for this criterion: "+rows.length; };
+  // ---------- debug: зміни стану OSPF-сусідств і STP між перерахунками ----------
+  N._dbgPrev={};
+  N.debugMsgs=()=>{ const M=[];
+    for(const d of Object.values(N.dev)){ if(isHost(d)||d.type==="hub") continue; const dn=d.devName;
+      if(d.dbgOspf&&d.ospf){ const P=N._dbgPrev[dn+"|ospf"]||{}; const cur={};
+        for(const n of N.ospfNeighbors(dn)){ const me=N.ospfRole(dn,n.myIf), he=N.ospfRole(n.dev,n.ifn); const st=(me==="DROTHER"&&he==="DROTHER")?"2WAY":"FULL"; cur[n.rid+"|"+n.myIf]=st;
+          if(P[n.rid+"|"+n.myIf]!==st){ const I="*OSPF-ADJ "+n.myIf+": "; M.push([dn,I+"2 Way Communication to "+n.rid+", state 2WAY"]);
+            if(st==="FULL") M.push([dn,I+"Nbr "+n.rid+": Prepare dbase exchange"],[dn,I+"Send DBD to "+n.rid+" seq 0x"+(0x1000+n.rid.split(".").reduce((a,x)=>a+Number(x),0)).toString(16)+" opt 0x52 flag 0x7 len 32"],[dn,I+"Rcv DBD from "+n.rid+" seq 0x"+(0x2000+n.rid.split(".").reduce((a,x)=>a+Number(x),0)).toString(16)+" opt 0x52 flag 0x2 len 152 mtu 1500 state EXCHANGE"],[dn,I+"Exchange Done with "+n.rid],[dn,I+"Synchronized with "+n.rid+", state FULL"]);
+            else M.push([dn,I+"Nbr "+n.rid+" is DROTHER and so am I: staying in 2WAY (no full adjacency between DROTHERs)"]); } }
+        for(const k of Object.keys(P)) if(!cur[k]){ const [rid,ifn]=k.split("|"); M.push([dn,"*OSPF-ADJ "+ifn+": Neighbor "+rid+" is dead, state DOWN"],[dn,"%OSPF-5-ADJCHG: Process "+d.ospf.pid+", Nbr "+rid+" on "+longIf(ifn)+" from FULL to DOWN, Neighbor Down: Dead timer expired"]); }
+        N._dbgPrev[dn+"|ospf"]=cur;
+        for(const l of N.ospfDebug(d).split("\n")) if(/Mismatch|mismatch|DUP_RTRID|passive|ACL|MTU|authentication/i.test(l)) M.push([dn,l]); }
+      else delete N._dbgPrev[dn+"|ospf"];
+      if(d.dbgStp&&d.type==="switch"){ const P=N._dbgPrev[dn+"|stp"]||{}; const cur={};
+        for(const v of Object.keys(d.vlans).map(Number)){ const st=(N.stp(v)||{})[dn]; if(!st) continue; const V="VLAN"+String(v).padStart(4,"0");
+          cur[v+"|root"]=st.rootName; if(P[v+"|root"]!==undefined&&P[v+"|root"]!==st.rootName) M.push([dn,"STP: "+V+" new root is "+(st.root&&st.root.p)+", "+(st.root&&st.root.mac)+(st.rootPort?" on port "+st.rootPort:" (this bridge)")+", cost "+st.cost]);
+          for(const [p,r] of Object.entries(st.roles||{})){ const k=v+"|"+p; const val=r[0]+"/"+r[1]; cur[k]=val; const was=P[k];
+            if(was!==undefined&&was!==val){ const [wr]=was.split("/"); if(wr!==r[0]) M.push([dn,"STP: "+V+" "+p+" role "+wr+" -> "+r[0]]); M.push([dn,"STP: "+V+" "+p+" -> "+({FWD:"forwarding",BLK:"blocking",LRN:"learning",LIS:"listening",BKN:"broken (inconsistent)"}[r[1]]||r[1])]); }
+            else if(was===undefined&&P[v+"|root"]!==undefined) M.push([dn,"STP: "+V+" "+p+" -> "+({FWD:"listening → learning → forwarding",BLK:"blocking"}[r[1]]||r[1])]); } }
+        N._dbgPrev[dn+"|stp"]=cur; }
+      else delete N._dbgPrev[dn+"|stp"]; }
+    return M; };
+  N.dbgDhcp=(srvDev,lines)=>{ const d=N.dev[srvDev]; if(!d||!d.dbgDhcp) return; N._dq=N._dq||[]; for(const l of lines) N._dq.push([srvDev,l]); };
   N.ospfDebug=s=>{ ospfSegments(); const mine=N.ospfIssues.filter(x=>x.startsWith(s.devName+" ↔ ")); if(!s.ospf) return "OSPF не запущено";
     if(!mine.length) return "*OSPF-ADJ: Сусідства на "+s.devName+" встановлюються без помилок ("+N.ospfNeighbors(s.devName).length+" сусід(ів))";
     return mine.map(x=>{ const [pair,why]=x.split(": "); const nb=pair.split(" ↔ ")[1];
@@ -413,7 +438,9 @@ function Net(def){
     for(const [ip,b] of Object.entries(d.dhcp.bind)) if(b.client===client&&b.pool===pool.name) return ip;
     const lo=ipToN(pool.net)+1, hi=((ipToN(pool.net)|~ipToN(pool.mask))>>>0)-1; const own=new Set(Object.values(d.ifs).map(i=>i.ip).filter(Boolean));
     const taken=new Set(Object.values(N.dev).filter(x=>isHost(x)&&x.ip&&x.name!==client).map(x=>x.ip));
+    const infra=new Set(Object.values(N.dev).filter(x=>!isHost(x)&&x!==d).flatMap(x=>Object.values(x.ifs||{}).flatMap(i=>[i.ip].concat(Object.values(i.hsrp||{}).map(h=>h.ip),Object.values(i.vrrp||{}).map(h=>h.ip)))).filter(Boolean));
     for(let n=lo;n<=hi;n++){ const ip=n2ip(n); if(d.dhcp.excl.some(([a,b])=>n>=ipToN(a)&&n<=ipToN(b))) continue; if(d.dhcp.bind[ip]||own.has(ip)||taken.has(ip)) continue;
+      if(infra.has(ip)){ d.dhcp.conflicts=d.dhcp.conflicts||{}; if(!d.dhcp.conflicts[ip]){ d.dhcp.conflicts[ip]=Date.now(); N._dq=N._dq||[]; N._dq.push([d.devName,"%DHCPD-4-PING_CONFLICT: DHCP address conflict:  server pinged "+ip+"."]); } continue; }
       d.dhcp.bind[ip]={client,pool:pool.name,cid:"0100.50"+(79+client.length).toString(16)+"."+(client.charCodeAt(client.length-1)).toString(16).padStart(2,"0")+"11.22"}; return ip; }
     return null; }
   N.dhcp=pcName=>{
@@ -426,12 +453,18 @@ function Net(def){
     for(const e of dom){ if(e.kind==="pc") continue; const d=N.dev[e.dev]; const ifc=d.ifs[e.ifn]; if(!ifc||!ifc.ip||ifc.ip!==e.ip) continue; const gi=ifc.ip; let srv=null;
       const local=poolFor(d,gi); if(local) srv={dev:e.dev,pool:local};
       else if(ifc.helper&&ifc.helper.length){ for(const h of ifc.helper){ const c={hops:[],ttl:16}; const f=originate(e.dev,{src:gi,dst:h,proto:"udp",dport:67,sport:67},c); if(!f.ok){ why="DHCP relay "+e.dev+" → "+h+": "+f.why; continue; }
-          const sd=N.dev[f.dev]; const p=poolFor(sd,gi); if(!p){ why="DHCP-сервер "+h+" ("+f.dev+") не має пулу для мережі "+gi+"/"+maskLen(ifc.mask); continue; }
+          const sd=N.dev[f.dev]; const p=poolFor(sd,gi); if(!p){ N.dbgDhcp(f.dev,["DHCPD: DHCPDISCOVER received from client through relay "+gi+".","DHCPD: there is no pool for "+gi+"."]); why="DHCP-сервер "+h+" ("+f.dev+") не має пулу для мережі "+gi+"/"+maskLen(ifc.mask); continue; }
           const b=originate(f.dev,{src:f.pkt.dst,dst:gi,proto:"udp",dport:67,sport:67,reply:true},{hops:[],ttl:16}); if(!b.ok){ why="Відповідь DHCP-сервера не доходить до relay "+gi+": "+b.why; continue; } srv={dev:f.dev,pool:p}; break; } }
-      if(srv){ const sb=snoopBlock(e,d,ifc); if(sb){ why=sb; continue; } const ip=allocate(N.dev[srv.dev],srv.pool,pcName); if(ip) for(const h of e.path||[]){ const sw=N.dev[h.dev]; const sp=sw&&sw.snoop; if(sp&&sp.on&&sp.vlans.includes(h.v)&&h.inp&&isPhys(h.inp)) sp.bind[pcMac]={mac:pcMac,ip,vlan:h.v,port:h.inp}; } if(!ip) return {ok:false,why:"Пул "+srv.pool.name+" на "+srv.dev+" вичерпано або всі адреси виключено"}; Object.assign(pc,{ip,mask:srv.pool.mask,gw:srv.pool.gw||null,dns:srv.pool.dns||null,opt43:srv.pool.opt43||null,dhcpSrv:N.dev[srv.dev]===d?gi:(ifc.helper[0])}); return {ok:true}; }
+      if(srv){ const sb=snoopBlock(e,d,ifc); if(sb){ why=sb; continue; } const ip=allocate(N.dev[srv.dev],srv.pool,pcName); if(ip) for(const h of e.path||[]){ const sw=N.dev[h.dev]; const sp=sw&&sw.snoop; if(sp&&sp.on&&sp.vlans.includes(h.v)&&h.inp&&isPhys(h.inp)) sp.bind[pcMac]={mac:pcMac,ip,vlan:h.v,port:h.inp}; } if(!ip) return {ok:false,why:"Пул "+srv.pool.name+" на "+srv.dev+" вичерпано або всі адреси виключено"}; { const cid=("01"+pcMac.replace(/\./g,"")).match(/.{1,4}/g).join("."); const via=N.dev[srv.dev]===d?" on interface "+longIf(e.ifn):" through relay "+gi; N.dbgDhcp(srv.dev,["DHCPD: DHCPDISCOVER received from client "+cid+via+".","DHCPD: Allocate an address without class information ("+ip+")","DHCPD: Sending DHCPOFFER to client "+cid+" ("+ip+").","DHCPD: DHCPREQUEST received from client "+cid+".","DHCPD: Sending DHCPACK to client "+cid+" ("+ip+")."]); }
+      Object.assign(pc,{ip,mask:srv.pool.mask,gw:srv.pool.gw||null,dns:srv.pool.dns||null,opt43:srv.pool.opt43||null,dhcpSrv:N.dev[srv.dev]===d?gi:(ifc.helper[0])}); return {ok:true}; }
     }
     pc.ip=null; return {ok:false,why:why||"Жоден DHCP-сервер не відповів у цьому сегменті: на шлюзі немає пулу для цієї мережі і не задано ip helper-address"}; };
   N.release=pcName=>{ const pc=N.dev[pcName]; const mac=macOf(pcName,"Fa0"); for(const d of Object.values(N.dev)) if(d.snoop&&d.snoop.bind) delete d.snoop.bind[mac]; for(const d of Object.values(N.dev)) if(!isHost(d)&&d.dhcp) for(const [ip,b] of Object.entries(d.dhcp.bind)) if(b.client===pcName) delete d.dhcp.bind[ip]; pc.ip=null; pc.mask=null; pc.gw=null; };
+  N.cdpNbrs=(dn)=>{ const s=N.dev[dn]; const R=[]; if(!s||isHost(s)) return R;
+    for(const l of N.links){ let me,ot,po; if(l.a===dn){me=l.pa;ot=l.b;po=l.pb;} else if(l.b===dn){me=l.pb;ot=l.a;po=l.pa;} else continue;
+      const od=N.dev[ot]; if(isHost(od)||od.type==="hub"||(s.svc&&s.svc.cdp===false)||s.ifs[me].cdpOff||(od.svc&&od.svc.cdp===false)||(od.ifs[po]&&od.ifs[po].cdpOff)||s.ifs[me].shutdown||(od.ifs[po]&&od.ifs[po].shutdown)) continue;
+      R.push({dev:ot,me,po,type:od.type,l3:!!od.l3}); } return R; };
+  N.mgmtIp=(dn)=>{ const d=N.dev[dn]; if(!d) return null; const ifs=Object.values(d.ifs).filter(i=>i.ip&&!i.shutdown); const v=ifs.find(i=>i.svi)||ifs.find(i=>i.loop)||ifs[0]; return v?v.ip:null; };
   N.cdp=(s)=>{ let o="Capability Codes: R - Router, S - Switch, H - Host\n\nDevice ID        Local Intrfce     Holdtme    Capability  Platform  Port ID\n";
     for(const l of N.links){ let me,pm,ot,po; if(l.a===s.devName){me=l.pa;ot=l.b;po=l.pb;} else if(l.b===s.devName){me=l.pb;ot=l.a;po=l.pa;} else continue;
       const od=N.dev[ot]; if(isHost(od)||od.type==="hub"||(s.svc&&s.svc.cdp===false)||s.ifs[me].cdpOff||(od.svc&&od.svc.cdp===false)||(od.ifs[po]&&od.ifs[po].cdpOff)||s.ifs[me].shutdown||(od.ifs[po]&&od.ifs[po].shutdown)) continue;

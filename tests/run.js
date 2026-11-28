@@ -2,7 +2,7 @@
 // Запуск: node tests/run.js  (exit code 1 при будь-якій помилці)
 const path=require("path"); const P=f=>path.join(__dirname,"..","public",f);
 global.window={}; global.btoa=s=>Buffer.from(s).toString("base64"); global.atob=s=>Buffer.from(s,"base64").toString();
-const files=["wlc","bash","questions-linux","questions-itn","questions-srwe","questions-notes","questions-extra","questions-srwe2","questions-ensa","questions-netacad","questions-ensa2","questions-v2","questions-simlet","questions-more","questions-practice","questions-figs","questions-en","glossary","cheats","pairs","gen","gen2","gen3","api","cli"];
+const files=["wlc","bash","questions-linux","questions-itn","questions-srwe","questions-notes","questions-extra","questions-srwe2","questions-ensa","questions-netacad","questions-ensa2","questions-v2","questions-simlet","questions-more","questions-dnd","questions-auto","questions-practice","questions-figs","questions-en","glossary","cheats","pairs","gen","gen2","gen3","api","cli"];
 for(const f of files) require(P(f+".js"));
 for(const f of require("fs").readdirSync(path.join(__dirname,"..","public")).filter(f=>/^tr-.*\.js$/.test(f))) require(P(f));
 let fails=0, checks=0; const fail=m=>{ fails++; console.error("✗ "+m); }; const ok=(c,m)=>{ checks++; if(!c) fail(m); };
@@ -18,6 +18,7 @@ for(const b of banks) for(const q of window[b]){ total++;
   if(t==="mc"){ ok(Array.isArray(q.o)&&q.o.length>=2,q.id+": мало варіантів"); ok(Array.isArray(q.a)&&q.a.length&&q.a.every(i=>i>=0&&i<q.o.length),q.id+": хибний індекс відповіді"); ok(q.o.every(o=>Array.isArray(o)&&o[0]),q.id+": порожній варіант"); }
   else if(t==="order") ok(Array.isArray(q.items)&&q.items.length>=3,q.id+": order без items");
   else if(t==="match") ok(Array.isArray(q.pairs)&&q.pairs.length>=2,q.id+": match без pairs");
+  else if(t==="cat") ok(Array.isArray(q.cats)&&q.cats.length>=2&&Array.isArray(q.items)&&q.items.length>=q.cats.length&&q.items.every(x=>Array.isArray(x)&&x[1]>=0&&x[1]<q.cats.length)&&q.cats.every((_,ci)=>q.items.some(x=>x[1]===ci)),q.id+": некоректний cat");
   else if(t==="cmd") ok(Array.isArray(q.ans)&&q.ans.length,q.id+": cmd без ans");
   else if(t==="fill") ok(/\[\[.+?\]\]/.test(q.cfg||""),q.id+": fill без пропусків");
   else if(t==="simlet") ok(Array.isArray(q.ex)&&q.ex.length&&q.ex.every(x=>x[0]&&x[1])&&Array.isArray(q.parts)&&q.parts.length>=2&&q.parts.every(p=>p.q&&p.o.length>=2&&p.a.length&&p.a.every(i=>i>=0&&i<p.o.length)),q.id+": некоректний simlet");
@@ -75,6 +76,21 @@ for(const sc of window.BASH.SCEN){ const ses=window.BASH.start(sc); ok(!sc.check
   const r=A.TASKS.filter(t=>!t.ok(L)).map(t=>t.id); ok(!r.length,"Ansible: не виконано "+r.join(","));
   { const L2=A.newLab(); const r2=A.run(L2,"- hosts: R1\n  gather_facts: false\n  tasks:\n    - ios_config:\n        lines: |\n          ntp server 1.1.1.1\n          ip domain-name x.lab\n"); ok(r2.ok&&(L2.N.dev.R1.svc.ntp||[]).includes("1.1.1.1"),"Ansible: багаторядковий lines: | розбивається на команди"); }
   ok(!A.run(L,"- hosts: S1\n  gather_facts: false\n  tasks:\n    - ios_command:\n        commands: configure terminal\n").ok,"Ansible: ios_command не має приймати conf t"); }
+// ---- експорт лаб для containerlab ----
+{ global.TextEncoder=require("util").TextEncoder; global.Blob=require("buffer").Blob; global.CLI=window.CLI; require(P("labexport.js")); const X=window.LABEXPORT;
+  ok(X.crc32(new TextEncoder().encode("123456789"))===0xCBF43926,"CRC32 еталон");
+  for(const sc of window.CLI.NETSCEN){ try{ const N=window.CLI.startNet(sc).N; const r=X.build(sc,N); const names=r.files.map(f=>f[0]); const nets=Object.keys(N.dev).filter(d=>/switch|router/.test(N.dev[d].type));
+      ok(names.includes("topology.clab.yml")&&names.includes("README.md")&&names.includes("solution.md")&&nets.every(d=>names.includes("configs/"+d+".cfg.partial")),"експорт "+sc.id+": усі файли");
+      const y=r.files[1][1]; ok(N.links.every(l=>y.includes('"'+l.a+":")&&y.includes('"'+l.b+":")),"експорт "+sc.id+": усі лінки в topology.clab.yml");
+      ok(!/(Gi|Fa|GigabitEthernet|FastEthernet)\d+\/\d+/.test(r.files.filter(f=>/configs\//.test(f[0])).map(f=>f[1]).join("\n").split("\n").filter(l=>!/^!/.test(l)).join("\n")),"експорт "+sc.id+": у конфігах лишились порти тренажера"); }
+    catch(e){ ok(false,"експорт "+sc.id+": "+e.message); } } }
+// ---- картки команд ----
+{ require(P("cmdcards.js")); const CC=window.CMDCARDS; const C=window.CLI;
+  const sample={"<n>":"10","<ip>":"10.1.1.1","<mask>":"255.255.255.0","<if>":"g0/1","<w>":"TEST","<list>":"10","<v6>":"2001:db8::1","<rest>":"permit ip any any"};
+  const special={"if|ipv6 address <w>":"ipv6 address 2001:db8::1/64","config|ipv6 route <w> <v6>":"ipv6 route ::/0 2001:db8::1","if|channel-group <n> mode <w>":"channel-group 1 mode active","if|switchport port-security violation <w>":"switchport port-security violation restrict","config|spanning-tree mode <w>":"spanning-tree mode rapid-pvst","line|transport input <rest>":"transport input ssh","config|logging trap <w>":"logging trap warnings","config|snmp-server community <w> <w>":"snmp-server community X ro","raguard|device-role <w>":"device-role host","if|ip access-group <w> <w>":"ip access-group 1 in","config|aaa authentication login <w> <rest>":"aaa authentication login default group tacacs+ local","dhcp|option 43 hex <w>":"option 43 hex f104.0a0a.0a05","dhcp6|address prefix <w>":"address prefix 2001:db8::/64","if|storm-control broadcast level <w>":"storm-control broadcast level 20","config|errdisable recovery cause <w>":"errdisable recovery cause psecure-violation","if|tunnel source <w>":"tunnel source g0/1","config|ip nat inside source list <w> interface <if> overload":"ip nat inside source list 1 interface g0/1 overload","if|duplex <w>":"duplex full","router|network <ip> <ip> area <w>":"network 10.0.0.0 0.0.0.255 area 0","if|ipv6 ospf <n> area <w>":"ipv6 ospf 1 area 0"};
+  for(const [k,d] of Object.entries(CC.D)){ const [mode,pat]=k.split("|"); const cmd=special[k]||pat.split(" ").map(t=>sample[t]||t).join(" "); const c=C.canonOf(mode,cmd);
+    ok(!!c&&c.pat===pat,"картка "+k+": шаблону немає в граматиці (отримано "+(c&&c.pat)+")"); ok(window.TOPICS_IDS?true:topicIds.has(d[0]),"картка "+k+": тема "+d[0]); ok(!CYR.test(d[2]),"картка "+k+": кирилиця в EN");
+    if(c){ const q=CC.card({mode,pat,full:c.full,lab:"X"},false); ok(q&&!/\{\d\}|…/.test(q.q)&&q.ans[0]===c.full,"картка "+k+": текст «"+(q&&q.q)+"»"); } } }
 // ---- злиття денних записів (журнал і час між пристроями) ----
 { const src=app.match(/function mergeDay\(o,v\)\{[\s\S]*?\n  return r; \}/); ok(!!src,"mergeDay не знайдено в app-*.js");
   if(src){ const mergeDay=new Function(src[0]+"; return mergeDay;")(); const r=mergeDay({n:5,c:4,m:10,log:[{ts:1,min:30,k:"pt"}],note:"a",jts:5},{n:3,c:3,m:12,log:[{ts:1,min:30,k:"pt"},{ts:2,min:15,k:"na"}],note:"b",jts:9});

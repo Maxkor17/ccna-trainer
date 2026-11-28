@@ -4,6 +4,18 @@
 
 Також є: root/loop guard, storm control, RA guard, VRRP, OSPFv3, AAA з TACACS+/RADIUS, SCP/SFTP, GRE, QoS (MQC, LLQ, mls qos), DHCP option 43, DNS-сервер і `nslookup`/`dig`, розширений `ping`, `show logging`, фільтри `| include/section/begin/count` і Linux/macOS-команди на ПК. CLI-лаби є для кожного модуля SRWE і ENSA. Окрема лаба Ansible (ENSA14) виконує YAML-плейбуки з `ios_command`/`ios_config` на пристроях симулятора. Troubleshooting має режим тікетів: скарга користувача, таймер і оцінка. Додано симлети з аналізом захоплення пакетів, симуляцію CCNA англійською з часом на кожне питання, вкладки головної, інтервальне повторення лаб (7 → 21 → 60 днів) і адаптивну складність. Картки можна імпортувати прямо з GitHub-репозиторію vault. Помилки JavaScript записуються в розділ «На виправлення».
 
+Додано пізніше:
+- лаба «Невідома мережа» (CDP discovery);
+- команди `debug ip ospf adj`, `debug ip dhcp server events` і `debug spanning-tree events`;
+- експорт будь-якої лаби в zip для containerlab (Cisco IOL), GNS3 або EVE-NG;
+- питання «перетягни в категорію»;
+- картки команд із власних лаб;
+- запис нотаток і карток у vault через GitHub API;
+- аудіорежим;
+- лаба «Python для мереж»: Pyodide з netmiko, napalm, requests і ncclient над симулятором, а також гайд для DevNet Sandbox;
+- трек безпеки: розслідування auth.log і харденінг за CIS;
+- шість нових тем LNX7–LNX12.
+
 **Безкоштовно:** сайт — GitHub Pages, вхід і база — Firebase (план Spark, без картки). Працює з будь-якого пристрою, встановлюється на телефон як додаток (PWA), прогрес синхронізується між пристроями.
 
 ## Структура
@@ -31,6 +43,13 @@ public/                  ← усе, що публікується на сайт
   ansible.js             ← лаба Ansible: підмножина YAML, ios_command/ios_config, loop, register
   app-errors.js          ← моніторинг помилок JS (localStorage + users/{uid}/errors)
   questions-more.js      ← додаткові питання для модулів SRWE/ENSA, де їх було менше 20
+  questions-dnd.js       ← питання «перетягни в категорію» (тип cat)
+  questions-auto.js      ← автоматизація й безпека (LNX7–LNX12)
+  cmdcards.js            ← описи команд для карток із власних лаб
+  labexport.js           ← експорт лаби в zip (containerlab / GNS3)
+  pylab.js, app-auto.js  ← Python-лаба: Pyodide і імітації netmiko/napalm/requests/ncclient
+  app-audio.js           ← аудіорежим (Web Speech API)
+  tr-*.js                ← переклади, вантажаться лише в англійському режимі
   sw.js, manifest.webmanifest, icon-*.png  ← PWA (офлайн, встановлення)
 src/cli/NN-*.js          ← фрагменти симулятора (граматика, show, мережевий двигун, ПК, лаби, troubleshooting)
 scripts/build-cli.mjs    ← збирає public/cli.js з фрагментів (--check — перевірка в CI)

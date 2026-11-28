@@ -111,3 +111,15 @@ textarea.jt{min-height:64px;font:inherit;font-size:14px;background:var(--card);m
 .pomo{position:fixed;right:12px;bottom:12px;z-index:50;display:flex;gap:8px;align-items:center;padding:8px 10px;border-radius:12px;background:var(--card);border:2px solid var(--accent);box-shadow:0 4px 18px rgba(0,0,0,.18);font-size:14px}.pomo b{font-variant-numeric:tabular-nums;font-size:17px}.pomo.brk{border-color:var(--ok)}.pomo.idle{border-color:var(--line)}
 .hometabs{display:flex;gap:6px;overflow-x:auto;margin:0 0 12px;padding-bottom:2px;position:sticky;top:0;z-index:5;background:var(--bg)}
 .hometabs button.seg{white-space:nowrap;flex:0 0 auto}
+.catgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:8px 0}
+.catbox{border:2px dashed var(--line,#ccd);border-radius:12px;padding:8px;min-height:70px;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}
+.catbox.ready{border-color:var(--accent);background:var(--accent-soft)}
+.cath{width:100%;font-weight:600;font-size:14px}
+.catpool{min-height:40px}
+.tok.on{outline:2px solid var(--accent);background:var(--accent-soft)}
+.audgrid{display:grid;gap:8px;margin:10px 0}
+.audbtn{display:flex;gap:12px;align-items:center;text-align:left;padding:16px;font-size:1.05em;min-height:64px}
+.audbtn b{font-size:1.4em;min-width:1.4em}
+.audbtn.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 15%,transparent)}
+.audbtn.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 15%,transparent)}
+.audbtn:disabled{opacity:1;color:var(--text)}

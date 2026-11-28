@@ -48,6 +48,31 @@ async function importGithub(){
     say(($("#obmsg")||{}).textContent+" · з GitHub: "+todo.length+" змінених файлів із "+md.length); }
   catch(e){ say("Помилка імпорту з GitHub: "+e.message); } }
 ACTS.ghimport=()=>importGithub();
+// ---- Запис у vault: слабкі місця, картки з помилок і тижневий огляд — комітом у GitHub-репозиторій ----
+function errCardsMd(){ const L=["---","tags: [ccna, flashcards]","updated: "+dkey(),"---","# CCNA — картки з моїх помилок","","> Згенеровано тренажером. Формат плагіна Spaced Repetition: питання::відповідь.","","#flashcards/ccna",""];
+  const clean=t=>String(t).replace(/::/g,":").replace(/\s*\n\s*/g," ").trim();
+  const rows=Object.entries(prog).filter(([id,r])=>r.w>0&&QMAP[id]).sort((a,b)=>(b[1].w-b[1].c*0.3)-(a[1].w-a[1].c*0.3)).slice(0,80);
+  for(const [id,r] of rows){ const q=QMAP[id]; L.push(clean(q.q)+"::"+clean(ansText(q))+" ("+tlabel(q.t)+", помилок: "+r.w+")"); }
+  for(const q of (typeof ccAll==="function"?ccAll():[])){ const r=prog[q.id]; if(r&&r.w>0) L.push(clean(q.q.replace(/^🃏 /,""))+"::"+clean(q.ans[0])); }
+  return L.join("\n")+"\n"; }
+const b64u=t=>{ const b=new TextEncoder().encode(t); let s=""; for(let i=0;i<b.length;i+=0x8000) s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000)); return btoa(s); };
+const unb64u=s=>{ const bin=atob(String(s).replace(/\n/g,"")); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return new TextDecoder().decode(u); };
+async function ghPut(repo,br,path,text,tok){ const url="https://api.github.com/repos/"+repo+"/contents/"+path.split("/").map(encodeURIComponent).join("/");
+  const H={Accept:"application/vnd.github+json",Authorization:"Bearer "+tok}; let sha=null;
+  const g=await fetch(url+"?ref="+encodeURIComponent(br),{headers:H}); if(g.status===200){ const j=await g.json(); sha=j.sha; try{ if(unb64u(j.content).replace(/^updated: .*$/m,"")===text.replace(/^updated: .*$/m,"")) return "same"; }catch(e){} } else if(g.status===401) throw new Error("токен недійсний");
+  const r=await fetch(url,{method:"PUT",headers:Object.assign({"Content-Type":"application/json"},H),body:JSON.stringify({message:"CCNA тренажер: "+path.split("/").pop()+" ("+dkey()+")",content:b64u(text),branch:br,sha:sha||undefined})});
+  if(r.status===403||r.status===404) throw new Error("немає права запису: потрібен токен з Contents: Read and write для "+repo); if(!r.ok) throw new Error("GitHub відповів "+r.status+" для "+path); return sha?"updated":"created"; }
+async function pushVault(silent){ const m=$("#obmsg"); const say=t=>{ if(m) m.textContent=t; };
+  const tok=(()=>{ try{ return localStorage.getItem(GH_TOK)||""; }catch(e){ return ""; } })(); const repo=opts.obRepo; if(!tok||!repo){ if(!silent) say("Спершу вкажіть репозиторій і токен з правом запису (розділ «Імпорт з GitHub»)"); return; }
+  const dir=(opts.obWriteDir||"CCNA/Тренажер").replace(/^\/|\/$/g,""); const wk=typeof reviewWeek==="function"?reviewWeek():null;
+  try{ if(!silent) say("Записую у vault…"); let br=opts.obBranch; if(!br) br=(await ghJson("https://api.github.com/repos/"+repo,tok)).default_branch;
+    const files=[[dir+"/Слабкі місця.md",obsidianMd()],[dir+"/Картки з помилок.md",errCardsMd()]]; if(wk) files.push([dir+"/Тиждень "+wk+".md",weekMd(wk)]);
+    const res=[]; for(const [p,t] of files) res.push(await ghPut(repo,br,p,t,tok));
+    opts.obPushed=Date.now(); lsSet(LS.opts,opts); const ch=res.filter(x=>x!=="same").length; if(!silent) say(ch?"Записано у "+repo+"/"+dir+": змінених файлів "+ch+" з "+res.length:"У vault усе актуально — змін немає"); }
+  catch(e){ if(!silent) say("Помилка запису у vault: "+e.message); } }
+ACTS.ghpush=()=>{ const t=$("#ghtok"); const v=t&&t.value.trim(); if(v&&v!=="••••"){ try{ localStorage.setItem(GH_TOK,v); }catch(e){} } const r=$("#ghrepo"); if(r&&r.value.trim()){ opts.obRepo=r.value.trim(); } const d=$("#ghwdir"); if(d) opts.obWriteDir=d.value.trim()||"CCNA/Тренажер"; lsSet(LS.opts,opts); pushVault(false); };
+ACTS.ghauto=el=>{ opts.obAutoPush=!opts.obAutoPush; lsSet(LS.opts,opts); render(); };
+setTimeout(()=>{ try{ if(opts.obAutoPush&&opts.obRepo&&localStorage.getItem(GH_TOK)&&Date.now()-(opts.obPushed||0)>20*3600e3) pushVault(true); }catch(e){} },15000);
 ACTS.ghforget=()=>{ try{ localStorage.removeItem(GH_TOK); localStorage.removeItem(GH_SHA); }catch(e){} render(); };
 function renderObsidian(){ const fl=customQs.filter(q=>q.type==="flash").length;
   return `<div class="card"><h2>📒 Картки з Obsidian</h2><p class="small muted" style="margin:0 0 8px">Оберіть папку CCNA з вашого vault (або окремі .md). Тренажер знайде картки у форматах <code>питання::відповідь</code>, <code>питання:::відповідь</code>, багаторядкові з рядком <code>?</code> між питанням і відповіддю, а також пари <code>Q:</code>/<code>A:</code>. Тему визначає за назвою файлу (наприклад «SRWE 3 VLAN.md») або ключовими словами. Повторний імпорт додає нові й оновлює змінені картки — прогрес не втрачається.</p>
@@ -58,7 +83,10 @@ function renderObsidian(){ const fl=customQs.filter(q=>q.type==="flash").length;
      <div class="row"><div class="grow"><label class="small muted">Папка (необов'язково)</label><input type="text" id="ghpath" value="${esc(opts.obPath||"")}" placeholder="напр. CCNA"></div><div class="grow"><label class="small muted">Гілка</label><input type="text" id="ghbranch" value="${esc(opts.obBranch||"")}" placeholder="за замовчуванням"></div></div>
      <label class="small muted">Токен для приватного репозиторію (fine-grained, лише Contents: read)</label><input type="password" id="ghtok" autocomplete="off" value="${(()=>{ try{ return localStorage.getItem(GH_TOK)?"••••":""; }catch(e){ return ""; } })()}" placeholder="github_pat_… (зберігається лише на цьому пристрої)">
      <div class="row" style="margin-top:8px"><button class="primary" data-act="ghimport">⬇ Імпортувати з GitHub</button><button class="ghost" data-act="ghforget">Забути токен і кеш</button></div>
-     <p class="small muted" style="margin:6px 0 0">Повторний імпорт завантажує лише змінені файли. Токен не синхронізується в хмару тренажера.</p></div></details>
+     <p class="small muted" style="margin:6px 0 0">Повторний імпорт завантажує лише змінені файли. Токен не синхронізується в хмару тренажера.</p>
+     <h3 style="margin:12px 0 4px">⬆ Запис у vault</h3><p class="small muted" style="margin:0 0 6px">Тренажер комітить у репозиторій три нотатки: «Слабкі місця», «Картки з помилок» (формат питання::відповідь для плагіна Spaced Repetition) і огляд тижня. Потрібен токен з правом Contents: Read and write. Obsidian Git підтягне їх у vault.</p>
+     <label class="small muted">Папка у vault</label><input type="text" id="ghwdir" value="${esc(opts.obWriteDir||"CCNA/Тренажер")}">
+     <div class="row" style="margin-top:8px"><button data-act="ghpush">⬆ Записати у vault</button><label class="small"><input type="checkbox" data-act="ghauto" ${opts.obAutoPush?"checked":""}> автоматично раз на день</label></div>${opts.obPushed?`<p class="small muted" style="margin:4px 0 0">Останній запис: ${new Date(opts.obPushed).toLocaleString("uk-UA")}</p>`:""}</div></details>
     <p class="small muted" id="obmsg" style="margin:8px 0 0">Карток з нотаток: ${fl}${opts.obLast?" · останній імпорт "+new Date(opts.obLast).toLocaleString("uk-UA"):""}</p>${fl?`<button class="mini" data-act="obtrain" style="margin-top:6px">Тренувати картки</button>`:""}</div>`; }
 function renderCustom(){
   const editing=customEdit? customQs.find(x=>x.id===customEdit) : customDraft;
@@ -203,6 +231,7 @@ function renderLabs(){
     <div class="row"><button class="primary" data-act="tsstart" data-n="1">Одна поломка</button><button data-act="tsstart" data-n="2">Дві поломки</button><button data-act="tsstart" data-n="1" data-tk="1">🎫 Тікет від користувача</button><span class="small muted">Розв'язано: ${Object.keys(labs).filter(k=>k.startsWith("ts-")&&labs[k].ok).reduce((a,k)=>a+(labs[k].solved||1),0)}${(()=>{ const t=Object.values(labs).filter(x=>x&&x.tk); const n=t.reduce((a,x)=>a+x.tk.n,0); return n?` · тікетів: ${n}, середня оцінка ${Math.round(t.reduce((a,x)=>a+x.tk.sum,0)/n)}, найкраща ${Math.max(...t.map(x=>x.tk.best))}`:""; })()}</span></div>
     <p class="small muted" style="margin:8px 0 0">Тікет — як на реальній роботі: ви бачите лише скаргу користувача, а не список вимог. Оцінка залежить від часу, кількості команд і невдалих перевірок.</p></div>
   <div class="card"><h2>📶 Бездротовий контролер (GUI)</h2><p class="small muted" style="margin:0 0 8px">Інтерфейс у стилі Cisco WLC: динамічний інтерфейс, RADIUS, WLAN із WPA2-PSK і WPA2-Enterprise. ${labs.wlc&&labs.wlc.ok?"✅ виконано":labs.wlc?"⏳ "+(labs.wlc.n||0)+"/5":""}</p><button class="primary" data-act="wlclab">Відкрити</button></div>
+  <div class="card"><h2>🐍 Python для мереж</h2><p class="small muted" style="margin:0 0 8px">Справжній Python у браузері: Netmiko, NAPALM, RESTCONF (requests) і NETCONF (ncclient) на пристроях симулятора. Гайд для Cisco DevNet Sandbox. ${labs.pylab&&labs.pylab.ok?"✅ виконано":labs.pylab?"⏳ "+(labs.pylab.n||0)+"/"+PYLAB.TASKS.length:""}</p><button class="primary" data-act="pylab">Відкрити</button></div>
   <div class="card"><h2>🤖 Автоматизація: Ansible</h2><p class="small muted" style="margin:0 0 8px">YAML-плейбуки з модулями ios_command і ios_config на пристроях симулятора: змінні, loop, register, ідемпотентність, save_when. ${labs.ansible&&labs.ansible.ok?"✅ виконано":labs.ansible?"⏳ "+(labs.ansible.n||0)+"/"+ANSIBLE.TASKS.length:""}</p><button class="primary" data-act="ansible">Відкрити</button></div>
   <div class="card"><h2>🤖 Автоматизація: REST API</h2><p class="small muted" style="margin:0 0 8px">Токен, GET/POST/PUT/DELETE, заголовки, JSON і коди відповідей — на навчальному контролері. ${labs.api&&labs.api.ok?"✅ виконано":labs.api?"⏳ "+(labs.api.n||0)+"/7":""}</p><button class="primary" data-act="api">Відкрити</button></div>
   <div class="card"><h2>🧪 Пісочниця</h2><p class="small muted" style="margin:0 0 8px">Будуйте власну мережу без завдання: комутатори, L3-комутатори, маршрутизатори, ПК, сервери. Конфігурація зберігається й синхронізується.</p><button class="primary" data-act="sandbox">Відкрити пісочницю</button></div>
@@ -210,23 +239,23 @@ function renderLabs(){
   <h3>🌐 SRWE: кілька пристроїв</h3>${(CLI.NETSCEN||[]).filter(s=>/^SRWE/.test(s.t)).map(card).join("")}
   <h3>🌐 ENSA: OSPF, ACL, NAT, WAN, QoS, дизайн</h3>${(CLI.NETSCEN||[]).filter(s=>/^ENSA/.test(s.t)).map(card).join("")}
   <h3>Один комутатор</h3>${CLI.SCEN.map(card).join("")}
-  <h3>🐧 Після CCNA: Linux і DevOps</h3>${((window.BASH&&BASH.SCEN)||[]).map(card).join("")}
+  <h3>🐧 Після CCNA: Linux, DevOps і безпека</h3>${((window.BASH&&BASH.SCEN)||[]).map(card).join("")}${(CLI.NETSCEN||[]).filter(s=>/^LNX/.test(s.t)).map(card).join("")}
   <button class="primary" data-act="home">На головну</button>`;
 }
 function renderLab(){
   const sc=LAB.sc;
   const ico=d=>{ const t=LAB.N&&LAB.N.dev[d]&&LAB.N.dev[d].type; return t==="pc"?"💻":t==="server"?"🗄":t==="router"?"🔀":"🔁"; };
-  const tabs= sc.net? `<div class="chips" style="margin-top:8px">${Object.keys(LAB.ses).map(d=>`<button class="seg ${LAB.cur===d?"on":""}" data-act="labdev" data-d="${d}">${ico(d)} ${d}</button>`).join("")}</div>` : "";
-  const fig=LAB.N&&!LAB.walk? CLI.figOf(LAB.N,[LAB.cur]) : null;
+  const tabs= sc.net? `<div class="chips" style="margin-top:8px">${Object.keys(LAB.ses).filter(d=>!sc.discover||LAB.known.has(d)).map(d=>`<button class="seg ${LAB.cur===d?"on":""}" data-act="labdev" data-d="${d}">${ico(d)} ${d}</button>`).join("")}</div>` : "";
+  const fig=LAB.N&&!LAB.walk&&!sc.discover? CLI.figOf(LAB.N,[LAB.cur]) : null;
   return `<div class="card"><h2>${sc.net?"🌐 ":""}${esc(sc.title)}</h2>${fig?topoSVG(fig):""}${sc.topo&&!sc.sb?`<details><summary class="small muted">Текстова схема</summary><pre>${esc(sc.topo)}</pre></details>`:""}<ol class="small" style="margin:0;padding-left:20px">${sc.task.map(t=>`<li>${esc(t)}</li>`).join("")}</ol></div>
-  ${sc.sb?sandboxEditor():""}
+  ${sc.sb?sandboxEditor():""}${sc.discover?discoverCard():""}
   <div id="walk">${LAB.walk?renderWalk():""}</div>
   ${tabs}
   ${LAB.ses[LAB.cur]?`<div class="term" id="term">${esc(LAB.outs[LAB.cur]||"")}</div>
   <div class="termin"><span id="tprompt">${esc(LAB.ses[LAB.cur].prompt())}</span><input id="tin" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" aria-label="Команда"></div>`:`<p class="small muted">Додайте пристрій, щоб відкрити його консоль.</p>`}
-  <div class="row" style="margin-top:8px">${LAB.N?`<button data-act="walk" id="walkbtn" ${LAB.N.lastFlow?"":"disabled"}>🔍 Шлях пакета</button>`:""}${sc.sb?`<button data-act="sbreset">Очистити пісочницю</button>`:`<button class="primary" data-act="labcheck">Перевірити</button>`}${sc.sb?"":LAB.ts?`<button data-act="tsgive">${LAB.showSol?"Сховати поломки":"Здатися — показати поломки"}</button><button data-act="tsstart" data-n="${LAB.ts.n}" data-tk="${LAB.ts.tk?1:0}">${LAB.ts.tk?"Новий тікет":"Нова поломка"}</button>${LAB.ts.tk&&!LAB.ts.done?`<span class="small muted" id="tktimer">⏱ 0:00 · команд: ${LAB.hist.length}</span>`:""}`:`<button data-act="labsol">${LAB.showSol?"Сховати рішення":"Показати рішення"}</button><button data-act="labreset">Скинути</button>`}</div>
+  <div class="row" style="margin-top:8px">${LAB.N?`<button data-act="walk" id="walkbtn" ${LAB.N.lastFlow?"":"disabled"}>🔍 Шлях пакета</button>`:""}${LAB.N&&!LAB.ts?`<button data-act="labexport" title="Топологія containerlab, конфіги й рішення для справжнього IOS">📦 На справжній IOS</button>`:""}${sc.sb?`<button data-act="sbreset">Очистити пісочницю</button>`:`<button class="primary" data-act="labcheck">Перевірити</button>`}${sc.sb?"":LAB.ts?`<button data-act="tsgive">${LAB.showSol?"Сховати поломки":"Здатися — показати поломки"}</button><button data-act="tsstart" data-n="${LAB.ts.n}" data-tk="${LAB.ts.tk?1:0}">${LAB.ts.tk?"Новий тікет":"Нова поломка"}</button>${LAB.ts.tk&&!LAB.ts.done?`<span class="small muted" id="tktimer">⏱ 0:00 · команд: ${LAB.hist.length}</span>`:""}`:`<button data-act="labsol">${LAB.showSol?"Сховати рішення":"Показати рішення"}</button><button data-act="labreset">Скинути</button>`}</div>
   <div id="labres">${LAB.res||""}</div>
-  ${LAB.showSol&&!LAB.ts?`<div class="card"><h2>Рішення</h2><pre>${esc(sc.sol)}</pre></div>`:""}
+  ${LAB.showSol&&!LAB.ts&&!sc.discover?`<div class="card"><h2>Рішення</h2><pre>${esc(sc.sol)}</pre></div>`:""}
   ${LAB.showSol&&LAB.ts?`<div class="card"><h2>Що було зламано</h2><ul class="checklist">${LAB.ts.faults.map(f=>`<li>🔧 ${esc(f)}</li>`).join("")}</ul><p class="small muted">Перевірте, як ці поломки виглядали в show-командах, і виправте їх.</p></div>`:""}
   <button class="ghost" data-act="labs">← До списку лаб</button>`;
 }
@@ -234,10 +263,11 @@ function bindLab(){
   clearInterval(window._tkT); if(LAB.ts&&LAB.ts.tk&&!LAB.ts.done){ const upd=()=>{ const el=$("#tktimer"); if(!el||!LAB.ts||!LAB.ts.tk||LAB.ts.done){ clearInterval(window._tkT); return; } const s=Math.floor((Date.now()-LAB.ts.tk.t0)/1000); el.textContent=`⏱ ${Math.floor(s/60)}:${String(s%60).padStart(2,"0")} · команд: ${LAB.hist.length}`; }; upd(); window._tkT=setInterval(upd,1000); }
   const tin=$("#tin"), term=$("#term"); if(!tin) return; term.scrollTop=term.scrollHeight; tin.focus();
   tin.addEventListener("keydown",e=>{
-    if(e.key==="Enter"){ const line=tin.value; const ses=LAB.ses[LAB.cur]; const pr=ses.prompt(); const out=ses.exec(line);
+    if(e.key==="Enter"){ const line=tin.value; const ses=LAB.ses[LAB.cur]; const pr=ses.prompt(); const mode0=ses.ctx&&ses.ctx.mode; const out=ses.exec(line); ccCapture(mode0,line,out);
       let hint=""; if(/Invalid|Incomplete/.test(out) && /^\s*(sh|show|ping)\b/i.test(line) && /\(config/.test(pr)) hint="(Підказка: у режимі конфігурації використовуйте do "+line.trim()+")";
       LAB.outs[LAB.cur]+=pr+line+"\n"+(out?out+"\n":"")+hint+(hint?"\n":"");
       if(LAB.N){ for(const [d,m] of LAB.N.recompute()) LAB.outs[d]+=m+"\n"; }
+      if(discoverLearn(line)){ const t=$("#dmap"); if(t) LAB.mapText=t.value; LAB.hist.push(line); LAB.hi=LAB.hist.length; render(); return; }
       LAB.hist.push(line); LAB.hi=LAB.hist.length; tin.value="";
       if(LAB.sc.sb) sbSave(); const wb=$("#walkbtn"); if(wb&&LAB.N&&LAB.N.lastFlow) wb.disabled=false;
       term.textContent=LAB.outs[LAB.cur]; term.scrollTop=term.scrollHeight; $("#tprompt").textContent=LAB.ses[LAB.cur].prompt(); e.preventDefault(); }

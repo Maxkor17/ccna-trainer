@@ -2,5 +2,8 @@
   "name": "ccna-trainer-tests",
   "private": true,
   "description": "Браузерний smoke-тест (Playwright). Запуск: npm install --prefix tests && npx --prefix tests playwright install chromium && node tests/smoke.mjs",
-  "dependencies": { "playwright": "^1.48.0" }
+  "dependencies": {
+    "playwright": "^1.48.0",
+    "pyodide": "314.0.8"
+  }
 }

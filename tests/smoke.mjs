@@ -49,7 +49,7 @@ await step("вкладки головної: Практика, Прогрес, �
   await act('[data-act="hometab"][data-v="tools"]'); await has("Інструменти");
   await act('[data-act="hometab"][data-v="all"]'); await has("Денна норма"); await has("Тест модуля"); });
 await step("тренування: відповідь і перевірка", async () => {
-  await act('[data-act="train"]'); await page.waitForSelector('[data-act="pick"], #cmdin, .fillin, [data-act="flashshow"]', { timeout: 3000 });
+  await act('[data-act="train"]'); await page.waitForSelector('[data-act="pick"], #cmdin, .fillin, [data-act="flashshow"], [data-act="catpick"], [data-act="ord"], [data-act="match"], [data-act="spick"], #tin', { timeout: 3000 });
   const pick = page.locator('[data-act="pick"]'); if (await pick.count()) await pick.first().click();
   const chk = page.locator("#checkbtn"); if (await chk.count() && await chk.isEnabled()) await chk.click();
   await home();
@@ -131,7 +131,7 @@ await step("Ansible: запуск плейбука, PLAY RECAP, прогрес",
   await act('[data-act="ansrun"]'); await has("PLAY RECAP"); await has("ok=1"); await home(); });
 await step("CCNA англійською: англійські питання, час на питання, мова відновлюється", async () => {
   const before = await page.evaluate(() => opts.lang);
-  await page.evaluate(() => { view = "home"; render(); }); await act('[data-act="ccna"][data-n="40"][data-en="1"]');
+  await page.evaluate(() => { view = "home"; render(); }); await act('[data-act="ccna"][data-n="40"][data-en="1"]'); await page.waitForFunction(() => typeof S !== "undefined" && S && S.en, null, { timeout: 8000 });
   const cyr = await page.evaluate(() => S.items.filter(q => /[а-яіїєґ]/i.test(q.q)).length); if (cyr) throw new Error("питань з кирилицею: " + cyr);
   await page.waitForTimeout(1100); await page.evaluate(() => { S.i = 1; render(); finishExam(); }); await has("Час на питання");
   const after = await page.evaluate(() => opts.lang); if (after !== before) throw new Error("мова не відновилась: " + after); await home(); });
@@ -156,6 +156,77 @@ await step("моніторинг помилок: запис і показ у «�
 await step("кожна лаба є в списку лаб", async () => {
   const miss = await page.evaluate(() => { view = "labs"; render(); const have = new Set([...document.querySelectorAll('[data-act="lab"]')].map(b => b.dataset.id)); return ALLSCEN().filter(s => !s.sb && !have.has(s.id)).map(s => s.id); });
   if (miss.length) throw new Error("немає в списку: " + miss.join(", ")); await home(); });
+await step("невідома мережа: CDP відкриває сусідів, карта перевіряється", async () => {
+  await page.evaluate(() => { view = "labs"; render(); }); await act('[data-act="lab"][data-id="net-discover"]');
+  const n0 = await page.locator('[data-act="labdev"]').count(); if (n0 !== 1) throw new Error("на старті видно вкладок: " + n0);
+  await page.fill("#tin", "enable"); await page.press("#tin", "Enter"); await page.fill("#tin", "show cdp neighbors"); await page.press("#tin", "Enter"); await page.waitForTimeout(100);
+  const n1 = await page.locator('[data-act="labdev"]').count(); if (n1 < 2) throw new Error("CDP не відкрив сусідів");
+  await page.evaluate(() => { document.querySelector("#dmap").value = CLI.discoverTruth(LAB.N).text; }); await act('[data-act="labcheck"]');
+  const bad = await page.evaluate(() => [...document.querySelectorAll("#labres li")].filter(li => li.textContent.startsWith("❌")).length); if (bad) throw new Error("правильна карта не зарахована"); await home(); });
+await step("debug: OSPF-сусідство і DHCP у консолі", async () => {
+  const r = await page.evaluate(() => { const sc = CLI.NETSCEN.find(s => s.id === "net-debug"); const { N, ses } = CLI.startNet(sc); ses.R1.exec("enable"); ses.R1.exec("debug ip ospf adj"); const m = N.recompute().map(x => x[1]).join("\n"); return m; });
+  if (!/Mismatched hello/.test(r)) throw new Error("немає Mismatched hello: " + r.slice(0, 200)); });
+await step("перетягни в категорію: тап і drag-and-drop, перевірка", async () => {
+  await page.evaluate(() => { startSession("train", [QMAP["dd-ec"]], "DnD"); });
+  const items = await page.evaluate(() => QMAP["dd-ec"].items.map(x => x[1]));
+  const first = await page.evaluate(() => S.order[0][0]);
+  await page.locator(`[data-act="catpick"][data-i="${first}"]`).dragTo(page.locator(`[data-catdrop="${items[first]}"]`).first());
+  for (let i = 0; i < items.length; i++) { if (await page.evaluate(i => (S.ans[0] || [])[i] != null, i)) continue; await act(`[data-act="catpick"][data-i="${i}"]`); const sel = await page.evaluate(() => S.catSel); await act(`[data-act="catdrop"][data-c="${items[i]}"]`); if (sel !== i) throw new Error("catSel=" + sel + " i=" + i + " view=" + await page.evaluate(() => view)); if (await page.evaluate(i => (S.ans[0] || [])[i] == null, i)) throw new Error("drop не спрацював для " + i + ": " + await page.evaluate(c => { const b = document.querySelector(`[data-catdrop="${c}"]`); const r = b.getBoundingClientRect(); const e = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return e.outerHTML.slice(0, 150) + " | sel=" + S.catSel; }, items[i])); }
+  const ok = await page.evaluate(() => isCorrect(S.items[0], S.ans[0])); if (!ok) throw new Error("відповідь не зарахована: " + JSON.stringify(await page.evaluate(() => S.ans[0])));
+  await page.evaluate(() => doCheck()); await has("✅"); await home(); });
+await step("картки команд: команда з лаби → картка → повторення", async () => {
+  await page.evaluate(() => { view = "labs"; render(); }); await act('[data-act="lab"][data-id="lab-vlan"]');
+  for (const c of ["enable", "conf t", "vlan 10", "name USERS", "interface fa0/1", "sw mo acc", "sw acc vl 10"]) { await page.fill("#tin", c); await page.press("#tin", "Enter"); }
+  const n = await page.evaluate(() => ccAll().length); if (n < 3) throw new Error("карток: " + n);
+  await page.evaluate(() => { opts.homeTab = "prac"; view = "home"; render(); }); await has("Картки команд"); await act('[data-act="ccrun"]'); await has("Команда з ваших лаб");
+  const q = await page.evaluate(() => S.items.find(x => /access vlan/.test(x.ans[0]))); if (!q || q.ans[0] !== "switchport access vlan 10") throw new Error("немає картки access vlan: " + JSON.stringify(q));
+  await page.evaluate(() => { opts.homeTab = "all"; }); await home(); });
+await step("запис у vault через GitHub API (мок)", async () => {
+  const puts = [];
+  await page.route(/api\.github\.com/, async r => { const u = r.request().url(), m = r.request().method();
+    if (/\/repos\/[^/]+\/[^/]+$/.test(u)) return r.fulfill({ contentType: "application/json", body: JSON.stringify({ default_branch: "main" }) });
+    if (m === "GET") return r.fulfill({ status: 404, body: "{}" });
+    if (m === "PUT") { const b = JSON.parse(r.request().postData()); puts.push({ path: decodeURIComponent(u.split("/contents/")[1]), text: Buffer.from(b.content, "base64").toString("utf8"), branch: b.branch, auth: r.request().headers().authorization }); return r.fulfill({ status: 201, contentType: "application/json", body: "{}" }); }
+    return r.fulfill({ status: 404, body: "" }); });
+  await page.evaluate(() => { localStorage.setItem("ccna.ghtoken", "test-token"); opts.obRepo = "test/vault"; opts.obBranch = ""; prog["e1-2"] = Object.assign({}, prog["e1-2"] || {}, { w: 2, c: 0, s: 2, b: 0, d: 0, l: 0, k: 0 }); view = "custom"; render(); });
+  await page.evaluate(() => pushVault(false)); await page.waitForFunction(() => /Записано|актуально|Помилка/.test((document.querySelector("#obmsg") || {}).textContent || ""), null, { timeout: 5000 });
+  const msg = await page.evaluate(() => document.querySelector("#obmsg").textContent); if (!/Записано/.test(msg)) throw new Error(msg);
+  if (puts.length !== 3 || !puts.some(p => /Картки з помилок\.md$/.test(p.path) && /::/.test(p.text)) || !puts.every(p => p.branch === "main" && p.auth === "Bearer test-token")) throw new Error(JSON.stringify(puts.map(p => p.path)));
+  await page.unroute(/api\.github\.com/); await page.evaluate(() => { localStorage.removeItem("ccna.ghtoken"); delete opts.obRepo; }); await home(); });
+await step("аудіорежим: озвучення питання, відповідь, пояснення", async () => {
+  await page.evaluate(() => { window.__said = []; const fake = { getVoices: () => [], cancel() {}, speak(u) { window.__said.push(u.text); setTimeout(() => u.onend && u.onend(), 5); }, onvoiceschanged: null };
+    Object.defineProperty(window, "speechSynthesis", { value: fake, configurable: true }); window.SpeechSynthesisUtterance = function (t) { this.text = t; };
+    localStorage.setItem("ccna.audio", JSON.stringify({ rate: 1, auto: false })); opts.homeTab = "prac"; view = "home"; render(); });
+  await act('[data-act="audstart"]'); await page.waitForTimeout(150);
+  const q = await page.evaluate(() => ({ q: AUD.items[0].q, a: AUD.items[0].a[0], said: window.__said.join(" | ") }));
+  if (!q.said.includes(q.q.slice(0, 20).replace(/\s+/g, " "))) throw new Error("питання не озвучено: " + q.said.slice(0, 200));
+  await act(`[data-act="audpick"][data-k="${q.a}"]`); await page.waitForTimeout(100);
+  const after = await page.evaluate(() => ({ said: window.__said.slice(-2).join(" "), ok: AUD.ok, phase: AUD.phase })); if (after.ok !== 1 || !/Правильно|Correct/.test(after.said)) throw new Error(JSON.stringify(after));
+  await act('[data-act="audnext"]'); await act('[data-act="audstop"]'); await page.evaluate(() => { opts.homeTab = "all"; }); });
+await step("Python-лаба (Pyodide): Netmiko, NAPALM, RESTCONF, NETCONF", async () => {
+  const PYD = path.join(path.dirname(fileURLToPath(import.meta.url)), "node_modules", "pyodide");
+  await page.route(/cdn\.jsdelivr\.net\/npm\/pyodide@/, r => { const f = path.join(PYD, new URL(r.request().url()).pathname.split("/").pop()); if (!fs.existsSync(f)) return r.fulfill({ status: 404, body: "" });
+    const ct = f.endsWith(".wasm") ? "application/wasm" : /\.m?js$/.test(f) ? "text/javascript" : f.endsWith(".json") ? "application/json" : "application/octet-stream"; return r.fulfill({ status: 200, contentType: ct, headers: { "access-control-allow-origin": "*" }, body: fs.readFileSync(f) }); });
+  await page.evaluate(() => { view = "labs"; render(); }); await act('[data-act="pylab"]'); await has("script.py");
+  await page.evaluate(() => { document.querySelector("#pysrc").value = `from netmiko import ConnectHandler
+from napalm import get_network_driver
+import requests
+for ip in ["10.0.0.1","10.0.0.11","10.0.0.12"]:
+    with ConnectHandler(device_type="cisco_ios", host=ip, username="admin", password="Cisco123!") as c:
+        print(c.find_prompt())
+d = get_network_driver("ios")("10.0.0.1","admin","Cisco123!"); d.open(); d.load_merge_candidate(config="ntp server 10.1.1.123"); print(d.compare_config()); d.commit_config()
+r = requests.get("https://10.0.0.1/restconf/data/ietf-interfaces:interfaces", headers={"Accept":"application/yang-data+json"}, auth=("admin","Cisco123!"))
+print("REST", r.status_code)`; });
+  await act('[data-act="pyrun"]'); await page.waitForFunction(() => PYL && !PYL.busy && PYL.out, null, { timeout: 90000 });
+  const out = await page.evaluate(() => PYL.out); if (!/R1#[\s\S]*S2#[\s\S]*\+ntp server 10\.1\.1\.123[\s\S]*REST 200/.test(out)) throw new Error(out.slice(0, 400));
+  const done = await page.evaluate(() => PYLAB.TASKS.filter(t => t.ok(PYL.lab)).map(t => t.id)); if (!done.includes("loop") || !done.includes("napalm") || !done.includes("rget")) throw new Error("завдання: " + done);
+  await page.unroute(/cdn\.jsdelivr\.net\/npm\/pyodide@/); await home(); });
+await step("поширення пісочниці посиланням: упакування → відкриття", async () => {
+  page.once("dialog", d => d.accept());
+  const r = await page.evaluate(async () => { const d = { devs: { R1: { type: "router" }, S1: { type: "switch" }, PC1: { type: "pc", ip: "192.168.1.10", mask: "255.255.255.0", gw: "192.168.1.1" } }, links: [["R1", "Gi0/0", "S1", "Gi0/1"], ["PC1", "Fa0", "S1", "Fa0/1"]] };
+    const code = await packSb(d); history.replaceState(null, "", location.pathname + "#sb=" + code); await sbOpenShared(); await new Promise(r => setTimeout(r, 100));
+    return { len: code.length, view, devs: LAB && LAB.N ? Object.keys(LAB.N.dev).sort().join(",") : "" }; });
+  if (r.view !== "lab" || r.devs !== "PC1,R1,S1") throw new Error(JSON.stringify(r)); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));

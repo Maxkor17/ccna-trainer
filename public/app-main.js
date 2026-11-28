@@ -28,15 +28,16 @@ document.addEventListener("click", async ev=>{
   if(act==="obtrain"){ startSession("train", shuffle(customQs.filter(q=>q.type==="flash")).slice(0,opts.train), "Картки з нотаток"); return; }
   if(act==="install"){ if(installEvt){ installEvt.prompt(); installEvt.userChoice.finally(()=>{ installEvt=null; render(); }); } return; }
   if(act==="installhide"){ opts.installHide=true; lsSet(LS.opts,opts); render(); return; }
-  if(act==="ccna"){ const n=Number(el.dataset.n)||120; const en=el.dataset.en==="1"; const prev=opts.lang; if(en&&prev!=="en"){ opts.lang="en"; rebuildQB(); }
-    startSession("exam", pickCcna(n,en), (n>=100?"CCNA 200-301 ":"CCNA (коротка) ")+bpVer()+(en?" · English":"")); S.ccna=true; S.bp=bpVer(); if(en){ S.en=true; S.enPrev=prev; } render(); return; }
+  if(act==="ccna"){ const n=Number(el.dataset.n)||120; const en=el.dataset.en==="1";
+    if(en&&!window.__trLoaded){ el.disabled=true; el.textContent="⏳ Завантажую англійські тексти…"; loadTR().then(()=>startCcna(n,en)).catch(e=>{ el.disabled=false; alert("Не вдалося завантажити переклади: "+e.message); }); return; }
+    startCcna(n,en); return; }
   if(act==="plan"){ startPlan(); return; }
   if(act==="exam"){ const gk=genKeysFor(sel); const n=opts.exam; const ng=gk.length?Math.round(n*0.15):0; const list=shuffle(qsFor(sel).filter(q=>qtype(q)!=="flash")).slice(0,n-ng); for(let i=0;i<ng;i++){const g=GEN.make(gk[i%gk.length]); if(g) list.push(g);} startSession("exam", shuffle(list)); return; }
   if(act==="gen"){ const list=[]; for(let i=0;i<10;i++){ const g=GEN.make(el.dataset.k); if(g) list.push(g);} startSession("gen", list); return; }
   if(act==="cheat"){ const tid=($("#modsel")||{}).value||opts.modTopic; opts.modTopic=tid; lsSet(LS.opts,opts); view="cheat"; render(); scrollTop(); return; }
   if(act==="module2"){ startSession("module", pickModule(opts.modTopic), "Тест модуля "+tlabel(opts.modTopic)); return; }
   if(act==="module"){ const tid=($("#modsel")||{}).value||opts.modTopic; opts.modTopic=tid; lsSet(LS.opts,opts); startSession("module", pickModule(tid), "Тест модуля "+tlabel(tid)); return; }
-  if(act==="setopt"){ const k=el.dataset.k; let v=el.dataset.v; if(v==="true"||v==="false") v=(v==="true"); else if(/^\d+$/.test(v)) v=Number(v); opts[k]=v; lsSet(LS.opts,opts); if(k==="goal"||k==="tgoal") pushSync(); if(k==="lang") rebuildQB(); applyLook(); render(); return; }
+  if(act==="setopt"){ const k=el.dataset.k; let v=el.dataset.v; if(v==="true"||v==="false") v=(v==="true"); else if(/^\d+$/.test(v)) v=Number(v); opts[k]=v; lsSet(LS.opts,opts); if(k==="goal"||k==="tgoal") pushSync(); if(k==="lang"){ rebuildQB(); if(v==="en") loadTR().then(()=>{ rebuildQB(); render(); }).catch(e=>alert("Не вдалося завантажити переклади: "+e.message)); } applyLook(); render(); return; }
   if(act==="cadd"){ customDraft=null; customEdit=null; render(); return; }
   if(act==="csave"){ saveCustom(); return; }
   if(act==="cedit"){ customEdit=el.dataset.id; render(); scrollTop(); return; }
@@ -46,7 +47,7 @@ document.addEventListener("click", async ev=>{
   if(["stats","backup","search","labs","custom","settings"].includes(act)){ view=act; render(); scrollTop(); if(act==="search"){const si=$("#searchin"); si&&si.focus();} if(act==="backup"&&store.mode==="db"&&remoteSnaps===null){ remoteSnaps=[]; loadRemoteSnaps().then(r=>{ remoteSnaps=r; if(view==="backup") render(); }); } return; }
   if(act==="lab"){ openLab(el.dataset.id); return; }
   if(act==="labcheck"){ checkLab(); return; }
-  if(act==="labdev"){ LAB.cur=el.dataset.d; render(); return; }
+  if(act==="labdev"){ const t=$("#dmap"); if(t) LAB.mapText=t.value; LAB.cur=el.dataset.d; render(); return; }
   if(act==="walk"){ if(!LAB.N.lastFlow) return; LAB.walk={i:0,play:true}; render(); walkStop(); LAB.walk.play=true; walkTimer=setInterval(()=>{ if(!LAB||!LAB.walk){walkStop();return;} const n=walkSteps().length; if(LAB.walk.i>=n-1){ walkStop(); walkUpd(); return; } LAB.walk.i++; walkUpd(); },1300); walkUpd(); return; }
   if(act==="walkclose"){ walkStop(); LAB.walk=null; render(); return; }
   if(act==="walkplay"){ if(LAB.walk.play){ walkStop(); walkUpd(); return; } if(LAB.walk.i>=walkSteps().length-1) LAB.walk.i=0; LAB.walk.play=true; walkTimer=setInterval(()=>{ if(!LAB||!LAB.walk){walkStop();return;} if(LAB.walk.i>=walkSteps().length-1){ walkStop(); walkUpd(); return; } LAB.walk.i++; walkUpd(); },1300); walkUpd(); return; }
@@ -65,10 +66,10 @@ document.addEventListener("click", async ev=>{
   if(act==="wlclab"){ if(!window._wlc) window._wlc=lsGet("ccna.wlc.v1",null)||WLC.newState(); view="wlc"; render(); scrollTop(); return; }
   if(act==="wlc"){ const op=el.dataset.op; if(op==="reset"){ window._wlc=WLC.newState(); } else WLC.handle(window._wlc,op,el,$); lsSet("ccna.wlc.v1",window._wlc); const d=WLC.done(window._wlc); const n=Object.values(d).filter(Boolean).length; const prev=labs.wlc||{}; if(n!==prev.n){ const rec={ok:n===WLC.TASKS.length||!!prev.ok,n,ts:Date.now()}; if(n===WLC.TASKS.length&&!prev.ok) rec.done=Date.now(); labs.wlc=rec; patch({labs:{wlc:rec}}); } ev.preventDefault(); render(); return; }
   if(act==="api"){ view="api"; render(); scrollTop(); return; }
-  if(act==="apisend"){ apiSync(); API.res=APILAB.handle(API.st,API.req); apiDone(); render(); return; }
-  if(act==="apitok"){ apiSync(); API.req.headers=API.req.headers.split("\n").filter(l=>!/^x-auth-token/i.test(l.trim())&&!/^authorization/i.test(l.trim())).concat(["X-Auth-Token: "+API.st.token]).join("\n"); render(); return; }
-  if(act==="apireset"){ API=null; render(); return; }
-  if(act==="apians"){ apiSync(); API.ans=$("#apians").value.trim(); if(API.ans===APILAB.TASKS.find(t=>t.id==="answer").ans) API.st.done.answer=true; else alert("Ні. Знайдіть пристрій із reachabilityStatus = Unreachable у відповіді GET /network-device."); apiDone(); render(); return; }
+  if(act==="apisend"){ apiSync(); APIL.res=APILAB.handle(APIL.st,APIL.req); apiDone(); render(); return; }
+  if(act==="apitok"){ apiSync(); APIL.req.headers=APIL.req.headers.split("\n").filter(l=>!/^x-auth-token/i.test(l.trim())&&!/^authorization/i.test(l.trim())).concat(["X-Auth-Token: "+APIL.st.token]).join("\n"); render(); return; }
+  if(act==="apireset"){ APIL=null; render(); return; }
+  if(act==="apians"){ apiSync(); APIL.ans=$("#apians").value.trim(); if(APIL.ans===APILAB.TASKS.find(t=>t.id==="answer").ans) APIL.st.done.answer=true; else alert("Ні. Знайдіть пристрій із reachabilityStatus = Unreachable у відповіді GET /network-device."); apiDone(); render(); return; }
   if(act==="sbadd"){ const t=el.dataset.t; const pre={switch:"S",l3:"MLS",router:"R",pc:"PC",server:"SRV"}[t]; let k=1; while(LAB.N.dev[pre+k]) k++; sbMutate(d=>{ d.devs[pre+k]= t==="pc"||t==="server"? {type:t,services:t==="server"?[80,22,23]:[]} : {type:t}; }); return; }
   if(act==="sblink"){ const a=$("#sbA").value,b=$("#sbB").value,pa=$("#sbPA").value,pb=$("#sbPB").value; if(!pa||!pb||a===b){ alert("Оберіть два різні пристрої з вільними портами"); return; } sbMutate(d=>d.links.push([a,pa,b,pb])); return; }
   if(act==="sbunlink"){ const k=Number(el.dataset.k); sbMutate(d=>d.links.splice(k,1)); return; }
@@ -78,7 +79,7 @@ document.addEventListener("click", async ev=>{
   if(act==="sbreset"){ if(!confirm("Видалити всі пристрої з пісочниці?")) return; LAB.outs={}; sbMutate(d=>{ d.devs={}; d.links=[]; }); return; }
   if(act==="tsstart"){ startTs(Number(el.dataset.n)||1,el.dataset.tk==="1"); return; }
   if(act==="tsgive"){ LAB.showSol=!LAB.showSol; render(); return; }
-  if(act==="labsol"){ LAB.showSol=!LAB.showSol; render(); return; }
+  if(act==="labsol"){ const t=$("#dmap"); if(t) LAB.mapText=t.value; LAB.showSol=!LAB.showSol; render(); return; }
   if(act==="labreset"){ openLab(LAB.sc.id); return; }
   if(act==="home"||act==="quit"){ examLangRestore(); view="home"; S=null; render(); scrollTop(); return; }
   if(act==="flag"){ const id=el.dataset.id; const f=flags[id]&&flags[id].on&&flags[id].kind!=="err"; const rec=f?{on:false,ts:Date.now()}:{on:true,ts:Date.now(),snip:el.dataset.snip,note:""}; flags[id]=rec; patch({flags:{[id]:rec}}); rerenderInPlace(); return; }
@@ -146,7 +147,10 @@ async function backupAct(act,el){
   if(act==="reset"){ if(el.dataset.confirm!=="1"){ el.dataset.confirm="1"; el.textContent="Точно скинути? Натисніть ще раз"; el.classList.add("primary"); return; } prog={}; saveAll(); el.textContent="Скинуто"; el.disabled=true; }
 }
 
+function startCcna(n,en){ const prev=opts.lang; if(en&&prev!=="en"){ opts.lang="en"; rebuildQB(); }
+  startSession("exam", pickCcna(n,en), (n>=100?"CCNA 200-301 ":"CCNA (коротка) ")+bpVer()+(en?" · English":"")); S.ccna=true; S.bp=bpVer(); if(en){ S.en=true; S.enPrev=prev; } render(); }
 customQs=lsGet(LS.custom,[]); rebuildQB(); applyLook();
+if(opts.lang==="en") loadTR().then(()=>{ rebuildQB(); if(!S) render(); }).catch(()=>{});
 render();
 initStore(); setTimeout(sbOpenShared,400); addEventListener("hashchange",sbOpenShared); setTimeout(()=>{ if(store.mode!=="db") autoBackup(); },8000);
 if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});

@@ -47,7 +47,9 @@ function renderHome(){
     <div class="row"><button class="primary" data-act="plan">Почати план на сьогодні</button><input type="date" id="examdate" value="${esc(opts.examDate)}" style="width:auto"></div>`
     :`<p class="small muted" style="margin:0 0 8px">Вкажіть дату екзамену — тренажер щодня складатиме набір із повторень і найслабших тем і покаже, чи встигаєте.</p><input type="date" id="examdate" style="width:auto">`}</div>`; })()}
 `,
-   prac:()=>`<div class="card"><h2>Тест модуля</h2>
+   prac:()=>`${(()=>{ const all=ccAll(), due=ccDue(); return `<div class="card"><div class="row"><h2 class="grow" style="margin:0">🃏 Картки команд</h2><span class="small muted">${all.length} карток · на сьогодні ${due.length}</span></div><p class="small muted" style="margin:6px 0 8px">Команди, які ви успішно вводили в лабах, повертаються як «введіть команду, щоб…» з інтервальним повторенням. CLI запам'ятовується руками.</p><button class="primary" data-act="ccrun" ${due.length?"":"disabled"}>${due.length?"Повторити "+Math.min(20,due.length):all.length?"Усе повторено на сьогодні":"Пройдіть лабу — картки з'являться"}</button></div>`; })()}
+  <div class="card"><h2>🎧 Аудіорежим</h2><p class="small muted" style="margin:0 0 8px">Тренажер читає питання й варіанти вголос, ви відповідаєте великими кнопками, потім чуєте правильну відповідь і пояснення. Для дороги й прогулянок: 20 питань із повторень і вибраних тем.</p><button class="primary" data-act="audstart">▶ Слухати</button></div>
+<div class="card"><h2>Тест модуля</h2>
     <p class="small muted" style="margin:0 0 8px">20 питань по одному модулю: спершу 🎓 NetAcad і слабкі місця, потім нові та розрахунки.</p>
     <select class="full" id="modsel">${COURSES.map(([g])=>`<optgroup label="${g}">${TOPICS.filter(t=>t.g===g).map(t=>`<option value="${t.id}" ${opts.modTopic===t.id?"selected":""}>${g} ${t.n}. ${esc(t.name)} (${QB.filter(q=>q.t===t.id).length})</option>`).join("")}</optgroup>`).join("")}</select>
     <div class="row" style="margin-top:8px"><button data-act="cheat">📄 Шпаргалка</button><span class="grow"></span><button class="primary" data-act="module">Почати тест модуля</button></div></div>
@@ -139,7 +141,7 @@ function pickModule(tid){
   const ng=gk.length?Math.min(4,Math.max(2,20-qs.length)):0;
   let list=[...na,...weak,...fresh,...rest].slice(0,20-ng);
   for(let i=0;i<ng;i++){ const g=GEN.make(gk[i%gk.length]); if(g) list.push(g); }
-  const lab=shuffle(ALLSCEN().filter(x=>x.t===tid)).map(x=>simQ(x.id)).filter(Boolean)[0];
+  const lab=shuffle(ALLSCEN().filter(x=>x.t===tid&&!x.discover)).map(x=>simQ(x.id)).filter(Boolean)[0];
   list=shuffle(list); if(lab){ list=list.slice(0,19); list.push(lab); }
   return list;
 }

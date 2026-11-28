@@ -195,7 +195,7 @@ function showRun(s){
   if(s.noDomainLookup) L.push("no ip domain-lookup"); if(s.domain) L.push("ip domain-name "+s.domain); if(s.ipRouting) L.push("ip routing"); if(s.sshVer) L.push("ip ssh version "+s.sshVer);
   for(const [a,b] of s.dhcp.excl) L.push("ip dhcp excluded-address "+a+(b!==a?" "+b:""));
   for(const p of Object.values(s.dhcp.pools)){ L.push("!","ip dhcp pool "+p.name); if(p.net) L.push(" network "+p.net+" "+p.mask); if(p.gw) L.push(" default-router "+p.gw); if(p.opt43) L.push(" option 43 hex "+p.opt43.replace(/(.{4})(?=.)/g,"$1.")); if(p.dns) L.push(" dns-server "+p.dns); if(p.domain) L.push(" domain-name "+p.domain); }
-  { const g=secRunGlobal(s).concat(v2RunGlobal(s),qosRunGlobal(s)); if(g.length) L.push("!",...g); }
+  { const g=secRunGlobal(s).concat(v2RunGlobal(s),qosRunGlobal(s),cisRunGlobal(s)); if(g.length) L.push("!",...g); }
   if(!s.router) L.push("!","spanning-tree mode "+s.stpMode); else L.push("!"); if(s.portfastDefault) L.push("spanning-tree portfast default"); if(s.bpduguardDefault) L.push("spanning-tree portfast bpduguard default"); L.push("spanning-tree extend system-id");
   for(const [v,p] of Object.entries(s.stpPrio)) L.push("spanning-tree vlan "+v+" priority "+p);
   if(s.lb!=="src-mac") L.push("port-channel load-balance "+s.lb);

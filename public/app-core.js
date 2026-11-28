@@ -17,21 +17,26 @@ const TOPICS = [
  ["ENSA4","ENSA","4","Принципи ACL"],["ENSA5","ENSA","5","Налаштування ACL"],["ENSA6","ENSA","6","NAT для IPv4"],["ENSA7","ENSA","7","Принципи WAN"],
  ["ENSA8","ENSA","8","VPN і IPsec"],["ENSA9","ENSA","9","QoS"],["ENSA10","ENSA","10","Керування мережею"],["ENSA11","ENSA","11","Проєктування мережі"],
  ["ENSA12","ENSA","12","Діагностика мережі"],["ENSA13","ENSA","13","Віртуалізація мережі"],["ENSA14","ENSA","14","Автоматизація мережі"],
- ["LNX1","LNX","1","Файли, права, журнали"],["LNX2","LNX","2","Процеси і сервіси systemd"],["LNX3","LNX","3","Мережа в Linux"],["LNX4","LNX","4","Bash-скрипти і cron"],["LNX5","LNX","5","Git"],["LNX6","LNX","6","CI/CD, YAML, Python, контейнери"]
+ ["LNX1","LNX","1","Файли, права, журнали"],["LNX2","LNX","2","Процеси і сервіси systemd"],["LNX3","LNX","3","Мережа в Linux"],["LNX4","LNX","4","Bash-скрипти і cron"],["LNX5","LNX","5","Git"],["LNX6","LNX","6","CI/CD, YAML, Python, контейнери"],
+ ["LNX7","LNX","7","Python для мереж: Netmiko, NAPALM"],["LNX8","LNX","8","RESTCONF, NETCONF, YANG"],["LNX9","LNX","9","Git і CI для конфігурацій"],
+ ["LNX10","LNX","10","Аналіз журналів і алертів"],["LNX11","LNX","11","Атаки в захопленнях пакетів"],["LNX12","LNX","12","Харденінг за CIS"]
 ].map(([id,g,n,name])=>({id,g,n,name}));
 const TMAP = Object.fromEntries(TOPICS.map(t=>[t.id,t]));
-const QB_BASE = [...(window.QB_ITN||[]), ...(window.QB_SRWE||[]), ...(window.QB_NOTES||[]), ...(window.QB_EXTRA||[]), ...(window.QB_SRWE2||[]), ...(window.QB_ENSA||[]), ...(window.QB_NETACAD||[]), ...(window.QB_FIGS||[]), ...(window.QB_EN||[]), ...(window.QB_LNX||[]), ...(window.QB_ENSA2||[]), ...(window.QB_V2||[]), ...(window.QB_SIM||[]), ...(window.QB_PRACT||[]), ...(window.QB_MORE||[])];
+const QB_BASE = [...(window.QB_ITN||[]), ...(window.QB_SRWE||[]), ...(window.QB_NOTES||[]), ...(window.QB_EXTRA||[]), ...(window.QB_SRWE2||[]), ...(window.QB_ENSA||[]), ...(window.QB_NETACAD||[]), ...(window.QB_FIGS||[]), ...(window.QB_EN||[]), ...(window.QB_LNX||[]), ...(window.QB_ENSA2||[]), ...(window.QB_V2||[]), ...(window.QB_SIM||[]), ...(window.QB_PRACT||[]), ...(window.QB_MORE||[]), ...(window.QB_DND||[]), ...(window.QB_AUTO||[])];
 let customQs = [];
 let QB = QB_BASE.slice();
 let QMAP = Object.fromEntries(QB.map(q=>[q.id,q]));
 function trq(q){ const t=window.QB_TR&&window.QB_TR[q.id]; if(!t) return q;
   const n=Object.assign({},q,{q:t.q,_uk:q.q,_tr:1});
   if(t.o&&q.o) n.o=q.o.map((p,i)=>{ const r=t.o[i]; return r?[r[0]===0?p[0]:r[0], r[1]]:p; });
-  ["items","pairs","e","cfg"].forEach(k=>{ if(t[k]!=null) n[k]=t[k]; });
+  ["items","pairs","e","cfg","cats"].forEach(k=>{ if(t[k]!=null) n[k]=t[k]; });
   if(t.parts&&q.parts) n.parts=q.parts.map((p,i)=>{ const r=t.parts[i]; return r? Object.assign({},p,{q:r.q,o:p.o.map((x,j)=>r.o&&r.o[j]?[r.o[j][0],r.o[j][1]]:x)}) : p; });
   if(t.intro) n.intro=t.intro; return n; }
+// Переклади (tr-*.js, ≈ 75 КБ) потрібні лише англійському режиму — вантажимо їх на вимогу.
+const TR_FILES=["tr-itn.js","tr-srwe.js","tr-srwe2.js","tr-ensa.js","tr-netacad.js","tr-figs.js","tr-notes.js","tr-extra.js"]; let trP=null;
+function loadTR(){ if(window.__trLoaded) return Promise.resolve(); if(!trP){ trP=Promise.all(TR_FILES.map(f=>new Promise((res,rej)=>{ const s=document.createElement("script"); s.src=f; s.onload=res; s.onerror=()=>rej(new Error("не завантажено "+f)); document.head.appendChild(s); }))).then(()=>{ window.__trLoaded=true; }); trP.catch(()=>{ trP=null; }); } return trP; }
 function rebuildQB(){ const base=opts.lang==="en"?QB_BASE.map(trq):QB_BASE; QB = base.concat(customQs.filter(q=>TMAP[q.t])); QMAP = Object.fromEntries(QB.map(q=>[q.id,q])); }
-const COURSES=[["ITN","Вступ до мереж"],["SRWE","Комутація, маршрутизація, бездротові мережі"],["ENSA","Корпоративні мережі, безпека, автоматизація"],["LNX","Після CCNA: Linux і DevOps"]];
+const COURSES=[["ITN","Вступ до мереж"],["SRWE","Комутація, маршрутизація, бездротові мережі"],["ENSA","Корпоративні мережі, безпека, автоматизація"],["LNX","Після CCNA: Linux, DevOps, автоматизація, безпека"]];
 const GEN = window.GEN, CLI = window.CLI;
 const TID2GEN = {"g-showstp":"g-showstp","g-showtrunk":"g-showtrunk","g-showec":"g-showec","g-showint":"g-showint","g-lpm":"g-lpm","g-ad":"g-ad","g-wild":"g-wild","g-ospfcost":"g-ospfcost","g-rid":"g-rid","g-bin":"g-bin","g-hex":"g-bin","g-net":"g-subnet","g-bc":"g-subnet","g-range":"g-subnet","g-hosts":"g-subnet","g-vlsm":"g-vlsm","g-ipv6":"g-ipv6","g-eui":"g-eui","g-stproot":"g-stproot","g-stprp":"g-stprp","g-stpcost":"g-stpcost","g-stpprio":"g-stpprio"};
 const INT_DAYS = [0,1,3,7,16,35], DAY = 864e5;

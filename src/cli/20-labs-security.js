@@ -1,0 +1,27 @@
+ // ===================== Після CCNA: безпека і автоматизація =====================
+ {id:"net-cis",net:true,t:"LNX12",title:"Аудит і харденінг маршрутизатора за CIS Benchmark",
+  topo:"Admin 192.168.1.10 — R1 Gi0/0 192.168.1.1 (внутрішня мережа)\nR1 Gi0/1 203.0.113.2/30 — ISP 203.0.113.1 (Інтернет)\nNTP/syslog-сервер 192.168.1.50",
+  task:["R1 — граничний маршрутизатор «з коробки»: Telnet із паролем на лінії, немає enable secret, CDP і проксі-ARP дивляться в Інтернет. Проведіть аудит (show running-config) і виправте за рекомендаціями CIS — кожна вимога нижче відповідає пункту бенчмарка.",
+   "Площина управління: enable secret; користувач admin із secret; SSH v2 з ключем 2048 (ip domain-name lab.local), ip ssh time-out 60 і authentication-retries 3; на vty — transport input ssh, login local, exec-timeout 10 0 і access-class зі стандартним ACL 10, що дозволяє лише 192.168.1.0/24; login block-for; banner motd.",
+   "Площина керування: service tcp-keepalives-in; logging buffered 16384, service timestamps log datetime msec, logging host 192.168.1.50; ntp server 192.168.1.50; CDP вимкнено на зовнішньому Gi0/1.",
+   "Площина даних: no ip source-route; на Gi0/1 — no ip proxy-arp, no ip redirects, no ip unreachables.",
+   "Перевірка: з Admin — ssh -l admin 192.168.1.1 працює, telnet — ні."],
+  def:()=>({devices:{
+    R1:{type:"router",setup:s=>{ IP(s,"Gi0/0","192.168.1.1",M24); IP(s,"Gi0/1","203.0.113.2",M30); addRoute(s,"0.0.0.0","0.0.0.0","203.0.113.1",null,1); s.vty.password="cisco"; s.vty.login="line"; }},
+    ISP:{type:"router",setup:s=>{ IP(s,"Gi0/1","203.0.113.1",M30); addRoute(s,"192.168.1.0",M24,"203.0.113.2",null,1); }},
+    Admin:{type:"pc",ip:"192.168.1.10",mask:M24,gw:"192.168.1.1"},NTP:{type:"server",ip:"192.168.1.50",mask:M24,gw:"192.168.1.1",services:[123,514]}},
+    links:[["Admin","Fa0","R1","Gi0/0"],["R1","Gi0/1","ISP","Gi0/1"],["NTP","Fa0","R1","Gi0/2"]]}),
+  check:N=>{ const r=N.dev.R1, v=r.vty, c=r.cis||{}, sv=r.svc||{}, o=r.ifs["Gi0/1"]; const acl=r.acls&&r.acls[v.acl];
+    const aclOk=!!acl&&JSON.stringify(acl).includes("192.168.1.0")&&JSON.stringify(acl).includes("0.0.0.255");
+    return [[!!r.enableSecret&&!!r.users.admin&&r.users.admin.secret,"1.1 enable secret і локальний користувач із secret"],
+      [r.sshVer===2&&r.rsaBits>=2048&&c.sshTimeout===60&&c.sshRetries===3,"1.2 SSH v2, ключ ≥ 2048, time-out 60, authentication-retries 3"],
+      [v.transport==="ssh"&&v.login==="local"&&!!v.execTimeout&&v.execTimeout[0]===10,"1.3 vty: лише SSH, login local, exec-timeout 10"],
+      [aclOk&&v.acl!=null,"1.4 access-class на vty дозволяє лише 192.168.1.0/24"],
+      [!!r.loginBlock&&!!r.motd,"1.5 login block-for і банер"],
+      [!!c.keepIn,"2.1 service tcp-keepalives-in"],
+      [!!sv.buffered&&!!sv.tsLog&&(sv.hosts||[]).includes("192.168.1.50")&&(sv.ntp||[]).includes("192.168.1.50"),"2.2 журнал (buffered, timestamps, syslog-сервер) і NTP"],
+      [!!o.cdpOff,"2.3 CDP вимкнено на зовнішньому інтерфейсі"],
+      [!!c.noSrcRoute,"3.1 no ip source-route"],
+      [!!o.noProxyArp&&!!o.noRedirects&&!!o.noUnreach,"3.2 на Gi0/1: no ip proxy-arp, no ip redirects, no ip unreachables"],
+      [N.flow("Admin","192.168.1.1","tcp",22).ok&&!N.flow("Admin","192.168.1.1","tcp",23).ok,"Admin входить по SSH, Telnet закрито"]]; },
+  sol:"R1:\nenable\nconf t\nenable secret Cis-Adm1n-2026\nusername admin privilege 15 secret Adm1nPa55!\nip domain-name lab.local\ncrypto key generate rsa modulus 2048\nip ssh version 2\nip ssh time-out 60\nip ssh authentication-retries 3\naccess-list 10 permit 192.168.1.0 0.0.0.255\nline vty 0 15\n transport input ssh\n login local\n exec-timeout 10 0\n access-class 10 in\nexit\nlogin block-for 120 attempts 3 within 60\nbanner motd #Authorized access only#\nservice tcp-keepalives-in\nlogging buffered 16384\nservice timestamps log datetime msec\nlogging host 192.168.1.50\nntp server 192.168.1.50\nno ip source-route\ninterface g0/1\n no cdp enable\n no ip proxy-arp\n no ip redirects\n no ip unreachables\nend"},

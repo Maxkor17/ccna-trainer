@@ -460,8 +460,14 @@ for(const m of ["user","exec"]){
   add(m,"show mac address-table dynamic",(s)=>s.net? s.net.macTable(s) : "");
 }
 add("exec","debug ip ospf adj",(s)=>{ s.dbgOspf=true; return "OSPF adjacency debugging is on"+(s.net? "\n"+s.net.ospfDebug(s) : ""); });
-add("exec","undebug all",(s)=>{ s.dbgOspf=false; return "All possible debugging has been turned off"; });
-add("exec","no debug all",(s)=>{ s.dbgOspf=false; return "All possible debugging has been turned off"; });
+const dbgOff=s=>{ s.dbgOspf=false; s.dbgStp=false; s.dbgDhcp=false; return "All possible debugging has been turned off"; };
+add("exec","undebug all",dbgOff); add("exec","no debug all",dbgOff); add("exec","u all",dbgOff); add("exec","undebug ip ospf adj",(s)=>{ s.dbgOspf=false; return "OSPF adjacency debugging is off"; });
+add("exec","debug ip dhcp server events",(s)=>{ if(!s.router&&!s.l3) return INV; s.dbgDhcp=true; return "DHCP server event debugging is on."; });
+add("exec","undebug ip dhcp server events",(s)=>{ s.dbgDhcp=false; return "DHCP server event debugging is off."; });
+add("exec","debug spanning-tree events",(s)=>{ if(s.router) return INV; s.dbgStp=true; return "Spanning Tree event debugging is on"; });
+add("exec","undebug spanning-tree events",(s)=>{ s.dbgStp=false; return "Spanning Tree event debugging is off"; });
+add("exec","show debugging",(s)=>{ const L=[]; if(s.dbgOspf) L.push("OSPF:\n  OSPF adjacency debugging is on"); if(s.dbgDhcp) L.push("DHCP:\n  DHCP server event debugging is on"); if(s.dbgStp) L.push("Spanning Tree:\n  Spanning Tree event debugging is on"); return L.join("\n"); });
+add("exec","terminal monitor",()=>"");
 function activeStatics6(s){ return (s.routes6||[]).filter(r=>{ if(r.ifc){ const i=s.ifs[r.ifc]; return i&&ifStatus(s,i)[1]==="up"; } return Object.values(s.ifs).some(i=>ifStatus(s,i)[1]==="up"&&(i.v6||[]).some(x=>v6same(x.addr,r.nh,x.len))); }); }
 function showRoute6(s,only){ const L=[]; const up=Object.values(s.ifs).filter(i=>ifStatus(s,i)[1]==="up"&&v6on(i));
   if(!only) for(const i of up) for(const x of i.v6||[]){ L.push("C   "+v6fmt(v6net(v6parse(x.addr),x.len))+"/"+x.len+" [0/0]\n     via "+longIf(i.name)+", directly connected"); L.push("L   "+x.addr+"/128 [0/0]\n     via "+longIf(i.name)+", receive"); }
@@ -758,7 +764,7 @@ function v2RunIf(s,i){ const L=[]; if(i.stpGuard) L.push(" spanning-tree guard "
   if(i.raGuard) L.push(i.raGuard==="(default)"?" ipv6 nd raguard":" ipv6 nd raguard attach-policy "+i.raGuard); return L.concat(qosRunIf(i)); }
 function v2RunL3(i){ const L=[]; for(const [g,v] of Object.entries(i.vrrp||{})){ if(v.desc) L.push(" vrrp "+g+" description "+v.desc); if(v.ip) L.push(" vrrp "+g+" ip "+v.ip); if(v.prio!==100) L.push(" vrrp "+g+" priority "+v.prio); if(!v.preempt) L.push(" no vrrp "+g+" preempt"); }
   if(i.ospf6) L.push(" ipv6 ospf "+i.ospf6.pid+" area "+i.ospf6.area); if(i.ospf6Cost) L.push(" ipv6 ospf cost "+i.ospf6Cost); if(i.ospf6Prio!=null) L.push(" ipv6 ospf priority "+i.ospf6Prio);
-  if(i.tunSrc) L.push(" tunnel source "+(i.tunSrc.includes(".")?i.tunSrc:longIf(i.tunSrc))); if(i.tunDst) L.push(" tunnel destination "+i.tunDst); return L.concat(qosRunIf(i)); }
+  if(i.tunSrc) L.push(" tunnel source "+(i.tunSrc.includes(".")?i.tunSrc:longIf(i.tunSrc))); if(i.tunDst) L.push(" tunnel destination "+i.tunDst); return L.concat(qosRunIf(i),cisRunIf(i)); }
 function v2RunGlobal(s){ const L=[]; if(s.aaa&&s.aaa.on){ L.push("aaa new-model"); for(const [n,m] of Object.entries(s.aaa.login)) L.push("aaa authentication login "+n+" "+m.map(x=>x==="tacacs+"||x==="radius"?"group "+x:x).join(" ")); for(const [n,m] of Object.entries(s.aaa.authz)) L.push("aaa authorization exec "+n+" "+m.map(x=>x==="tacacs+"||x==="radius"?"group "+x:x).join(" ")); for(const [n,v] of Object.entries(s.aaa.acct)) L.push("aaa accounting exec "+n+" "+v); L.push("!"); }
   for(const [n,t] of Object.entries(s.tacacs||{})){ L.push("tacacs server "+n); if(t.ip) L.push(" address ipv4 "+t.ip); if(t.key) L.push(" key 7 "+hmac(t.key).replace(/\./g,"").toUpperCase()); if(t.port!==49) L.push(" port "+t.port); L.push("!"); }
   for(const [n,t] of Object.entries(s.radius||{})){ L.push("radius server "+n); if(t.ip) L.push(" address ipv4 "+t.ip+" auth-port "+t.auth+" acct-port "+t.acct); if(t.key) L.push(" key 7 "+hmac(t.key).replace(/\./g,"").toUpperCase()); L.push("!"); }
@@ -853,6 +859,20 @@ function showRouteIp(s,ip){ if(!s.net||!s.ipRouting) return "% Network not in ta
   const src=r.ospf?{k:"ospf "+(s.ospf?s.ospf.pid:1),ad:110,m:(s.net.ospfRoutes(s.devName).find(x=>x.net+"/"+maskLen(x.mask)===r.pfx)||{}).cost||0}:r.conn?{k:"connected",ad:0,m:0}:{k:"static",ad:r.ad,m:0};
   return "Routing entry for "+r.pfx+"\n  Known via \""+src.k+"\", distance "+src.ad+", metric "+src.m+(r.conn?" (connected, via interface)":"")+"\n  Routing Descriptor Blocks:\n  * "+(r.conn?"directly connected, via "+longIf(r.ifn):r.nh+(r.ifn?", via "+longIf(r.ifn):""))+"\n      Route metric is "+src.m+", traffic share count is 1"; }
 for(const m of ["user","exec"]) add(m,"show ip route <ip>",(s,a)=>showRouteIp(s,a[0]));
+// ---------- Харденінг за CIS: source-route, proxy-arp, redirects/unreachables, keepalives, bootp, ssh timers ----------
+const CIS=s=>(s.cis=s.cis||{});
+add(C,"no ip source-route",s=>{ CIS(s).noSrcRoute=true; }); add(C,"ip source-route",s=>{ CIS(s).noSrcRoute=false; });
+add(C,"service tcp-keepalives-in",s=>{ CIS(s).keepIn=true; }); add(C,"no service tcp-keepalives-in",s=>{ CIS(s).keepIn=false; });
+add(C,"service tcp-keepalives-out",s=>{ CIS(s).keepOut=true; }); add(C,"no service tcp-keepalives-out",s=>{ CIS(s).keepOut=false; });
+add(C,"no ip bootp server",s=>{ CIS(s).noBootp=true; }); add(C,"ip bootp server",s=>{ CIS(s).noBootp=false; });
+add(C,"no service pad",()=>{}); add(C,"no ip finger",()=>{}); add(C,"no service dhcp",s=>{ CIS(s).noDhcpSvc=true; }); add(C,"service dhcp",s=>{ CIS(s).noDhcpSvc=false; });
+add(C,"ip ssh time-out <n>",(s,a)=>{ if(a[0]<1||a[0]>120) return INV; CIS(s).sshTimeout=a[0]; });
+add(C,"ip ssh authentication-retries <n>",(s,a)=>{ if(a[0]<0||a[0]>5) return INV; CIS(s).sshRetries=a[0]; });
+add("if","no ip proxy-arp",F(i=>{ i.noProxyArp=true; })); add("if","ip proxy-arp",F(i=>{ i.noProxyArp=false; }));
+add("if","no ip redirects",F(i=>{ i.noRedirects=true; })); add("if","ip redirects",F(i=>{ i.noRedirects=false; }));
+add("if","no ip unreachables",F(i=>{ i.noUnreach=true; })); add("if","ip unreachables",F(i=>{ i.noUnreach=false; }));
+function cisRunGlobal(s){ const c=s.cis||{}; const L=[]; if(c.noSrcRoute) L.push("no ip source-route"); if(c.keepIn) L.push("service tcp-keepalives-in"); if(c.keepOut) L.push("service tcp-keepalives-out"); if(c.noBootp) L.push("no ip bootp server"); if(c.noDhcpSvc) L.push("no service dhcp"); if(c.sshTimeout) L.push("ip ssh time-out "+c.sshTimeout); if(c.sshRetries!=null) L.push("ip ssh authentication-retries "+c.sshRetries); return L; }
+function cisRunIf(i){ const L=[]; if(i.noRedirects) L.push(" no ip redirects"); if(i.noUnreach) L.push(" no ip unreachables"); if(i.noProxyArp) L.push(" no ip proxy-arp"); return L; }
 // ---------- Розбір рядка ----------
 function tokenize(line){
   let t=line.trim().split(/\s+/).filter(Boolean);
@@ -1050,7 +1070,7 @@ function showRun(s){
   if(s.noDomainLookup) L.push("no ip domain-lookup"); if(s.domain) L.push("ip domain-name "+s.domain); if(s.ipRouting) L.push("ip routing"); if(s.sshVer) L.push("ip ssh version "+s.sshVer);
   for(const [a,b] of s.dhcp.excl) L.push("ip dhcp excluded-address "+a+(b!==a?" "+b:""));
   for(const p of Object.values(s.dhcp.pools)){ L.push("!","ip dhcp pool "+p.name); if(p.net) L.push(" network "+p.net+" "+p.mask); if(p.gw) L.push(" default-router "+p.gw); if(p.opt43) L.push(" option 43 hex "+p.opt43.replace(/(.{4})(?=.)/g,"$1.")); if(p.dns) L.push(" dns-server "+p.dns); if(p.domain) L.push(" domain-name "+p.domain); }
-  { const g=secRunGlobal(s).concat(v2RunGlobal(s),qosRunGlobal(s)); if(g.length) L.push("!",...g); }
+  { const g=secRunGlobal(s).concat(v2RunGlobal(s),qosRunGlobal(s),cisRunGlobal(s)); if(g.length) L.push("!",...g); }
   if(!s.router) L.push("!","spanning-tree mode "+s.stpMode); else L.push("!"); if(s.portfastDefault) L.push("spanning-tree portfast default"); if(s.bpduguardDefault) L.push("spanning-tree portfast bpduguard default"); L.push("spanning-tree extend system-id");
   for(const [v,p] of Object.entries(s.stpPrio)) L.push("spanning-tree vlan "+v+" priority "+p);
   if(s.lb!=="src-mac") L.push("port-channel load-balance "+s.lb);
@@ -1283,7 +1303,9 @@ function Net(def){
       if(ia&&ib&&!ia.shutdown&&!ib.shutdown&&operTrunk(ia)&&operTrunk(ib)&&ia.nativeVlan!==ib.nativeVlan){
         msgs.push([l.a,"%CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on "+longIf(l.pa)+" ("+ia.nativeVlan+"), with "+l.b+" "+longIf(l.pb)+" ("+ib.nativeVlan+")."]);
         msgs.push([l.b,"%CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on "+longIf(l.pb)+" ("+ib.nativeVlan+"), with "+l.a+" "+longIf(l.pa)+" ("+ia.nativeVlan+")."]); } }
+    try{ msgs.push(...N.debugMsgs()); }catch(e){}
     const out=[]; for(const m of msgs){ const k=m.join("|"); if(!N.seenMsgs.has(k)){ N.seenMsgs.add(k); out.push(m); } }
+    if(N._dq&&N._dq.length) out.push(...N._dq.splice(0));
     { const t=new Date(); const st=t.toLocaleString("en-US",{month:"short"})+" "+String(t.getDate()).padStart(2," ")+" "+t.toTimeString().slice(0,8)+"."+String(t.getMilliseconds()).padStart(3,"0");
       for(const [dn,txt] of out){ const d=N.dev[dn]; if(d&&!isHost(d)&&d.type!=="hub"){ const lb=d.logBuf||[]; if(lb.length&&lb[lb.length-1].endsWith(": "+txt)) continue; d.logBuf=lb.concat(["*"+st+": "+txt]).slice(-60); } } }
     N.seenMsgs=new Set([...N.seenMsgs].filter(k=>msgs.some(m=>m.join("|")===k)));
@@ -1582,6 +1604,29 @@ function Net(def){
         const mac=e.mac||(isHost(N.dev[e.dev])?macOf(e.dev,"Fa0"):macOf(e.dev,e.ifn)); const k=v+"|"+mac; if(seen.has(k)) continue; seen.add(k); rows.push([v,mac,first.out]); } }
     rows.sort((a,b)=>a[0]-b[0]||a[2].localeCompare(b[2],undefined,{numeric:true})); for(const x of s.macStatic||[]){ const k=x.v+"|"+x.mac; const ix=rows.findIndex(r=>r[0]+"|"+r[1]===k); if(ix>=0) rows.splice(ix,1); rows.unshift([x.v,x.mac,x.port,"STATIC"]); }
     return "          Mac Address Table\n-------------------------------------------\n\nVlan    Mac Address       Type        Ports\n----    -----------       --------    -----\n"+rows.map(r=>String(r[0]).padStart(4)+"    "+r[1].padEnd(18)+(r[3]||"DYNAMIC").padEnd(12)+r[2]).join("\n")+"\nTotal Mac Addresses for this criterion: "+rows.length; };
+  // ---------- debug: зміни стану OSPF-сусідств і STP між перерахунками ----------
+  N._dbgPrev={};
+  N.debugMsgs=()=>{ const M=[];
+    for(const d of Object.values(N.dev)){ if(isHost(d)||d.type==="hub") continue; const dn=d.devName;
+      if(d.dbgOspf&&d.ospf){ const P=N._dbgPrev[dn+"|ospf"]||{}; const cur={};
+        for(const n of N.ospfNeighbors(dn)){ const me=N.ospfRole(dn,n.myIf), he=N.ospfRole(n.dev,n.ifn); const st=(me==="DROTHER"&&he==="DROTHER")?"2WAY":"FULL"; cur[n.rid+"|"+n.myIf]=st;
+          if(P[n.rid+"|"+n.myIf]!==st){ const I="*OSPF-ADJ "+n.myIf+": "; M.push([dn,I+"2 Way Communication to "+n.rid+", state 2WAY"]);
+            if(st==="FULL") M.push([dn,I+"Nbr "+n.rid+": Prepare dbase exchange"],[dn,I+"Send DBD to "+n.rid+" seq 0x"+(0x1000+n.rid.split(".").reduce((a,x)=>a+Number(x),0)).toString(16)+" opt 0x52 flag 0x7 len 32"],[dn,I+"Rcv DBD from "+n.rid+" seq 0x"+(0x2000+n.rid.split(".").reduce((a,x)=>a+Number(x),0)).toString(16)+" opt 0x52 flag 0x2 len 152 mtu 1500 state EXCHANGE"],[dn,I+"Exchange Done with "+n.rid],[dn,I+"Synchronized with "+n.rid+", state FULL"]);
+            else M.push([dn,I+"Nbr "+n.rid+" is DROTHER and so am I: staying in 2WAY (no full adjacency between DROTHERs)"]); } }
+        for(const k of Object.keys(P)) if(!cur[k]){ const [rid,ifn]=k.split("|"); M.push([dn,"*OSPF-ADJ "+ifn+": Neighbor "+rid+" is dead, state DOWN"],[dn,"%OSPF-5-ADJCHG: Process "+d.ospf.pid+", Nbr "+rid+" on "+longIf(ifn)+" from FULL to DOWN, Neighbor Down: Dead timer expired"]); }
+        N._dbgPrev[dn+"|ospf"]=cur;
+        for(const l of N.ospfDebug(d).split("\n")) if(/Mismatch|mismatch|DUP_RTRID|passive|ACL|MTU|authentication/i.test(l)) M.push([dn,l]); }
+      else delete N._dbgPrev[dn+"|ospf"];
+      if(d.dbgStp&&d.type==="switch"){ const P=N._dbgPrev[dn+"|stp"]||{}; const cur={};
+        for(const v of Object.keys(d.vlans).map(Number)){ const st=(N.stp(v)||{})[dn]; if(!st) continue; const V="VLAN"+String(v).padStart(4,"0");
+          cur[v+"|root"]=st.rootName; if(P[v+"|root"]!==undefined&&P[v+"|root"]!==st.rootName) M.push([dn,"STP: "+V+" new root is "+(st.root&&st.root.p)+", "+(st.root&&st.root.mac)+(st.rootPort?" on port "+st.rootPort:" (this bridge)")+", cost "+st.cost]);
+          for(const [p,r] of Object.entries(st.roles||{})){ const k=v+"|"+p; const val=r[0]+"/"+r[1]; cur[k]=val; const was=P[k];
+            if(was!==undefined&&was!==val){ const [wr]=was.split("/"); if(wr!==r[0]) M.push([dn,"STP: "+V+" "+p+" role "+wr+" -> "+r[0]]); M.push([dn,"STP: "+V+" "+p+" -> "+({FWD:"forwarding",BLK:"blocking",LRN:"learning",LIS:"listening",BKN:"broken (inconsistent)"}[r[1]]||r[1])]); }
+            else if(was===undefined&&P[v+"|root"]!==undefined) M.push([dn,"STP: "+V+" "+p+" -> "+({FWD:"listening → learning → forwarding",BLK:"blocking"}[r[1]]||r[1])]); } }
+        N._dbgPrev[dn+"|stp"]=cur; }
+      else delete N._dbgPrev[dn+"|stp"]; }
+    return M; };
+  N.dbgDhcp=(srvDev,lines)=>{ const d=N.dev[srvDev]; if(!d||!d.dbgDhcp) return; N._dq=N._dq||[]; for(const l of lines) N._dq.push([srvDev,l]); };
   N.ospfDebug=s=>{ ospfSegments(); const mine=N.ospfIssues.filter(x=>x.startsWith(s.devName+" ↔ ")); if(!s.ospf) return "OSPF не запущено";
     if(!mine.length) return "*OSPF-ADJ: Сусідства на "+s.devName+" встановлюються без помилок ("+N.ospfNeighbors(s.devName).length+" сусід(ів))";
     return mine.map(x=>{ const [pair,why]=x.split(": "); const nb=pair.split(" ↔ ")[1];
@@ -1601,7 +1646,9 @@ function Net(def){
     for(const [ip,b] of Object.entries(d.dhcp.bind)) if(b.client===client&&b.pool===pool.name) return ip;
     const lo=ipToN(pool.net)+1, hi=((ipToN(pool.net)|~ipToN(pool.mask))>>>0)-1; const own=new Set(Object.values(d.ifs).map(i=>i.ip).filter(Boolean));
     const taken=new Set(Object.values(N.dev).filter(x=>isHost(x)&&x.ip&&x.name!==client).map(x=>x.ip));
+    const infra=new Set(Object.values(N.dev).filter(x=>!isHost(x)&&x!==d).flatMap(x=>Object.values(x.ifs||{}).flatMap(i=>[i.ip].concat(Object.values(i.hsrp||{}).map(h=>h.ip),Object.values(i.vrrp||{}).map(h=>h.ip)))).filter(Boolean));
     for(let n=lo;n<=hi;n++){ const ip=n2ip(n); if(d.dhcp.excl.some(([a,b])=>n>=ipToN(a)&&n<=ipToN(b))) continue; if(d.dhcp.bind[ip]||own.has(ip)||taken.has(ip)) continue;
+      if(infra.has(ip)){ d.dhcp.conflicts=d.dhcp.conflicts||{}; if(!d.dhcp.conflicts[ip]){ d.dhcp.conflicts[ip]=Date.now(); N._dq=N._dq||[]; N._dq.push([d.devName,"%DHCPD-4-PING_CONFLICT: DHCP address conflict:  server pinged "+ip+"."]); } continue; }
       d.dhcp.bind[ip]={client,pool:pool.name,cid:"0100.50"+(79+client.length).toString(16)+"."+(client.charCodeAt(client.length-1)).toString(16).padStart(2,"0")+"11.22"}; return ip; }
     return null; }
   N.dhcp=pcName=>{
@@ -1614,12 +1661,18 @@ function Net(def){
     for(const e of dom){ if(e.kind==="pc") continue; const d=N.dev[e.dev]; const ifc=d.ifs[e.ifn]; if(!ifc||!ifc.ip||ifc.ip!==e.ip) continue; const gi=ifc.ip; let srv=null;
       const local=poolFor(d,gi); if(local) srv={dev:e.dev,pool:local};
       else if(ifc.helper&&ifc.helper.length){ for(const h of ifc.helper){ const c={hops:[],ttl:16}; const f=originate(e.dev,{src:gi,dst:h,proto:"udp",dport:67,sport:67},c); if(!f.ok){ why="DHCP relay "+e.dev+" → "+h+": "+f.why; continue; }
-          const sd=N.dev[f.dev]; const p=poolFor(sd,gi); if(!p){ why="DHCP-сервер "+h+" ("+f.dev+") не має пулу для мережі "+gi+"/"+maskLen(ifc.mask); continue; }
+          const sd=N.dev[f.dev]; const p=poolFor(sd,gi); if(!p){ N.dbgDhcp(f.dev,["DHCPD: DHCPDISCOVER received from client through relay "+gi+".","DHCPD: there is no pool for "+gi+"."]); why="DHCP-сервер "+h+" ("+f.dev+") не має пулу для мережі "+gi+"/"+maskLen(ifc.mask); continue; }
           const b=originate(f.dev,{src:f.pkt.dst,dst:gi,proto:"udp",dport:67,sport:67,reply:true},{hops:[],ttl:16}); if(!b.ok){ why="Відповідь DHCP-сервера не доходить до relay "+gi+": "+b.why; continue; } srv={dev:f.dev,pool:p}; break; } }
-      if(srv){ const sb=snoopBlock(e,d,ifc); if(sb){ why=sb; continue; } const ip=allocate(N.dev[srv.dev],srv.pool,pcName); if(ip) for(const h of e.path||[]){ const sw=N.dev[h.dev]; const sp=sw&&sw.snoop; if(sp&&sp.on&&sp.vlans.includes(h.v)&&h.inp&&isPhys(h.inp)) sp.bind[pcMac]={mac:pcMac,ip,vlan:h.v,port:h.inp}; } if(!ip) return {ok:false,why:"Пул "+srv.pool.name+" на "+srv.dev+" вичерпано або всі адреси виключено"}; Object.assign(pc,{ip,mask:srv.pool.mask,gw:srv.pool.gw||null,dns:srv.pool.dns||null,opt43:srv.pool.opt43||null,dhcpSrv:N.dev[srv.dev]===d?gi:(ifc.helper[0])}); return {ok:true}; }
+      if(srv){ const sb=snoopBlock(e,d,ifc); if(sb){ why=sb; continue; } const ip=allocate(N.dev[srv.dev],srv.pool,pcName); if(ip) for(const h of e.path||[]){ const sw=N.dev[h.dev]; const sp=sw&&sw.snoop; if(sp&&sp.on&&sp.vlans.includes(h.v)&&h.inp&&isPhys(h.inp)) sp.bind[pcMac]={mac:pcMac,ip,vlan:h.v,port:h.inp}; } if(!ip) return {ok:false,why:"Пул "+srv.pool.name+" на "+srv.dev+" вичерпано або всі адреси виключено"}; { const cid=("01"+pcMac.replace(/\./g,"")).match(/.{1,4}/g).join("."); const via=N.dev[srv.dev]===d?" on interface "+longIf(e.ifn):" through relay "+gi; N.dbgDhcp(srv.dev,["DHCPD: DHCPDISCOVER received from client "+cid+via+".","DHCPD: Allocate an address without class information ("+ip+")","DHCPD: Sending DHCPOFFER to client "+cid+" ("+ip+").","DHCPD: DHCPREQUEST received from client "+cid+".","DHCPD: Sending DHCPACK to client "+cid+" ("+ip+")."]); }
+      Object.assign(pc,{ip,mask:srv.pool.mask,gw:srv.pool.gw||null,dns:srv.pool.dns||null,opt43:srv.pool.opt43||null,dhcpSrv:N.dev[srv.dev]===d?gi:(ifc.helper[0])}); return {ok:true}; }
     }
     pc.ip=null; return {ok:false,why:why||"Жоден DHCP-сервер не відповів у цьому сегменті: на шлюзі немає пулу для цієї мережі і не задано ip helper-address"}; };
   N.release=pcName=>{ const pc=N.dev[pcName]; const mac=macOf(pcName,"Fa0"); for(const d of Object.values(N.dev)) if(d.snoop&&d.snoop.bind) delete d.snoop.bind[mac]; for(const d of Object.values(N.dev)) if(!isHost(d)&&d.dhcp) for(const [ip,b] of Object.entries(d.dhcp.bind)) if(b.client===pcName) delete d.dhcp.bind[ip]; pc.ip=null; pc.mask=null; pc.gw=null; };
+  N.cdpNbrs=(dn)=>{ const s=N.dev[dn]; const R=[]; if(!s||isHost(s)) return R;
+    for(const l of N.links){ let me,ot,po; if(l.a===dn){me=l.pa;ot=l.b;po=l.pb;} else if(l.b===dn){me=l.pb;ot=l.a;po=l.pa;} else continue;
+      const od=N.dev[ot]; if(isHost(od)||od.type==="hub"||(s.svc&&s.svc.cdp===false)||s.ifs[me].cdpOff||(od.svc&&od.svc.cdp===false)||(od.ifs[po]&&od.ifs[po].cdpOff)||s.ifs[me].shutdown||(od.ifs[po]&&od.ifs[po].shutdown)) continue;
+      R.push({dev:ot,me,po,type:od.type,l3:!!od.l3}); } return R; };
+  N.mgmtIp=(dn)=>{ const d=N.dev[dn]; if(!d) return null; const ifs=Object.values(d.ifs).filter(i=>i.ip&&!i.shutdown); const v=ifs.find(i=>i.svi)||ifs.find(i=>i.loop)||ifs[0]; return v?v.ip:null; };
   N.cdp=(s)=>{ let o="Capability Codes: R - Router, S - Switch, H - Host\n\nDevice ID        Local Intrfce     Holdtme    Capability  Platform  Port ID\n";
     for(const l of N.links){ let me,pm,ot,po; if(l.a===s.devName){me=l.pa;ot=l.b;po=l.pb;} else if(l.b===s.devName){me=l.pb;ot=l.a;po=l.pa;} else continue;
       const od=N.dev[ot]; if(isHost(od)||od.type==="hub"||(s.svc&&s.svc.cdp===false)||s.ifs[me].cdpOff||(od.svc&&od.svc.cdp===false)||(od.ifs[po]&&od.ifs[po].cdpOff)||s.ifs[me].shutdown||(od.ifs[po]&&od.ifs[po].shutdown)) continue;
@@ -1828,6 +1881,51 @@ const ACC=(s,map)=>{ for(const [p,v] of Object.entries(map)){ s.ifs[p].mode="acc
 const EC=(s,g,ports,mode,cfg)=>{ s.ifs["Po"+g]=Object.assign(newIf("Po"+g),cfg||{}); for(const p of ports) Object.assign(s.ifs[p],cfg||{},{chGroup:g,chMode:mode}); };
 const POOL=(s,name,net,mask,gw,excl)=>{ s.dhcp.pools[name]={name,net,mask,gw,dns:null,domain:null}; if(excl) s.dhcp.excl.push(excl); };
 const V6=(s,n,pfx,ll)=>{ const P=v6pfx(pfx); const i=s.ifs[n]; i.v6=[{addr:P.addr,len:P.len}]; i.llStatic=ll; i.v6on=true; i.shutdown=false; };
+// ---------- «Невідома мережа»: генератор, еталон і перевірка карти ----------
+const DISC_NAMES=[["CORE","SW-CORE"],["DIST","SW-DIST"],["ACC","SW-ACC"],["EDGE","R-EDGE"],["BR","R-BR"]];
+function discoverNet(){ const rnd=n=>Math.floor(Math.random()*n); const pick=a=>a[rnd(a.length)];
+  const nSw=3+rnd(3), nR=1+rnd(2); const names=[]; const sws=[], rs=[]; const used=new Set();
+  for(let i=0;i<nSw;i++){ let n; do{ n=pick(["SW-CORE","SW-DIST1","SW-DIST2","SW-ACC1","SW-ACC2","SW-ACC3","SW-LAB","SW-FLOOR2","SW-SRV"]); }while(used.has(n)); used.add(n); sws.push(n); }
+  for(let i=0;i<nR;i++){ let n; do{ n=pick(["R-EDGE","R-BRANCH","R-WAN","R-DMZ"]); }while(used.has(n)); used.add(n); rs.push(n); }
+  const all=sws.concat(rs); const devices={}; const free={}; let ipn=11;
+  for(const n of sws){ devices[n]={type:"switch",setup:(s=>{ const ip="10.99.0."+(s._ipn); s.ifs.Vlan1=Object.assign(newIf("Vlan1"),{svi:true,ip,mask:M24,shutdown:false}); })}; free[n]=rng("Fa0/",1,24).concat(["Gi0/1","Gi0/2"]); }
+  for(const n of rs){ devices[n]={type:"router"}; free[n]=["Gi0/0","Gi0/1","Gi0/2"]; }
+  const takeP=(n,pref)=>{ const f=free[n]; let k=pref==="gi"?f.findIndex(p=>/^Gi/.test(p)):-1; if(k<0) k=rnd(f.length); if(pref!=="gi"&&/^Gi/.test(f[k])&&f.some(p=>/^Fa/.test(p))&&rnd(2)) k=f.findIndex(p=>/^Fa/.test(p))+rnd(4); k=Math.min(Math.max(k,0),f.length-1); return f.splice(k,1)[0]; };
+  const links=[]; const order=sws.slice().sort(()=>Math.random()-0.5);
+  for(let i=1;i<order.length;i++){ const a=order[i], b=order[rnd(i)]; links.push([a,takeP(a,"gi"),b,takeP(b)]); }
+  if(order.length>=3&&rnd(2)){ const a=order[order.length-1], b=order[0]; if(!links.some(l=>(l[0]===a&&l[2]===b)||(l[0]===b&&l[2]===a))) links.push([a,takeP(a),b,takeP(b)]); }
+  rs.forEach((r,i)=>{ const sw=pick(sws); links.push([r,"Gi0/"+i,sw,takeP(sw,"gi")]); free[r]=free[r].filter(p=>p!=="Gi0/"+i); });
+  // адреси: комутатори — Vlan1, маршрутизатори — інтерфейс до комутатора
+  const ips={}; sws.forEach(n=>{ ips[n]=ipn++; }); rs.forEach((r,i)=>{ ips[r]=1+i; });
+  for(const n of sws){ const k=ips[n]; devices[n].setup=s=>{ s.ifs.Vlan1=Object.assign(newIf("Vlan1"),{svi:true,ip:"10.99.0."+k,mask:M24,shutdown:false}); for(const p of Object.keys(s.ifs)) if(/^(Fa|Gi)/.test(p)&&links.some(l=>(l[0]===n&&l[1]===p)||(l[2]===n&&l[3]===p))) s.ifs[p].mode="trunk"; }; }
+  rs.forEach((r,i)=>{ const p=links.find(l=>l[0]===r)[1]; devices[r].setup=s=>{ IP(s,p,"10.99.0."+(1+i),M24); }; });
+  // кілька ПК на access-портах
+  let pcs=0; for(const n of sws) if(rnd(3)>0){ pcs++; const nm="PC"+pcs; devices[nm]={type:"pc",ip:"10.99.0."+(100+pcs),mask:M24}; links.push([nm,"Fa0",n,takeP(n)]); }
+  const start=order[0]; return {devices,links,start}; }
+function discoverTruth(N){ const net=Object.keys(N.dev).filter(d=>N.dev[d].type==="switch"||N.dev[d].type==="router"); const L=[];
+  for(const l of N.links) if(net.includes(l.a)&&net.includes(l.b)) L.push([l.a,l.pa,l.b,l.pb]);
+  const text=L.map(l=>l[0]+" "+l[1]+" — "+l[2]+" "+l[3]).concat(net.map(d=>d+" "+N.mgmtIp(d))).join("\n"); return {net,links:L,text}; }
+function discoverParse(text){ const links=[], ips={}; const bad=[];
+  for(const raw of String(text||"").split("\n")){ const t=raw.trim(); if(!t||t.startsWith("#")) continue;
+    let m=t.match(/^([\w.-]+)\s+((?:[A-Za-z-]+)\s*\d+(?:\/\d+)*)\s*(?:—|–|-|<->|<-+>|=+|,|\s)\s*([\w.-]+)\s+((?:[A-Za-z-]+)\s*\d+(?:\/\d+)*)$/);
+    if(m){ const pa=normIf(m[2]), pb=normIf(m[4]); if(pa&&pb){ links.push([m[1].toUpperCase(),pa,m[3].toUpperCase(),pb]); continue; } }
+    m=t.match(/^([\w.-]+)\s*[:\s]\s*(\d+\.\d+\.\d+\.\d+)$/); if(m){ ips[m[1].toUpperCase()]=m[2]; continue; } bad.push(t); }
+  return {links,ips,bad}; }
+function discoverCheck(N){ const T=discoverTruth(N); const U=discoverParse(N._map); const key=l=>[l[0].toUpperCase()+" "+l[1],l[2].toUpperCase()+" "+l[3]].sort().join(" — ");
+  const want=new Set(T.links.map(key)), got=new Set(U.links.map(key)); const miss=[...want].filter(k=>!got.has(k)), extra=[...got].filter(k=>!want.has(k));
+  const devs=new Set(U.links.flatMap(l=>[l[0],l[2]]).concat(Object.keys(U.ips))); const missDev=T.net.filter(d=>!devs.has(d.toUpperCase()));
+  const badIp=T.net.filter(d=>U.ips[d.toUpperCase()]!==N.mgmtIp(d));
+  return [[!missDev.length,"Знайдено всі мережеві пристрої ("+T.net.length+")"+(missDev.length&&N._map?" — бракує: "+missDev.length:"")],
+    [!!N._map&&!miss.length,"Усі лінки між пристроями ("+want.size+")"+(miss.length&&N._map?" — бракує: "+miss.length:"")],
+    [!!N._map&&!extra.length,"Немає зайвих або помилкових лінків"+(extra.length?": "+extra.join("; "):"")],
+    [!!N._map&&!badIp.length,"IP керування вказано для кожного пристрою"+(badIp.length&&N._map?" — не так або немає: "+badIp.length:"")],
+    [!U.bad.length,"Усі рядки карти розпізнано"+(U.bad.length?": «"+U.bad.slice(0,2).join("», «")+"»":"")]]; }
+function showCdpDetail(s){ if(!s.net) return ""; const N=s.net; const R=N.cdpNbrs(s.devName); if(!R.length) return "";
+  return R.map(r=>{ const od=N.dev[r.dev]; const ip=N.mgmtIp(r.dev); const nv=s.ifs[r.me]&&s.ifs[r.me].nativeVlan||1;
+    return "-------------------------\nDevice ID: "+r.dev+"\nEntry address(es): \n"+(ip?"  IP address: "+ip+"\n":"")+"Platform: "+(od.type==="router"?"cisco ISR4321":"cisco WS-C2960-24TT-L")+",  Capabilities: "+(od.type==="router"?"Router Source-Route-Bridge":"Switch IGMP")+"\nInterface: "+longIf(r.me)+",  Port ID (outgoing port): "+longIf(r.po)+"\nHoldtime : 160 sec\n\nVersion :\nCisco IOS Software, "+(od.type==="router"?"ISR Software (X86_64_LINUX_IOSD-UNIVERSALK9-M), Version 16.9.4":"C2960 Software (C2960-LANBASEK9-M), Version 15.0(2)SE11")+"\n\nadvertisement version: 2\n"+(od.type==="router"?"":"Native VLAN: "+nv+"\n")+"Duplex: full\nManagement address(es): \n"+(ip?"  IP address: "+ip+"\n":""); }).join("\n")+"\n\nTotal cdp entries displayed : "+R.length; }
+for(const m of ["user","exec"]){ add(m,"show ip dhcp conflict",s=>{ const c=Object.entries((s.dhcp||{}).conflicts||{}); return "IP address        Detection method   Detection time          VRF\n"+c.map(([ip,t])=>ip.padEnd(18)+"Ping".padEnd(19)+new Date(t).toUTCString().slice(5,25)).join("\n"); }); }
+add("exec","clear ip dhcp conflict *",s=>{ if(s.dhcp) s.dhcp.conflicts={}; return ""; });
+for(const m of ["user","exec"]){ add(m,"show cdp neighbors detail",s=>showCdpDetail(s)); add(m,"show cdp entry <w>",(s,a)=>{ const t=showCdpDetail(s).split("-------------------------\n").find(x=>x.startsWith("Device ID: "+a[0]+"\n")); return t? "-------------------------\n"+t.trim() : ""; }); }
 const NETSCEN=[
  {id:"net-trunk",net:true,t:"SRWE3",title:"Два комутатори: VLAN і trunk",
   topo:"PC1 (VLAN10) — S1 Fa0/1      S2 Fa0/1 — PC2 (VLAN10)\nPC3 (VLAN20) — S1 Fa0/2      S2 Fa0/2 — PC4 (VLAN20)\n                S1 Gi0/1 ════ S2 Gi0/1",
@@ -2408,13 +2506,70 @@ const NETSCEN=[
   check:N=>{ const s=N.dev.S1, i=s.ifs["Fa0/10"]; return [[!!s.vlans[10]&&!!s.vlans[20],"VLAN 10 і 20 створено на S1"],[i.mode==="trunk"&&JSON.stringify(i.allowed)==="[10,20]","Fa0/10 — trunk лише з VLAN 10, 20"],
       [pass(N,"PC1","192.168.10.10")&&N.flow("PC1","192.168.10.10","tcp",80).ok,"PC1 → VM-Web (ping і HTTP)"],[pass(N,"PC1","192.168.20.20"),"PC1 → VM-DB"]]; },
   sol:"S1:\nenable\nconf t\nvlan 10\n name WEB\nvlan 20\n name DB\nexit\ninterface fa0/10\n switchport mode trunk\n switchport trunk allowed vlan 10,20\nend"},
+ // ===================== Діагностика debug-командами і «Невідома мережа» =====================
+ {id:"net-debug",net:true,t:"ENSA12",title:"Діагностика з debug: OSPF-сусідство і DHCP через relay",
+  topo:"PC1 — R1 Gi0/0 192.168.10.1 (DHCP-сервер для обох LAN)\nR1 Gi0/1 10.0.12.1/30 — R2 Gi0/1 10.0.12.2/30 (OSPF area 0)\nR2 Gi0/0 192.168.20.1 (ip helper-address 10.0.12.1) — PC2 (DHCP)",
+  task:["Скарга: PC2 не отримує адресу, а R1 не бачить мережу 192.168.20.0. Знайдіть причини саме через debug, а не show run.",
+   "На R1: debug ip ospf adj — повідомлення Mismatched hello parameters покаже, які таймери не збігаються. Виправте їх на R2 (поверніть стандартні 10/40).",
+   "Після виправлення в тому ж debug видно перехід 2WAY → EXCHANGE → FULL.",
+   "На R1: debug ip dhcp server events, потім на PC2: ipconfig /renew. Повідомлення «there is no pool for 192.168.20.1» підкаже, що не так із пулом LAN20. Виправте пул.",
+   "Обов'язково вимкніть налагодження: undebug all (на R1 і R2). На робочому обладнанні debug навантажує CPU."],
+  def:()=>({devices:{
+    R1:{type:"router",setup:s=>{ IP(s,"Gi0/0","192.168.10.1",M24); IP(s,"Gi0/1","10.0.12.1",M30); OSPF(s,1,"1.1.1.1",[["192.168.10.0","0.0.0.255",0],["10.0.12.0","0.0.0.3",0]],["Gi0/0"]); POOL(s,"LAN10","192.168.10.0",M24,"192.168.10.1",["192.168.10.1","192.168.10.10"]); POOL(s,"LAN20","192.168.21.0",M24,"192.168.21.1"); }},
+    R2:{type:"router",setup:s=>{ IP(s,"Gi0/0","192.168.20.1",M24); IP(s,"Gi0/1","10.0.12.2",M30); OSPF(s,1,"2.2.2.2",[["192.168.20.0","0.0.0.255",0],["10.0.12.0","0.0.0.3",0]],["Gi0/0"]); s.ifs["Gi0/0"].helper=["10.0.12.1"]; Object.assign(s.ifs["Gi0/1"],{hello:5,dead:20}); }},
+    PC1:{type:"pc",ip:"192.168.10.10",mask:M24,gw:"192.168.10.1"},PC2:{type:"pc",dhcp:true}},
+    links:[["PC1","Fa0","R1","Gi0/0"],["R1","Gi0/1","R2","Gi0/1"],["PC2","Fa0","R2","Gi0/0"]]}),
+  check:N=>{ const p=Object.values(N.dev.R1.dhcp.pools).find(x=>x.net==="192.168.20.0"); const pc=N.dev.PC2;
+    return [[N.ospfNeighbors("R1").some(n=>n.rid==="2.2.2.2"),"R1 і R2 — сусіди OSPF"],[N.dev.R2.ifs["Gi0/1"].hello===10&&N.dev.R2.ifs["Gi0/1"].dead===40,"Таймери на R2 Gi0/1 стандартні (10/40)"],
+      [!!p&&p.gw==="192.168.20.1","Пул для 192.168.20.0/24 зі шлюзом 192.168.20.1"],[!!pc.ip&&sameNet(pc.ip,"192.168.20.0",M24),"PC2 отримав адресу через relay"],[!!pc.ip&&pass(N,"PC2","192.168.10.10"),"PC2 → PC1"],
+      [!N.dev.R1.dbgOspf&&!N.dev.R1.dbgDhcp&&!N.dev.R2.dbgOspf,"Налагодження вимкнено (undebug all)"]]; },
+  sol:"R1:\nenable\ndebug ip ospf adj\n\nR2:\nenable\nconf t\ninterface g0/1\n no ip ospf hello-interval\n no ip ospf dead-interval\nend\n\nR1:\ndebug ip dhcp server events\nconf t\nip dhcp pool LAN20\n network 192.168.20.0 255.255.255.0\n default-router 192.168.20.1\nend\n\nPC2:\nipconfig /renew\n\nR1:\nundebug all\n\nR2:\nundebug all"},
+ {id:"net-discover",net:true,t:"ENSA10",discover:true,title:"Невідома мережа: відновіть схему через CDP/LLDP",
+  topo:"Схема прихована — це і є завдання. Щоразу генерується нова мережа.",
+  task:["Вас підключили консоллю до одного комутатора незнайомої мережі. Документації немає. Відкриті вкладки — лише пристрої, про які ви вже знаєте.",
+   "Виконайте show cdp neighbors: кожен знайдений сусід з'являється як нова вкладка. Переходьте до сусідів і повторюйте, доки не знайдете всі мережеві пристрої.",
+   "show cdp neighbors detail показує IP-адресу керування сусіда.",
+   "Заповніть «Вашу карту»: рядки «Пристрій Порт — Пристрій Порт» для кожного лінку між мережевими пристроями і «Пристрій IP» для адреси керування. ПК на схему не наносьте.",
+   "Наприклад: «SW1 Gi0/1 — R-Edge Gi0/0» і «SW1 10.99.0.11»."],
+  def:()=>discoverNet(),
+  check:N=>discoverCheck(N),
+  autoSol:N=>{ N._map=discoverTruth(N).text; },
+  sol:"(карта будується автоматично)"},
+ // ===================== Після CCNA: безпека і автоматизація =====================
+ {id:"net-cis",net:true,t:"LNX12",title:"Аудит і харденінг маршрутизатора за CIS Benchmark",
+  topo:"Admin 192.168.1.10 — R1 Gi0/0 192.168.1.1 (внутрішня мережа)\nR1 Gi0/1 203.0.113.2/30 — ISP 203.0.113.1 (Інтернет)\nNTP/syslog-сервер 192.168.1.50",
+  task:["R1 — граничний маршрутизатор «з коробки»: Telnet із паролем на лінії, немає enable secret, CDP і проксі-ARP дивляться в Інтернет. Проведіть аудит (show running-config) і виправте за рекомендаціями CIS — кожна вимога нижче відповідає пункту бенчмарка.",
+   "Площина управління: enable secret; користувач admin із secret; SSH v2 з ключем 2048 (ip domain-name lab.local), ip ssh time-out 60 і authentication-retries 3; на vty — transport input ssh, login local, exec-timeout 10 0 і access-class зі стандартним ACL 10, що дозволяє лише 192.168.1.0/24; login block-for; banner motd.",
+   "Площина керування: service tcp-keepalives-in; logging buffered 16384, service timestamps log datetime msec, logging host 192.168.1.50; ntp server 192.168.1.50; CDP вимкнено на зовнішньому Gi0/1.",
+   "Площина даних: no ip source-route; на Gi0/1 — no ip proxy-arp, no ip redirects, no ip unreachables.",
+   "Перевірка: з Admin — ssh -l admin 192.168.1.1 працює, telnet — ні."],
+  def:()=>({devices:{
+    R1:{type:"router",setup:s=>{ IP(s,"Gi0/0","192.168.1.1",M24); IP(s,"Gi0/1","203.0.113.2",M30); addRoute(s,"0.0.0.0","0.0.0.0","203.0.113.1",null,1); s.vty.password="cisco"; s.vty.login="line"; }},
+    ISP:{type:"router",setup:s=>{ IP(s,"Gi0/1","203.0.113.1",M30); addRoute(s,"192.168.1.0",M24,"203.0.113.2",null,1); }},
+    Admin:{type:"pc",ip:"192.168.1.10",mask:M24,gw:"192.168.1.1"},NTP:{type:"server",ip:"192.168.1.50",mask:M24,gw:"192.168.1.1",services:[123,514]}},
+    links:[["Admin","Fa0","R1","Gi0/0"],["R1","Gi0/1","ISP","Gi0/1"],["NTP","Fa0","R1","Gi0/2"]]}),
+  check:N=>{ const r=N.dev.R1, v=r.vty, c=r.cis||{}, sv=r.svc||{}, o=r.ifs["Gi0/1"]; const acl=r.acls&&r.acls[v.acl];
+    const aclOk=!!acl&&JSON.stringify(acl).includes("192.168.1.0")&&JSON.stringify(acl).includes("0.0.0.255");
+    return [[!!r.enableSecret&&!!r.users.admin&&r.users.admin.secret,"1.1 enable secret і локальний користувач із secret"],
+      [r.sshVer===2&&r.rsaBits>=2048&&c.sshTimeout===60&&c.sshRetries===3,"1.2 SSH v2, ключ ≥ 2048, time-out 60, authentication-retries 3"],
+      [v.transport==="ssh"&&v.login==="local"&&!!v.execTimeout&&v.execTimeout[0]===10,"1.3 vty: лише SSH, login local, exec-timeout 10"],
+      [aclOk&&v.acl!=null,"1.4 access-class на vty дозволяє лише 192.168.1.0/24"],
+      [!!r.loginBlock&&!!r.motd,"1.5 login block-for і банер"],
+      [!!c.keepIn,"2.1 service tcp-keepalives-in"],
+      [!!sv.buffered&&!!sv.tsLog&&(sv.hosts||[]).includes("192.168.1.50")&&(sv.ntp||[]).includes("192.168.1.50"),"2.2 журнал (buffered, timestamps, syslog-сервер) і NTP"],
+      [!!o.cdpOff,"2.3 CDP вимкнено на зовнішньому інтерфейсі"],
+      [!!c.noSrcRoute,"3.1 no ip source-route"],
+      [!!o.noProxyArp&&!!o.noRedirects&&!!o.noUnreach,"3.2 на Gi0/1: no ip proxy-arp, no ip redirects, no ip unreachables"],
+      [N.flow("Admin","192.168.1.1","tcp",22).ok&&!N.flow("Admin","192.168.1.1","tcp",23).ok,"Admin входить по SSH, Telnet закрито"]]; },
+  sol:"R1:\nenable\nconf t\nenable secret Cis-Adm1n-2026\nusername admin privilege 15 secret Adm1nPa55!\nip domain-name lab.local\ncrypto key generate rsa modulus 2048\nip ssh version 2\nip ssh time-out 60\nip ssh authentication-retries 3\naccess-list 10 permit 192.168.1.0 0.0.0.255\nline vty 0 15\n transport input ssh\n login local\n exec-timeout 10 0\n access-class 10 in\nexit\nlogin block-for 120 attempts 3 within 60\nbanner motd #Authorized access only#\nservice tcp-keepalives-in\nlogging buffered 16384\nservice timestamps log datetime msec\nlogging host 192.168.1.50\nntp server 192.168.1.50\nno ip source-route\ninterface g0/1\n no cdp enable\n no ip proxy-arp\n no ip redirects\n no ip unreachables\nend"},
 ];
-function startNet(sc){ const N=Net(sc.def()); const ses={}; for(const [k,d] of Object.entries(N.dev)) if(d.type!=="hub") ses[k]= (d.type==="pc"||d.type==="server")? PCSession(d,N) : Session(d); return {N,ses}; }
+function startNet(sc){ const def=sc.def(); const N=Net(def); N._start=def.start||null; const ses={}; for(const [k,d] of Object.entries(N.dev)) if(d.type!=="hub") ses[k]= (d.type==="pc"||d.type==="server")? PCSession(d,N) : Session(d); return {N,ses}; }
 
 // ---------- Розв'язання сценарію і режим «Troubleshooting» ----------
 function solveNet(sc){ const {N,ses}=startNet(sc); let cur=null;
   for(const raw of sc.sol.split("\n")){ const line=raw.trim().replace(/\{\{MAC:(\w+)\}\}/g,(_,x)=>N.hostMac(x)); if(!line||line.startsWith("(")) continue; const m=line.match(/^([\w-]+):$/); if(m&&ses[m[1]]){ cur=m[1]; continue; } if(!cur) continue;
     const r=ses[cur].exec(line); if(/Reset ALL/.test(ses[cur].prompt())) ses[cur].exec("yes"); N.recompute(); }
+  if(sc.autoSol){ sc.autoSol(N); N.recompute(); }
   return N; }
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 function faultsFor(N){
@@ -2517,5 +2672,6 @@ function sessionsFor(N){ const ses={}; for(const [k,d] of Object.entries(N.dev))
 function freePorts(N,dev){ const d=N.dev[dev]; if(!d) return []; const used=new Set(N.links.filter(l=>l.a===dev||l.b===dev).map(l=>l.a===dev?l.pa:l.pb));
   if(d.type==="pc"||d.type==="server") return used.has("Fa0")?[]:["Fa0"]; return Object.keys(d.ifs).filter(p=>isPhys(p)&&!used.has(p)); }
 
-window.CLI={figOf,netFromSaved,saveNet,sessionsFor,freePorts,Net,SCEN,NETSCEN,startNet,solveNet,troubleshoot,startScenario,Session,newState,normIf,parseList};
+function canonOf(mode,line){ const r=matchMode(mode,line); if(!r||!r.hit) return null; const p=r.hit.c.p; let j=0; const full=p.map(t=>{ if(!t.startsWith("<")) return t; const a=r.hit.args[j++]; return t==="<if>"?(normIf(String(a))||a):String(a); }).join(" "); return {pat:p.join(" "),full,mode}; }
+window.CLI={longIf,canonOf,discoverTruth,discoverParse,figOf,netFromSaved,saveNet,sessionsFor,freePorts,Net,SCEN,NETSCEN,startNet,solveNet,troubleshoot,startScenario,Session,newState,normIf,parseList};
 })();

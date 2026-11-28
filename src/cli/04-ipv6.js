@@ -43,8 +43,14 @@ for(const m of ["user","exec"]){
   add(m,"show mac address-table dynamic",(s)=>s.net? s.net.macTable(s) : "");
 }
 add("exec","debug ip ospf adj",(s)=>{ s.dbgOspf=true; return "OSPF adjacency debugging is on"+(s.net? "\n"+s.net.ospfDebug(s) : ""); });
-add("exec","undebug all",(s)=>{ s.dbgOspf=false; return "All possible debugging has been turned off"; });
-add("exec","no debug all",(s)=>{ s.dbgOspf=false; return "All possible debugging has been turned off"; });
+const dbgOff=s=>{ s.dbgOspf=false; s.dbgStp=false; s.dbgDhcp=false; return "All possible debugging has been turned off"; };
+add("exec","undebug all",dbgOff); add("exec","no debug all",dbgOff); add("exec","u all",dbgOff); add("exec","undebug ip ospf adj",(s)=>{ s.dbgOspf=false; return "OSPF adjacency debugging is off"; });
+add("exec","debug ip dhcp server events",(s)=>{ if(!s.router&&!s.l3) return INV; s.dbgDhcp=true; return "DHCP server event debugging is on."; });
+add("exec","undebug ip dhcp server events",(s)=>{ s.dbgDhcp=false; return "DHCP server event debugging is off."; });
+add("exec","debug spanning-tree events",(s)=>{ if(s.router) return INV; s.dbgStp=true; return "Spanning Tree event debugging is on"; });
+add("exec","undebug spanning-tree events",(s)=>{ s.dbgStp=false; return "Spanning Tree event debugging is off"; });
+add("exec","show debugging",(s)=>{ const L=[]; if(s.dbgOspf) L.push("OSPF:\n  OSPF adjacency debugging is on"); if(s.dbgDhcp) L.push("DHCP:\n  DHCP server event debugging is on"); if(s.dbgStp) L.push("Spanning Tree:\n  Spanning Tree event debugging is on"); return L.join("\n"); });
+add("exec","terminal monitor",()=>"");
 function activeStatics6(s){ return (s.routes6||[]).filter(r=>{ if(r.ifc){ const i=s.ifs[r.ifc]; return i&&ifStatus(s,i)[1]==="up"; } return Object.values(s.ifs).some(i=>ifStatus(s,i)[1]==="up"&&(i.v6||[]).some(x=>v6same(x.addr,r.nh,x.len))); }); }
 function showRoute6(s,only){ const L=[]; const up=Object.values(s.ifs).filter(i=>ifStatus(s,i)[1]==="up"&&v6on(i));
   if(!only) for(const i of up) for(const x of i.v6||[]){ L.push("C   "+v6fmt(v6net(v6parse(x.addr),x.len))+"/"+x.len+" [0/0]\n     via "+longIf(i.name)+", directly connected"); L.push("L   "+x.addr+"/128 [0/0]\n     via "+longIf(i.name)+", receive"); }
