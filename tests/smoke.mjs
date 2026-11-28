@@ -43,6 +43,10 @@ await page.goto(BASE + "index.html");
 await page.waitForTimeout(800);
 
 await step("головна відкривається", async () => { await has("Денна норма"); await has("Чек-ін дня"); });
+await step("ліниве завантаження модулів: стаб → модуль → екран", async () => {
+  const before = await page.evaluate(() => [typeof ccCheck, typeof INTERVIEW, typeof BUGS, !!ACTS.confcheck._stub]); if (before.join() !== "undefined,undefined,undefined,true") throw new Error("модулі вже завантажені на старті: " + before);
+  await page.evaluate(() => ACTS.confcheck()); await page.waitForFunction(() => typeof ccCheck === "function" && view === "confcheck", null, { timeout: 5000 }); await has("Аналізатор конфігурацій");
+  await page.evaluate(() => loadLazy("all")); await page.waitForFunction(() => typeof INTERVIEW !== "undefined" && typeof BUGS !== "undefined" && typeof pcNew === "function", null, { timeout: 8000 }); await home(); });
 await step("вкладки головної: Практика, Прогрес, Інструменти, Усе", async () => {
   await act('[data-act="hometab"][data-v="prac"]'); await has("Тест модуля"); await has("Симуляція CCNA");
   await act('[data-act="hometab"][data-v="prog"]'); await has("Статистика");
