@@ -3,9 +3,9 @@
 // Файли все одно кешує service worker, тож офлайн усе працює.
 const LAZY = {
   iv: ["interview-data.js", "interview-data2.js", "interview-srwe.js", "app-interview.js"],
-  tools: ["app-confcheck.js", "app-confgen.js", "app-srwe.js", "app-ref.js", "app-examstats.js", "app-vlsm.js", "app-netdoc.js", "app-sa.js", "app-acl.js"],
-  practice: ["app-drills.js", "app-ec.js", "app-packet.js", "app-logs.js", "app-pcap.js"] };
-const LAZY_ACTS = { iv: ["interview", "feyn", "ivgo", "ivdue", "ivsc"], tools: ["confcheck", "confgen", "vlsm", "netdoc", "modtrack", "ptguide", "ptopen", "ref", "refopen", "runbook", "rbopen", "sa", "acl", "traps", "blindtoggle"], practice: ["bugs", "cbuild", "eclab", "packet", "logs", "pcap"] };
+  tools: ["app-confcheck.js", "app-confgen.js", "app-srwe.js", "app-ref.js", "app-examstats.js", "app-vlsm.js", "app-netdoc.js", "app-sa.js", "app-acl.js", "app-forecast.js", "app-gapmap.js"],
+  practice: ["app-drills.js", "app-ec.js", "app-packet.js", "app-logs.js", "app-pcap.js", "app-english.js", "app-shift.js"] };
+const LAZY_ACTS = { iv: ["interview", "feyn", "ivgo", "ivdue", "ivsc"], tools: ["confcheck", "confgen", "vlsm", "netdoc", "modtrack", "ptguide", "ptopen", "ref", "refopen", "runbook", "rbopen", "sa", "acl", "traps", "blindtoggle", "readiness", "icsview", "gapmap"], practice: ["bugs", "cbuild", "eclab", "packet", "logs", "pcap", "english", "shift"] };
 const lazyP = {};
 function loadLazy(g) { if (g === "all") return Promise.all(Object.keys(LAZY).map(loadLazy)); if (lazyP[g]) return lazyP[g];
   const one = f => new Promise((res, rej) => { if (document.querySelector('script[data-lazy="' + f + '"]')) return res(); const s = document.createElement("script"); s.src = f; s.async = false; s.dataset.lazy = f; s.onload = res; s.onerror = () => rej(new Error("не завантажено " + f)); document.head.appendChild(s); });

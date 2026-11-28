@@ -729,6 +729,7 @@ for(const m of ["exec"]){
 // --- extended ping ---
 for(const m of ["user","exec"]){
   add(m,"ping <ip> source <w>",(s,a)=>s.net? s.net.pingCli(s,a[0],{src:a[1]}) : INV);
+  add(m,"traceroute <ip> source <w>",(s,a)=>s.net? s.net.traceCli(s,a[0],{src:a[1]}) : INV);
   add(m,"ping <ip> repeat <n>",(s,a)=>s.net? s.net.pingCli(s,a[0],{repeat:a[1]}) : INV);
   add(m,"ping <ip> size <n>",(s,a)=>s.net? s.net.pingCli(s,a[0],{size:a[1]}) : INV);
   add(m,"ping <ip> source <w> repeat <n>",(s,a)=>s.net? s.net.pingCli(s,a[0],{src:a[1],repeat:a[2]}) : INV);
@@ -1652,7 +1653,7 @@ function Net(def){
     const wrap=t=>t.match(/.{1,70}/g).join("\n");
     if(r.ok){ const first=r.hops.length&&!src?".":"!"; const okc=first==="."?n-1:n; return head+wrap(first+"!".repeat(Math.max(0,n-1)))+"\nSuccess rate is "+Math.round(okc/n*100)+" percent ("+okc+"/"+n+"), round-trip min/avg/max = 1/2/4 ms"; }
     return head+wrap((r.noroute||r.acl?"U":".").repeat(n))+"\nSuccess rate is 0 percent (0/"+n+")\n! "+r.why; };
-  N.traceCli=(s,dst)=>{ const r=N.ping(s.devName,dst); let o="Type escape sequence to abort.\nTracing the route to "+dst+"\nVRF info: (vrf in name/id, vrf out name/id)\n"; const hops=(r.hops||[]).slice(); if(r.ok) hops.push(dst); hops.forEach((h,k)=>o+="  "+(k+1)+" "+h+" 1 msec 1 msec 1 msec\n"); if(!r.ok) o+="  "+(hops.length+1)+"  *  *  *\n! "+r.why; return o; };
+  N.traceCli=(s,dst,opt)=>{ opt=opt||{}; let src=null; if(opt.src){ const n=normIf(opt.src); if(n&&s.ifs[n]){ src=s.ifs[n].ip; if(!src) return "% Invalid source interface - IP not enabled"; } else if(ipRe.test(opt.src)){ if(!Object.values(s.ifs).some(i=>i.ip===opt.src)) return "% Invalid source address- IP address not on any of our up interfaces"; src=opt.src; } else return INV; } const r=src?N.flow(s.devName,dst,"icmp",null,src):N.ping(s.devName,dst); let o="Type escape sequence to abort.\nTracing the route to "+dst+"\nVRF info: (vrf in name/id, vrf out name/id)\n"; const hops=(r.hops||[]).slice(); if(r.ok) hops.push(dst); hops.forEach((h,k)=>o+="  "+(k+1)+" "+h+" 1 msec 1 msec 1 msec\n"); if(!r.ok) o+="  "+(hops.length+1)+"  *  *  *\n! "+r.why; return o; };
   // ---------- DHCP ----------
   const poolFor=(d,gi)=> d.dhcp? Object.values(d.dhcp.pools).find(p=>p.net&&sameNet(p.net,gi,p.mask)) : null;
   function allocate(d,pool,client){
@@ -2257,6 +2258,21 @@ const NETSCEN=[
     return [[s1.ifs["Gi0/1"].stpGuard==="root"&&s1.ifs["Gi0/2"].stpGuard==="root","Root guard на S1 Gi0/1 і Gi0/2"],[!!st.S1&&st.S1.rootName==="S1"&&!!st.S2&&st.S2.rootName==="S1","S1 — root для S1 і S2"],
       [s3.ifs["Fa0/5"].errdis==="bpduguard","S3 Fa0/5 (чужий комутатор) — err-disabled через BPDU guard"],[!!st.S1&&st.S1.roles["Gi0/2"]&&st.S1.roles["Gi0/2"][1]==="FWD","Gi0/2 на S1 відновився після прибирання джерела"],[pass(N,"PC1","192.168.10.100")&&pass(N,"PC3","192.168.10.100"),"PC1 і PC3 бачать сервер"]]; },
   sol:"S1:\nenable\nconf t\ninterface range gi0/1 - 2\n spanning-tree guard root\nend\n\nS3:\nenable\nconf t\ninterface fa0/5\n spanning-tree portfast\n spanning-tree bpduguard enable\nend"},
+ {id:"net-xping",net:true,t:"SRWE16",title:"Extended ping і traceroute з source: де губиться зворотний шлях",
+  topo:"PC1 192.168.1.10 — R1 Gi0/0 192.168.1.1\nR1 Gi0/1 10.0.12.1/30 — R2 Gi0/0 10.0.12.2/30\nR2 Gi0/1 10.0.23.1/30 — R3 Gi0/0 10.0.23.2/30\nR3 Gi0/1 172.16.3.1 — SRV 172.16.3.10",
+  task:["Користувачі мережі 192.168.1.0/24 скаржаться: сервер 172.16.3.10 недоступний. Адмін на R1 виконав ping 172.16.3.10 — успішно, і закрив тікет. Але з PC1 сервер не відповідає.",
+   "Поясніть розбіжність: звичайний ping з R1 іде з адреси вихідного інтерфейсу (10.0.12.1). Повторіть перевірку від імені LAN: ping 172.16.3.10 source g0/0 і traceroute 172.16.3.10 source g0/0 на R1.",
+   "Знайдіть маршрутизатор, якому бракує маршруту назад до 192.168.1.0/24 (show ip route на R2 і R3), і додайте статичний маршрут.",
+   "Перевірка: ping 172.16.3.10 source g0/0 на R1 — !!!!!, PC1 → ping 172.16.3.10 успішний."],
+  def:()=>({devices:{R1:{type:"router",setup:s=>{ IP(s,"Gi0/0","192.168.1.1",M24); IP(s,"Gi0/1","10.0.12.1",M30); addRoute(s,"0.0.0.0","0.0.0.0","10.0.12.2",null,1); }},
+    R2:{type:"router",setup:s=>{ IP(s,"Gi0/0","10.0.12.2",M30); IP(s,"Gi0/1","10.0.23.1",M30); addRoute(s,"192.168.1.0",M24,"10.0.12.1",null,1); addRoute(s,"172.16.3.0",M24,"10.0.23.2",null,1); }},
+    R3:{type:"router",setup:s=>{ IP(s,"Gi0/0","10.0.23.2",M30); IP(s,"Gi0/1","172.16.3.1",M24); addRoute(s,"10.0.12.0",M30,"10.0.23.1",null,1); }},
+    PC1:{type:"pc",ip:"192.168.1.10",mask:M24,gw:"192.168.1.1"},SRV:{type:"server",ip:"172.16.3.10",mask:M24,gw:"172.16.3.1"}},
+    links:[["PC1","Fa0","R1","Gi0/0"],["R1","Gi0/1","R2","Gi0/0"],["R2","Gi0/1","R3","Gi0/0"],["R3","Gi0/1","SRV","Fa0"]]}),
+  check:N=>{ const R3=N.dev.R3; const back=R3.routes.some(r=>(r.net==="192.168.1.0"||r.net==="0.0.0.0")&&r.nh==="10.0.23.1");
+    return [[back,"R3: маршрут назад до 192.168.1.0/24 (або за замовчуванням) через 10.0.23.1"],[N.flow("R1","172.16.3.10","icmp",null,"192.168.1.1").ok,"R1: ping 172.16.3.10 source g0/0 успішний"],[pass(N,"PC1","172.16.3.10"),"PC1 ↔ SRV"]]; },
+  sol:"R1:\nenable\nping 172.16.3.10\nping 172.16.3.10 source g0/0\ntraceroute 172.16.3.10 source g0/0\n\nR3:\nenable\nconf t\nip route 192.168.1.0 255.255.255.0 10.0.23.1\nend",
+  hint:"Звичайний ping з маршрутизатора бере адресу вихідного інтерфейсу — він перевіряє не той шлях, що трафік користувачів. Extended ping з source показує, чи є маршрут назад до мережі LAN."},
  {id:"net-storm",net:true,t:"SRWE11",title:"Storm control: broadcast-шторм від зараженого ПК",
   topo:"PC1 — S1 Fa0/1        S1 Gi0/1 — R1 Gi0/0 (192.168.10.1)\nPC2 — S1 Fa0/2\nInfected — S1 Fa0/3 (генерує broadcast-шторм)\nУсі ПК у VLAN 10",
   task:["ПК Infected генерує broadcast-шторм. PC1 → ping 192.168.10.1: VLAN 10 «лежить» — комутатор розсилає шторм на всі порти.",

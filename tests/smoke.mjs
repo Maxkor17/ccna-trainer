@@ -46,7 +46,7 @@ await step("головна відкривається", async () => { await has(
 await step("ліниве завантаження модулів: стаб → модуль → екран", async () => {
   const before = await page.evaluate(() => [typeof ccCheck, typeof INTERVIEW, typeof BUGS, !!ACTS.confcheck._stub]); if (before.join() !== "undefined,undefined,undefined,true") throw new Error("модулі вже завантажені на старті: " + before);
   await page.evaluate(() => ACTS.confcheck()); await page.waitForFunction(() => typeof ccCheck === "function" && view === "confcheck", null, { timeout: 5000 }); await has("Аналізатор конфігурацій");
-  await page.evaluate(() => loadLazy("all")); await page.waitForFunction(() => typeof INTERVIEW !== "undefined" && typeof BUGS !== "undefined" && typeof pcNew === "function", null, { timeout: 8000 }); await home(); });
+  await page.evaluate(() => loadLazy("all")); await page.waitForFunction(() => typeof INTERVIEW !== "undefined" && typeof BUGS !== "undefined" && typeof pcNew === "function" && typeof shCats === "function" && typeof icsBuild === "function", null, { timeout: 8000 }); await home(); });
 await step("вкладки головної: Практика, Прогрес, Інструменти, Усе", async () => {
   await act('[data-act="hometab"][data-v="prac"]'); await has("Тест модуля"); await has("Симуляція CCNA");
   await act('[data-act="hometab"][data-v="prog"]'); await has("Статистика");
@@ -302,6 +302,27 @@ await step("челенджі: тиждень, посилання з резуль
   const link = await page.evaluate(async () => { const ch = Object.assign({}, CHV.ch); delete ch.week; return await chLink("chr", { ch, r: { name: "Друг", correct: 15, n: 15, dur: 300, bits: "1".repeat(15) } }); });
   await page.goto(link); await page.waitForFunction(() => typeof view !== "undefined" && view === "challenge" && CHV && CHV.mode === "cmp", null, { timeout: 5000 }); await has("За питаннями"); await has("Друг попереду");
   const wk = await page.evaluate(() => lsGet(CH_WK, {})[chWeekKey()]); if (!wk || wk.tries < 1) throw new Error("рекорд тижня не записано"); await home(); });
+await step("Ansible: resource-модулі, --check --diff, ідемпотентність", async () => {
+  await page.evaluate(() => { ACTS.ansible(); }); await page.fill("#ansrc", "- hosts: switches\n  gather_facts: false\n  tasks:\n    - cisco.ios.ios_vlans:\n        config:\n          - vlan_id: 50\n            name: MGMT\n");
+  await act('[data-act="ansflag"][data-k="check"]'); await act('[data-act="ansflag"][data-k="diff"]'); await act('[data-act="ansrun"]'); await has("[check mode]"); await has("+   name MGMT");
+  if (await page.evaluate(() => !!ANS.lab.N.dev.S1.vlans[50])) throw new Error("--check змінив пристрій"); await act('[data-act="ansflag"][data-k="check"]'); await act('[data-act="ansrun"]');
+  if (!(await page.evaluate(() => !!ANS.lab.N.dev.S1.vlans[50]))) throw new Error("VLAN не створено"); await act('[data-act="ansrun"]'); await has("changed=0"); await home(); });
+await step("англійська: терміни з повторенням і читання на час", async () => {
+  await page.evaluate(() => ACTS.english()); await has("Терміни ("); const n = await page.evaluate(() => (window.GLOSSARY || []).length); if (n < 300) throw new Error("термінів " + n);
+  await act('[data-act="enpick"]'); await act('[data-act="ennext"]'); await act('[data-act="enmode"][data-m="read"]'); await act('[data-act="enread"]'); await act('[data-act="enrpick"]'); await home(); });
+await step("коли я буду готовий: прогноз, графік, .ics", async () => {
+  await page.evaluate(() => { opts.examDate = (() => { const d = new Date(); d.setDate(d.getDate() + 40); return dkey(d); })(); ACTS.readiness(); }); await has("Коли я буду готовий"); await has("прохідний");
+  if (!(await page.evaluate(() => Object.keys(flags).some(k => k === "rd:" + dkey())))) throw new Error("немає денного знімка"); await act('[data-act="icsview"]'); await has("ccna-plan.ics");
+  const t = await page.evaluate(() => icsBuild(icsOpt()).text); if (!/^BEGIN:VCALENDAR/.test(t) || !/Іспит CCNA/.test(t) || (t.match(/BEGIN:VEVENT/g) || []).length < 20) throw new Error("ics: " + t.slice(0, 200));
+  await page.evaluate(() => { opts.examDate = ""; }); await home(); });
+await step("карта прогалин Obsidian", async () => {
+  await page.evaluate(() => ACTS.gapmap()); await has("Карта прогалин"); await page.fill("#gaplist", "CCNA/SRWE/STP root bridge.md\nEtherChannel LACP.md"); await act('[data-act="gappaste"]'); await has("Додано 2 назв");
+  await act('[data-act="gapf"][data-f="none"]'); await has("NAT / PAT"); await page.evaluate(() => lsSet(GAP_LS, { names: [] })); await home(); });
+await step("черговий адмін: зміна з 3 тікетів, закриття з причиною, MTTR", async () => {
+  await page.evaluate(() => { lsSet(SH_LS, { tickets: [], shifts: [] }); ACTS.shift(); }); await act('[data-act="shstart"][data-n="3"]');
+  for (let i = 0; i < 3; i++) { await has("Зміна чергового: тікет " + (i + 1)); await page.evaluate(() => { LAB.N = CLI.solveNet(LAB.sc); }); await act('[data-act="labcheck"]'); await has("Закрити тікет");
+    const k = await page.evaluate(() => shCats(LAB.ts.faults)[0]); await act(`[data-act="shcat"][data-k="${k}"]`); await act('[data-act="shclose"]'); }
+  await has("Підсумок зміни"); await has("MTTR"); const L = await page.evaluate(() => lsGet(SH_LS, {})); if (L.tickets.length !== 3 || L.shifts.length !== 1 || L.tickets.some(t => !t.hit)) throw new Error(JSON.stringify(L).slice(0, 300)); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));

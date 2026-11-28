@@ -48,5 +48,9 @@ for(const [a,b,want] of EC){ const N=ec(a,b); const got=["Gi0/1","Gi0/2"].every(
   ok(/ip address dhcp/.test(r.exec("show running-config"))&&!/ip route 0\.0\.0\.0/.test(r.exec("show running-config")),"ip address dhcp: running-config"); ok(/DHCP/.test(r.exec("show ip interface brief")),"ip address dhcp: Method DHCP");
   ok(N.hsrpState("R1","Gi0/1",1).state==="Active","HSRP: R1 active з пріоритетом 110"); r.exec("conf t"); r.exec("interface g0/0"); r.exec("shutdown"); r.exec("end"); N.recompute();
   ok(N.hsrpState("R1","Gi0/1",1).state==="Standby"&&N.hsrpPrio("R1","Gi0/1",1)===90,"HSRP track: падіння Gi0/0 знижує пріоритет до 90 і роль переходить до R2"); ok(/track GigabitEthernet0\/0 20/.test(r.exec("show running-config")),"HSRP track у running-config"); }
+{ const sc=C.NETSCEN.find(x=>x.id==="net-xping"); ok(!!sc,"лаба net-xping існує"); const {N,ses}=C.startNet(sc); const r=ses.R1; r.exec("enable");
+  const plain=r.exec("ping 172.16.3.10"), src=r.exec("ping 172.16.3.10 source 192.168.1.1"); ok(/!!!!/.test(plain)&&/Success rate is 0 percent/.test(src),"extended ping: без source проходить, з source LAN — ні (немає зворотного маршруту)");
+  const tr=r.exec("traceroute 172.16.3.10 source 192.168.1.1"); ok(/traceroute|Tracing/i.test(tr)&&!/Invalid/.test(tr),"traceroute ... source: команда приймається");
+  const R=C.solveNet(sc); ok(sc.check(R).every(x=>x[0]),"net-xping: еталонне рішення проходить"); }
 console.log(fails? "\n❌ Модульні тести: помилок "+fails+" з "+n : "\n✅ Модульні тести симулятора: "+n+" перевірок");
 process.exit(fails?1:0);

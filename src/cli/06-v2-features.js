@@ -83,6 +83,7 @@ for(const m of ["exec"]){
 // --- extended ping ---
 for(const m of ["user","exec"]){
   add(m,"ping <ip> source <w>",(s,a)=>s.net? s.net.pingCli(s,a[0],{src:a[1]}) : INV);
+  add(m,"traceroute <ip> source <w>",(s,a)=>s.net? s.net.traceCli(s,a[0],{src:a[1]}) : INV);
   add(m,"ping <ip> repeat <n>",(s,a)=>s.net? s.net.pingCli(s,a[0],{repeat:a[1]}) : INV);
   add(m,"ping <ip> size <n>",(s,a)=>s.net? s.net.pingCli(s,a[0],{size:a[1]}) : INV);
   add(m,"ping <ip> source <w> repeat <n>",(s,a)=>s.net? s.net.pingCli(s,a[0],{src:a[1],repeat:a[2]}) : INV);
