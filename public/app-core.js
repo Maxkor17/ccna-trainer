@@ -22,7 +22,7 @@ const TOPICS = [
  ["LNX10","LNX","10","Аналіз журналів і алертів"],["LNX11","LNX","11","Атаки в захопленнях пакетів"],["LNX12","LNX","12","Харденінг за CIS"]
 ].map(([id,g,n,name])=>({id,g,n,name}));
 const TMAP = Object.fromEntries(TOPICS.map(t=>[t.id,t]));
-const QB_BASE = [...(window.QB_ITN||[]), ...(window.QB_SRWE||[]), ...(window.QB_NOTES||[]), ...(window.QB_EXTRA||[]), ...(window.QB_SRWE2||[]), ...(window.QB_ENSA||[]), ...(window.QB_NETACAD||[]), ...(window.QB_FIGS||[]), ...(window.QB_EN||[]), ...(window.QB_LNX||[]), ...(window.QB_ENSA2||[]), ...(window.QB_V2||[]), ...(window.QB_SIM||[]), ...(window.QB_PRACT||[]), ...(window.QB_MORE||[]), ...(window.QB_DND||[]), ...(window.QB_AUTO||[])];
+const QB_BASE = [...(window.QB_ITN||[]), ...(window.QB_SRWE||[]), ...(window.QB_NOTES||[]), ...(window.QB_EXTRA||[]), ...(window.QB_SRWE2||[]), ...(window.QB_ENSA||[]), ...(window.QB_NETACAD||[]), ...(window.QB_FIGS||[]), ...(window.QB_EN||[]), ...(window.QB_LNX||[]), ...(window.QB_ENSA2||[]), ...(window.QB_V2||[]), ...(window.QB_V2B||[]), ...(window.QB_SIM||[]), ...(window.QB_PRACT||[]), ...(window.QB_MORE||[]), ...(window.QB_DND||[]), ...(window.QB_AUTO||[])];
 let customQs = [];
 let QB = QB_BASE.slice();
 let QMAP = Object.fromEntries(QB.map(q=>[q.id,q]));

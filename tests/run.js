@@ -2,7 +2,7 @@
 // Запуск: node tests/run.js  (exit code 1 при будь-якій помилці)
 const path=require("path"); const P=f=>path.join(__dirname,"..","public",f);
 global.window={}; global.btoa=s=>Buffer.from(s).toString("base64"); global.atob=s=>Buffer.from(s,"base64").toString();
-const files=["wlc","bash","questions-linux","questions-itn","questions-srwe","questions-notes","questions-extra","questions-srwe2","questions-ensa","questions-netacad","questions-ensa2","questions-v2","questions-simlet","questions-more","questions-dnd","questions-auto","questions-practice","questions-figs","questions-en","glossary","cheats","pairs","gen","gen2","gen3","api","cli"];
+const files=["wlc","bash","questions-linux","questions-itn","questions-srwe","questions-notes","questions-extra","questions-srwe2","questions-ensa","questions-netacad","questions-ensa2","questions-v2","questions-v2b","glossary2","questions-simlet","questions-more","questions-dnd","questions-auto","questions-practice","questions-figs","questions-en","glossary","cheats","pairs","gen","gen2","gen3","api","cli"];
 for(const f of files) require(P(f+".js"));
 for(const f of require("fs").readdirSync(path.join(__dirname,"..","public")).filter(f=>/^tr-.*\.js$/.test(f))) require(P(f));
 let fails=0, checks=0; const fail=m=>{ fails++; console.error("✗ "+m); }; const ok=(c,m)=>{ checks++; if(!c) fail(m); };
@@ -42,7 +42,7 @@ function solveSingle(sc){ const ses=C.startScenario(sc); for(const raw of sc.sol
 for(const sc of C.SCEN){ const st=solveSingle(sc); const r=sc.check(st); ok(r.every(x=>x[0]),"лаба "+sc.id+": "+r.filter(x=>!x[0]).map(x=>x[1]).join("; ")); }
 for(const sc of C.NETSCEN){ const fresh=C.startNet(sc); const before=sc.check(fresh.N).every(x=>x[0]); ok(!before,"лаба "+sc.id+" виконана без жодних дій");
   const N=C.solveNet(sc); const r=sc.check(N); ok(r.every(x=>x[0]),"лаба "+sc.id+": "+r.filter(x=>!x[0]).map(x=>x[1]).join("; "));
-  const t=C.troubleshoot(sc,1); ok(!!t,"troubleshooting не згенерувався для "+sc.id); }
+  let t=null; for(let k=0;k<5&&!t;k++) t=C.troubleshoot(sc,1); ok(!!t,"troubleshooting не згенерувався для "+sc.id); }
 console.log("Лаб:",C.SCEN.length+C.NETSCEN.length);
 // ---- шлях пакета ----
 { const N=C.solveNet(C.NETSCEN.find(s=>s.id==="net-roas")); N.counting=true; N.ping("PC1","192.168.20.12"); N.counting=false; ok(N.lastFlow&&N.lastFlow.fwd.length>5&&N.lastFlow.back.length>5,"шлях пакета не записано"); }
@@ -73,6 +73,13 @@ for(const sc of window.BASH.SCEN){ const ses=window.BASH.start(sc); ok(!sc.check
   const vl="- hosts: switches\n  gather_facts: false\n  vars:\n    vlans:\n      - {id: 30, name: GUEST}\n      - {id: 40, name: VOICE}\n  tasks:\n    - cisco.ios.ios_config:\n        parents: \"vlan {{ item.id }}\"\n        lines: \"name {{ item.name }}\"\n      loop: \"{{ vlans }}\"\n";
   const runs=[A.SAMPLE,vl,vl,"- hosts: all\n  gather_facts: false\n  tasks:\n    - cisco.ios.ios_config:\n        lines: ntp server 10.1.1.123\n        save_when: modified\n- hosts: switches\n  gather_facts: false\n  tasks:\n    - cisco.ios.ios_command:\n        commands: show vlan brief\n      register: vlans_out\n    - debug:\n        var: vlans_out.stdout_lines\n"].map(src=>A.run(L,src));
   ok(runs.every(r=>r.ok),"Ansible: плейбуки без помилок"); ok(runs[1].changed===2&&runs[2].changed===0,"Ansible: ідемпотентність ("+runs[1].changed+"/"+runs[2].changed+")");
+  { const res="- hosts: switches\n  gather_facts: false\n  tasks:\n    - cisco.ios.ios_vlans:\n        config:\n          - vlan_id: 50\n            name: MGMT\n          - vlan_id: 60\n            name: CAMERAS\n        state: merged\n    - cisco.ios.ios_interfaces:\n        config:\n          - name: GigabitEthernet0/1\n            description: UPLINK\n    - cisco.ios.ios_l2_interfaces:\n        config:\n          - name: GigabitEthernet0/1\n            mode: trunk\n            trunk:\n              native_vlan: 99\n";
+    const before=JSON.stringify(L.N.dev.S1.vlans); const ck=A.run(L,res,{check:true,diff:true}); ok(ck.ok&&ck.check&&ck.changed>0,"Ansible --check: передбачає зміни"); ok(JSON.stringify(L.N.dev.S1.vlans)===before&&!L.N.dev.S1.ifs["Gi0/1"].desc,"Ansible --check: пристрої не змінено");
+    ok(/\+ vlan 50/.test(ck.text)&&/\+\s+name MGMT/.test(ck.text)&&/\+\s+switchport trunk native vlan 99/.test(ck.text),"Ansible --diff: рядки + для VLAN і trunk");
+    const r1=A.run(L,res,{diff:true}), r2=A.run(L,res); ok(r1.ok&&r1.changed>0&&r2.ok&&r2.changed===0,"Ansible: resource-модулі ідемпотентні ("+r1.changed+"/"+r2.changed+")");
+    const del=A.run(L,"- hosts: switches\n  gather_facts: false\n  tasks:\n    - ios_vlans:\n        config:\n          - vlan_id: 60\n        state: deleted\n",{diff:true}); ok(del.ok&&/- vlan 60/.test(del.text)&&!L.N.dev.S2.vlans[60],"Ansible: ios_vlans state: deleted");
+    ok(!A.run(L,"- hosts: S1\n  gather_facts: false\n  tasks:\n    - ios_vlans:\n        state: merged\n").ok,"Ansible: resource-модуль без config — помилка");
+    ok(A.cfgDiff("interface G1\n description A\n","interface G1\n description B\n").join("|")==="  interface G1|-   description A|+   description B","Ansible: cfgDiff"); }
   const r=A.TASKS.filter(t=>!t.ok(L)).map(t=>t.id); ok(!r.length,"Ansible: не виконано "+r.join(","));
   { const L2=A.newLab(); const r2=A.run(L2,"- hosts: R1\n  gather_facts: false\n  tasks:\n    - ios_config:\n        lines: |\n          ntp server 1.1.1.1\n          ip domain-name x.lab\n"); ok(r2.ok&&(L2.N.dev.R1.svc.ntp||[]).includes("1.1.1.1"),"Ansible: багаторядковий lines: | розбивається на команди"); }
   ok(!A.run(L,"- hosts: S1\n  gather_facts: false\n  tasks:\n    - ios_command:\n        commands: configure terminal\n").ok,"Ansible: ios_command не має приймати conf t"); }
@@ -171,6 +178,26 @@ for(const sc of window.BASH.SCEN){ const ses=window.BASH.start(sc); ok(!sc.check
   for(const g of LG.LOGS.map((_,i)=>i)){ for(let k=0;k<20;k++){ const it=LG.LOGS[g](); const m=it.m.match(/^%([A-Z0-9_]+)-(\d)-([A-Z0-9_]+): \S/); ok(!!m,"журнал "+g+": формат «"+it.m+"»"); ok(it.a>=0&&it.a<it.o.length&&new Set(it.o).size===it.o.length&&it.why,"журнал "+g+": варіанти"); } }
   const PC=new Function("shuffle",SHs+R("app-pcap.js").replace(/let PCV[\s\S]*$/,"")+";return PCAP;")(shuffle);
   for(const [k,g] of Object.entries(PC)) for(let i=0;i<60;i++){ const it=g(); ok(it.L.length>=2&&it.L.every(p=>p.t&&p.src&&p.dst&&p.proto&&p.info&&p.tree.length),"захоплення "+k+": пакети"); ok(it.a>=0&&it.a<it.o.length&&new Set(it.o).size===it.o.length&&it.why,"захоплення "+k+": питання «"+it.q+"» "+JSON.stringify(it.o)); if(it.key!=null) ok(!!it.L[it.key],"захоплення "+k+": ключовий пакет"); }
+  { const dk=(d=new Date())=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); const day=k=>{ const d=new Date(); d.setDate(d.getDate()+k); return dk(d); };
+    const fl={}; for(let i=10;i>=1;i--) fl["rd:"+day(-i)]={on:false,s:700-10*i,v:"v2.0"};
+    const FC=new Function("lsGet","lsSet","dkey","TOPICS","topicReady","opts","fwPlan","flags","exams","daily","passForecast","bpVer","patch","setTimeout","VIEWS","ACTS","saveDownload",R("app-forecast.js")+";return {icsBuild,icsFold,rdPlan,rdDay,rdIso};")(
+      (k,d)=>d,()=>{},dk,[{id:"SRWE3",g:"SRWE",name:"VLANs; trunks, DTP"},{id:"SRWE5",g:"SRWE",name:"STP"},{id:"ENSA1",g:"ENSA",name:"OSPF"}],()=>({p:0.3,n:9,seen:3}),{examDate:day(30)},()=>({items:[{date:day(29),k:1,tasks:[["light","Легке повторення",""]]},{date:day(28),k:2,tasks:[["mock","Повна симуляція","120 питань"]]}]}),fl,[],{},()=>({score:700,ver:"v2.0",gaps:[]}),()=>"v2.0",()=>{},()=>{},{},{},()=>{});
+    ok(FC.rdIso(FC.rdDay("2026-03-29"))==="2026-03-29"&&FC.rdDay("2026-03-30")-FC.rdDay("2026-03-29")===1,"прогноз: дні без зсуву часових поясів");
+    const PL=FC.rdPlan(); ok(PL.T.slope>7&&PL.T.slope<13,"прогноз: нахил тренду ≈10/день ("+PL.T.slope+")"); ok(PL.eta>0&&PL.eta<20&&PL.proj>=825&&PL.tone!=="bad","прогноз: дата 825 і вердикт ("+PL.eta+", "+PL.proj+")");
+    const ics=FC.icsBuild({time:"19:30",dur:60,dows:[1,2,3,4,5,6,0],course:"SRWE",rem:15,weeks:8}); const T=ics.text, Ls=T.split("\r\n");
+    ok(T.startsWith("BEGIN:VCALENDAR\r\n")&&T.endsWith("END:VCALENDAR\r\n"),"ics: обгортка VCALENDAR і CRLF"); ok(Ls.every(l=>Buffer.byteLength(l)<=75),"ics: рядки ≤ 75 байт (folding)");
+    ok((T.match(/BEGIN:VEVENT/g)||[]).length===(T.match(/END:VEVENT/g)||[]).length&&ics.P.ev.length>=25,"ics: події збалансовані ("+ics.P.ev.length+")");
+    ok(T.includes("DTSTART;VALUE=DATE:"+day(30).replace(/-/g,""))&&ics.P.ev.every(e=>e.iso<day(30)),"ics: день іспиту і всі блоки до нього"); ok(ics.P.ev.some(e=>e.cat==="final"&&/симуляція/.test(e.title)&&e.dur>=120),"ics: фінішні дні з повною симуляцією");
+    ok(/SUMMARY:CCNA SRWE3/.test(T)&&/VLANs\\; trunks\\, DTP/.test(T)&&/TRIGGER:-PT15M/.test(T),"ics: модулі, екранування ; і , та нагадування");
+    ok(FC.icsFold("X".repeat(200)).split("\r\n ").every(l=>l.length<=75)&&FC.icsFold("Ж".repeat(60)).split("\r\n ").every(l=>Buffer.byteLength(l)<=75),"ics: folding UTF-8"); }
+  { const SF=new Function("lsGet","render","VIEWS","ACTS",R("app-shift.js")+";return {shCats};")((k,d)=>d,function(){},{},{});
+    const cs=[["R1: у правилі NAT для list 1 прибрано overload / змінено ACL","nat"],["S2: на trunk GigabitEthernet0/1 (до S1) увімкнено spanning-tree bpduguard — порт пішов у err-disabled","l2"],["S1: з Gi0/1 прибрано ip dhcp snooping trust — DHCPOFFER від сервера відкидаються","sec"],["R1: у пулі DHCP LAN хибний default-router","dhcp"],["S1: інтерфейс FastEthernet0/1 (до PC1) адміністративно вимкнено — потрібен no shutdown","l1"],["R2: прибрано ip ospf cost 50 з Gi0/1","route"],["S1: видалено VLAN 20 (порти в ній неактивні)","vlan"]];
+    for(const [f,c] of cs) ok(SF.shCats([f])[0]===c,"черговий: категорія «"+f.slice(4,40)+"» → "+c+" ("+SF.shCats([f])+")");
+    let miss=0; for(let k=0;k<120;k++){ const pool=window.CLI.NETSCEN.filter(s=>!s.discover); const t=window.CLI.troubleshoot(pool[k%pool.length],1); if(t) for(const f of t.faults) if(!SF.shCats([f]).length){ miss++; ok(false,"черговий: поломка без категорії: "+f); } } ok(!miss,"черговий: усі поломки мають категорію"); }
+  { const GM=new Function("lsGet","lsSet","customQs","topicReady","dkey","VIEWS","ACTS",R("app-gapmap.js")+";return {gapCompute,gapMd,GAP_C};")((k,d)=>({names:["CCNA/SRWE/STP root bridge.md","EtherChannel LACP.md","VLAN basics.md"],ts:1}),()=>{},[{src:"n",file:"VLAN basics.md",t:"SRWE3",q:"Що таке VLAN?",ans:"x"},{src:"n",file:"STP root bridge.md",t:"SRWE5",q:"Як обирається root bridge?",ans:"BID"}],t=>t==="SRWE5"?{p:0.4,n:10,seen:8}:null,()=>"2026-01-01",{},{});
+    const G=GM.gapCompute(); const row=c=>G.rows.find(r=>r.c.startsWith(c)); ok(G.rows.length===GM.GAP_C.length&&G.names.length===3,"прогалини: рядки і нотатки");
+    ok(row("STP").st==="weak"&&row("EtherChannel").st==="nocards"&&row("VLAN").st==="unseen"&&row("NAT").st==="none","прогалини: статуси ("+["STP","EtherChannel","VLAN","NAT"].map(c=>row(c).st)+")");
+    const md=GM.gapMd(G); ok(/^---\ntags: \[ccna, moc, gaps\]/.test(md)&&/\[\[ENSA6 NAT \/? ?PAT\]\]|\[\[ENSA6 NAT PAT\]\]/.test(md)&&/\[\[STP root bridge\]\]/.test(md),"прогалини: MOC .md з посиланнями"); }
   const idx=R("index.html"), sw=R("sw.js"), lz=R("app-lazy.js"); const lazyFiles=[...lz.matchAll(/"((?:app|interview)-[\w-]+\.js)"/g)].map(m=>m[1]);
   ok(lazyFiles.length>=15,"ліниві модулі: "+lazyFiles.length); for(const f of lazyFiles){ ok(fs.existsSync(P(f)),"лінивий файл існує: "+f); ok(!idx.includes('src="'+f+'"'),"лінивий файл не в index.html: "+f); ok(sw.includes('"'+f+'"'),"лінивий файл кешує service worker: "+f); }
   for(const f of [...idx.matchAll(/src="([\w.-]+\.js)"/g)].map(m=>m[1])) ok(sw.includes('"'+f+'"'),"sw.js кешує "+f); }

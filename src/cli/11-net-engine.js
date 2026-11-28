@@ -439,7 +439,7 @@ function Net(def){
     const wrap=t=>t.match(/.{1,70}/g).join("\n");
     if(r.ok){ const first=r.hops.length&&!src?".":"!"; const okc=first==="."?n-1:n; return head+wrap(first+"!".repeat(Math.max(0,n-1)))+"\nSuccess rate is "+Math.round(okc/n*100)+" percent ("+okc+"/"+n+"), round-trip min/avg/max = 1/2/4 ms"; }
     return head+wrap((r.noroute||r.acl?"U":".").repeat(n))+"\nSuccess rate is 0 percent (0/"+n+")\n! "+r.why; };
-  N.traceCli=(s,dst)=>{ const r=N.ping(s.devName,dst); let o="Type escape sequence to abort.\nTracing the route to "+dst+"\nVRF info: (vrf in name/id, vrf out name/id)\n"; const hops=(r.hops||[]).slice(); if(r.ok) hops.push(dst); hops.forEach((h,k)=>o+="  "+(k+1)+" "+h+" 1 msec 1 msec 1 msec\n"); if(!r.ok) o+="  "+(hops.length+1)+"  *  *  *\n! "+r.why; return o; };
+  N.traceCli=(s,dst,opt)=>{ opt=opt||{}; let src=null; if(opt.src){ const n=normIf(opt.src); if(n&&s.ifs[n]){ src=s.ifs[n].ip; if(!src) return "% Invalid source interface - IP not enabled"; } else if(ipRe.test(opt.src)){ if(!Object.values(s.ifs).some(i=>i.ip===opt.src)) return "% Invalid source address- IP address not on any of our up interfaces"; src=opt.src; } else return INV; } const r=src?N.flow(s.devName,dst,"icmp",null,src):N.ping(s.devName,dst); let o="Type escape sequence to abort.\nTracing the route to "+dst+"\nVRF info: (vrf in name/id, vrf out name/id)\n"; const hops=(r.hops||[]).slice(); if(r.ok) hops.push(dst); hops.forEach((h,k)=>o+="  "+(k+1)+" "+h+" 1 msec 1 msec 1 msec\n"); if(!r.ok) o+="  "+(hops.length+1)+"  *  *  *\n! "+r.why; return o; };
   // ---------- DHCP ----------
   const poolFor=(d,gi)=> d.dhcp? Object.values(d.dhcp.pools).find(p=>p.net&&sameNet(p.net,gi,p.mask)) : null;
   function allocate(d,pool,client){
