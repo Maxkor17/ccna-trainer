@@ -96,7 +96,7 @@ for(const sc of window.BASH.SCEN){ const ses=window.BASH.start(sc); ok(!sc.check
   if(src){ const mergeDay=new Function(src[0]+"; return mergeDay;")(); const r=mergeDay({n:5,c:4,m:10,log:[{ts:1,min:30,k:"pt"}],note:"a",jts:5},{n:3,c:3,m:12,log:[{ts:1,min:30,k:"pt"},{ts:2,min:15,k:"na"}],note:"b",jts:9});
     ok(r.n===5&&r.c===4,"mergeDay: відповіді"); ok(r.m===12,"mergeDay: хвилини"); ok(r.log.length===2,"mergeDay: журнал без дублів"); ok(r.note==="b","mergeDay: новіший чек-ін"); } }
 // ---- співбесіда ----
-{ require(P("interview-data.js")); require(P("interview-data2.js")); const I=window.INTERVIEW; ok(I.Q.length>=80,"співбесіда: питань "+I.Q.length); ok(I.SC.length>=4,"співбесіда: ситуацій");
+{ require(P("interview-data.js")); require(P("interview-data2.js")); require(P("interview-srwe.js")); const I=window.INTERVIEW; ok(I.Q.length>=80,"співбесіда: питань "+I.Q.length); ok(I.SC.length>=4,"співбесіда: ситуацій");
   const seen=new Set(); for(const q of I.Q){ ok(!seen.has(q.id),"співбесіда: дубль "+q.id); seen.add(q.id); ok(!!I.CATS[q.cat]&&I.LVL[q.lvl],"співбесіда: категорія/рівень "+q.id); ok(q.ua&&q.en&&q.model&&q.points.length>=3,"співбесіда: поля "+q.id);
     ok(!/[А-Яа-яІіЇїЄєҐґ]/.test(q.en),"співбесіда: кирилиця в EN "+q.id);
     let re=[]; try{ re=q.points.map(p=>new RegExp(p.k,"i")); }catch(e){ fail("співбесіда: регулярка "+q.id+": "+e.message); continue; }
@@ -134,5 +134,30 @@ for(const sc of window.BASH.SCEN){ const ses=window.BASH.start(sc); ok(!sc.check
   const PT=new Function("flags","patch",R("app-srwe.js").replace(/const mdGet[\s\S]*$/,"")+";return PT_ACT;")({},()=>{}); for(const a of PT){ ok(!!TMAP0[a[1]]&&a[3].length&&a[4].length&&a[5].length,"PT "+a[0]+": поля"); }
   const EC=new Function(R("app-ec.js").replace(/let EC_M[\s\S]*$/,"")+";return {ecRun};")(); const exp={"active|active":1,"active|passive":1,"passive|passive":0,"desirable|auto":1,"auto|auto":0,"on|on":1,"on|active":0,"desirable|passive":0};
   for(const [k,v] of Object.entries(exp)){ const [a,b]=k.split("|"); ok(EC.ecRun(a,b,"none").up===!!v,"EtherChannel "+k); } ok(EC.ecRun("active","active","speed").f1.includes("s"),"EtherChannel: різна швидкість → s"); }
+// ---- пакет покроково, VLSM, документація, челенджі, Skills Assessment ----
+{ const TMAP1=Object.fromEntries([...topicIds].map(t=>[t,1])); const QBall=Object.values(allQ); const TMAPall=Object.fromEntries([...topicIds].map(t=>[t,{g:t.replace(/\d+$/,"")}])); const qtypeT=q=>q.type||"mc"; const ip2nT=x=>x.split(".").reduce((a,b)=>a*256+ +b,0); const fs=require("fs"); const R=f=>fs.readFileSync(P(f),"utf8"); global.CLI=window.CLI;
+  ok(window.INTERVIEW.Q.filter(q=>q.cat==="srwe").length>=20&&window.INTERVIEW.Q.filter(q=>q.cat==="srwe").every(q=>TMAP1[q.t]),"поясни вголос: теми SRWE");
+  const PW=new Function(R("app-packet.js").replace(/let PWV[\s\S]*$/,"")+";return {pwBuild,PW_SCN};")();
+  for(const [scn,x] of Object.entries(PW.PW_SCN)) for(const f of Object.keys(x.faults)){ const st=PW.pwBuild(scn,f); ok(st.length>=(f==="none"?4:2),"пакет "+scn+"/"+f+": кроків "+st.length);
+    for(const s of st){ ok(s.q&&s.q.a>=0&&s.q.a<s.q.o.length&&new Set(s.q.o).size===s.q.o.length&&s.pre&&s.post&&s.T,"пакет "+scn+"/"+f+": крок"); if(s.link) ok(s.link.every(n=>/^(PC[123]|S[12]|R1|ISP|SRV)$/.test(n)),"пакет: вузол"); }
+    ok(!!st[st.length-1].fail===(f!=="none"),"пакет "+scn+"/"+f+": поломка має зупинити пакет"); ok(st.filter(s=>s.fail).length<=1,"пакет: одна точка збою"); }
+  const CCs=R("app-confcheck.js").replace(/\/\/ ---- екран ----[\s\S]*$/,"");
+  const VL=new Function("lsGet","esc","dkey",CCs+R("app-confgen.js").replace(/let CGV[\s\S]*$/,"")+R("app-vlsm.js").replace(/let VLV[\s\S]*$/,"")+";return {vlPlan,cgBuild,CG_DEF,ccCheck};")(()=>({}),x=>x,()=>"2026-01-01");
+  const pl=VL.vlPlan({base:"192.168.0.0/22",reserve:20,firstVlan:10,step:10,dhcpSkip:10,rows:"USERS 120\nVOICE 60\nPRINTERS 20\nLINK-R1-ISP 2"}); ok(!pl.err&&pl.rows.length===4,"VLSM: план");
+  if(!pl.err){ const u=pl.rows.find(r=>r.name==="USERS"); ok(u.len===24&&u.net==="192.168.0.0"&&u.gw==="192.168.0.1","VLSM: USERS /24 першою ("+u.net+"/"+u.len+")"); ok(pl.rows.find(r=>r.name==="LINK-R1-ISP").len===30,"VLSM: лінк /30"); const v=pl.rows.find(r=>r.name==="VOICE"); ok(v.len===25&&v.net==="192.168.1.0","VLSM: VOICE /25 (60×1.2=72)");
+    let prev=-1; for(const r of pl.rows){ const n=ip2nT(r.net); ok(n>prev,"VLSM: без перекриття"); prev=n+2**(32-r.len)-1; }
+    const out=VL.cgBuild(Object.assign({},VL.CG_DEF,{role:"router",host:"R1",vlans:pl.rows.filter(r=>r.vlan).map(r=>`${r.vlan} ${r.name} ${r.gw}/${r.len}`).join("\n")})); const cr=VL.ccCheck(out); ok(!cr.F.some(f=>f.sev==="err"),"VLSM → генератор: без помилок"); }
+  ok(!!VL.vlPlan({base:"10.0.0.0/28",rows:"A 50"}).err,"VLSM: нестача місця"); ok(!!VL.vlPlan({base:"10.0.0.5/24",rows:"A 5"}).err,"VLSM: не адреса мережі");
+  const ND=new Function("lsGet","esc","dkey",CCs+R("app-netdoc.js").replace(/let NDV[\s\S]*?(?=const ND_SAMPLE)/,"").replace(/VIEWS\.netdoc[\s\S]*$/,"")+";return {ndParse,ndMd,ND_SAMPLE};")(()=>"",x=>x,()=>"2026-01-01");
+  const nr=ND.ndParse(ND.ND_SAMPLE); ok(nr.L.length===4&&nr.D.ISP&&nr.D.ISP.type==="router"&&nr.D.S2.type==="switch","документація: приклад ("+nr.L.length+" лінків)"); ok(/```mermaid[\s\S]*R1 ---\|"Gi0\/0 ↔ Gi0\/1"\| S1/.test(ND.ndMd(nr)),"документація: Mermaid");
+  { const {N,ses}=CLI.startNet({def:()=>({devices:{R1:{type:"router"},S1:{type:"switch"},S2:{type:"switch"}},links:[["R1","Gi0/0","S1","Gi0/1"],["S1","Fa0/24","S2","Fa0/24"]]})}); ses.R1.exec("en"); ses.R1.exec("conf t"); ses.R1.exec("int g0/0"); ses.R1.exec("ip address 10.0.0.1 255.255.255.0"); ses.R1.exec("no sh"); ses.R1.exec("end"); N.recompute();
+    let t=""; for(const d of ["R1","S1","S2"]){ ses[d].exec("en"); t+=d+"#show cdp neighbors\n"+ses[d].exec("show cdp neighbors")+"\n"+d+"#show ip interface brief\n"+ses[d].exec("show ip interface brief")+"\n"; } t+="S1#show cdp neighbors detail\n"+ses.S1.exec("show cdp neighbors detail");
+    const r2=ND.ndParse(t); ok(r2.L.length===2,"документація: виводи симулятора → 2 лінки ("+JSON.stringify(r2.L)+")"); ok(r2.D.R1.ifs["Gi0/0"]&&r2.D.R1.ifs["Gi0/0"].ip==="10.0.0.1","документація: адреси"); }
+  const CHs=R("app-challenge.js"); const CH=new Function("QB","QB_BASE","TMAP","qtype",CHs.replace(/let CHV[\s\S]*?(?=VIEWS\.challenge)/,"").replace(/VIEWS\.challenge[\s\S]*$/,"")+";return {chPick,chId,chWeekKey};")(QBall,QBall,TMAPall,qtypeT);
+  const p1=CH.chPick("week-2026-W48",["SRWE"],15), p2=CH.chPick("week-2026-W48",["SRWE"],15), p3=CH.chPick("week-2026-W49",["SRWE"],15); ok(p1.length===15&&p1.join()===p2.join()&&p1.join()!==p3.join(),"челендж: детермінований набір"); ok(/^\d{4}-W\d\d$/.test(CH.chWeekKey()),"челендж: тиждень");
+  const SA=new Function("lsGet","esc",CCs+CHs.match(/const chRng = [^\n]*\n/)[0]+R("app-sa.js").replace(/VIEWS\.sa = [\s\S]*$/,"")+";return {saGen,saGrade,saSolution,saVlanBrief,ccSyntax};")(()=>null,x=>x);
+  for(let k=0;k<25;k++){ const Pp=SA.saGen("t"+k); const S=SA.saSolution(Pp); const text=["R1","S1","S2"].map(h=>"Building configuration...\n"+S[h].join("\n")+(h!=="R1"?"\n"+h+"#show vlan brief\n"+SA.saVlanBrief(Pp):"")).join("\n"); const G=SA.saGrade(Pp,text);
+    ok(G.pct===100,"SA "+k+": еталон дає "+G.pct+"% ("+G.T.filter(t=>!t.ok).map(t=>t.txt).join("; ")+")"); if(k<3) for(const h of ["R1","S1","S2"]) ok(!SA.ccSyntax(S[h]).length,"SA: симулятор приймає еталон "+h); }
+  { const Pp=SA.saGen("x"); ok(SA.saGrade(Pp,"").pct===0,"SA: порожня відповідь — 0%"); const S=SA.saSolution(Pp); const bad=S.R1.map(l=>l.replace(/^ipv6 unicast-routing$/,"!")).join("\n"); const G=SA.saGrade(Pp,"Building configuration...\n"+bad); ok(G.T.find(t=>/IPv6/.test(t.sec)).ok===false,"SA: без ipv6 unicast-routing — мінус"); } }
 console.log(fails? "\n❌ Помилок: "+fails+" (перевірок "+checks+")" : "\n✅ Усі перевірки пройдено ("+checks+")");
 process.exit(fails?1:0);

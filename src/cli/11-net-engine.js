@@ -95,6 +95,10 @@ function Net(def){
       if(ia&&ib&&!ia.shutdown&&!ib.shutdown&&operTrunk(ia)&&operTrunk(ib)&&ia.nativeVlan!==ib.nativeVlan){
         msgs.push([l.a,"%CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on "+longIf(l.pa)+" ("+ia.nativeVlan+"), with "+l.b+" "+longIf(l.pb)+" ("+ib.nativeVlan+")."]);
         msgs.push([l.b,"%CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on "+longIf(l.pb)+" ("+ib.nativeVlan+"), with "+l.a+" "+longIf(l.pa)+" ("+ia.nativeVlan+")."]); } }
+    // ---------- DHCP-клієнт на інтерфейсах маршрутизатора (ip address dhcp) ----------
+    for(const d of Object.values(N.dev)) if(!isHost(d)&&d.type!=="hub") for(const i of Object.values(d.ifs)) if(i.ipDhcp&&!i.ip&&ifStatus(d,i)[1]==="up"){
+      for(const e of fromIface(d,i.name,{noVip:true})||[]){ if(e.kind==="pc"||e.dev===d.devName||!e.ip) continue; const sd=N.dev[e.dev]; const p=poolFor(sd,e.ip); if(!p) continue; const ip=allocate(sd,p,d.devName+":"+i.name);
+        if(ip){ i.ip=ip; i.mask=p.mask; i.dhcpLease={srv:e.dev,gw:p.gw||null}; if(p.gw&&!d.routes.some(r=>r.dhcp)) d.routes.push({net:"0.0.0.0",mask:"0.0.0.0",nh:p.gw,ifc:null,ad:254,dhcp:true}); msgs.push([d.devName,"%DHCP-6-ADDRESS_ASSIGN: Interface "+longIf(i.name)+" assigned DHCP address "+ip+", mask "+p.mask+", hostname "+d.devName]); } break; } }
     try{ msgs.push(...N.debugMsgs()); }catch(e){}
     const out=[]; for(const m of msgs){ const k=m.join("|"); if(!N.seenMsgs.has(k)){ N.seenMsgs.add(k); out.push(m); } }
     if(N._dq&&N._dq.length) out.push(...N._dq.splice(0));
@@ -150,10 +154,14 @@ function Net(def){
     if(opt&&opt.l2check&&!opt.origin) opt=Object.assign({},opt,{origin:{mac:macOf(d.devName,ifn),ip:i.ip}}); if(i.svi) return domain({sw:d.devName,v:Number(ifn.slice(4))},opt);
     const ph=i.sub? ifn.split(".")[0] : ifn; const pr=N.peer(d.devName,ph); if(!pr) return [];
     const tag= i.sub? (i.native? null : i.encap) : null; return domain({dev:pr.dev,port:pr.port,tag},opt); };
+  const hsrpTrackDown=(d,i,g)=>{ const h=i.hsrp&&i.hsrp[g]; if(!h||!h.track) return false; const t=d.ifs[h.track.ifn]; return !t||ifStatus(d,t)[1]!=="up"; };
+  const hsrpEff=(d,i,g)=>{ const h=i.hsrp[g]; return Math.max(0,h.prio-(hsrpTrackDown(d,i,g)?h.track.dec:0)); };
+  N.hsrpPrio=(devName,ifn,g)=>{ const d=N.dev[devName]; const i=d.ifs[ifn]; return i&&i.hsrp&&i.hsrp[g]?hsrpEff(d,i,g):100; };
+  N.hsrpTrackDown=(devName,ifn,g)=>{ const d=N.dev[devName]; const i=d.ifs[ifn]; return !!(i&&hsrpTrackDown(d,i,g)); };
   function hsrpPeers(devName,ifn,g){ const d=N.dev[devName]; const i=d.ifs[ifn]; if(!i||!i.hsrp||!i.hsrp[g]) return []; const vip=i.hsrp[g].ip; const out=[];
-    if(ifStatus(d,i)[1]==="up"&&i.ip) out.push({dev:devName,ifn,prio:i.hsrp[g].prio,ip:i.ip});
+    if(ifStatus(d,i)[1]==="up"&&i.ip) out.push({dev:devName,ifn,prio:hsrpEff(d,i,g),ip:i.ip});
     if(!out.length) return out;
-    for(const e of fromIface(d,ifn,{noVip:true})){ if(e.kind==="pc"||e.dev===devName) continue; const o=N.dev[e.dev]; const j=o.ifs[e.ifn]; if(!j||!j.hsrp||!j.hsrp[g]||j.hsrp[g].ip!==vip||j.ip!==e.ip) continue; if(ifStatus(o,j)[1]!=="up") continue; out.push({dev:e.dev,ifn:e.ifn,prio:j.hsrp[g].prio,ip:j.ip}); }
+    for(const e of fromIface(d,ifn,{noVip:true})){ if(e.kind==="pc"||e.dev===devName) continue; const o=N.dev[e.dev]; const j=o.ifs[e.ifn]; if(!j||!j.hsrp||!j.hsrp[g]||j.hsrp[g].ip!==vip||j.ip!==e.ip) continue; if(ifStatus(o,j)[1]!=="up") continue; out.push({dev:e.dev,ifn:e.ifn,prio:hsrpEff(o,j,g),ip:j.ip}); }
     return out.sort((a,b)=>b.prio-a.prio||ipToN(b.ip)-ipToN(a.ip)); }
   function vrrpPeers(devName,ifn,g){ const d=N.dev[devName]; const i=d.ifs[ifn]; if(!i||!i.vrrp||!i.vrrp[g]) return []; const v=i.vrrp[g]; if(ifStatus(d,i)[1]!=="up"||!i.ip||!v.ip) return [];
     const pr=(ii,vv)=>ii.ip===vv.ip?255:vv.prio; const out=[{dev:devName,ifn,prio:pr(i,v),ip:i.ip,own:i.ip===v.ip}];

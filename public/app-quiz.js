@@ -113,7 +113,7 @@ function finishExam(){
   const e={ts:Date.now(), n:S.items.length, correct:ok, pct:Math.round(ok/S.items.length*100), dur:Math.round((Date.now()-S.start)/1000), per, ccna:!!S.ccna, bp:S.bp||null,
     en:!!S.en, tq:S.items.map((_,k)=>Math.round(((S.tq||{})[k]||0)/1000)), tok:S.items.map((q,k)=>isCorrect(q,S.ans[k])?1:0), tt:S.items.map(q=>q.t),
     ids:S.items.map(q=>q.gen?null:q.id), ans:Object.fromEntries(Object.entries(S.ans).filter(([k])=>!S.items[k].gen).map(([k,v])=>[S.items[k].id,v]))};
-  saveExam(e); S.result=e; examLangRestore(); view="result"; render(); scrollTop();
+  saveExam(e); S.result=e; examLangRestore(); if(S.challenge&&typeof chDone==="function"){ chDone(e); return; } view="result"; render(); scrollTop();
 }
 
 // ================= Рендеринг: питання =================

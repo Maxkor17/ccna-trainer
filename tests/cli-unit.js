@@ -39,5 +39,14 @@ for(const [a,b,want] of EC){ const N=ec(a,b); const got=["Gi0/1","Gi0/2"].every(
   N=net(def,{R1:base.concat(["ip access-list extended WEB","deny tcp any any eq 80","permit tcp any any eq 80","permit ip any any","exit","interface g0/0","ip access-group WEB in"])}).N; ok(!N.flow("PC1","10.0.0.5","tcp",80).ok,"ACL: перший збіг виграє");
   N=net(def,{R1:base.concat(["ip route 172.16.0.0 255.255.0.0 10.0.0.5","ip route 172.16.5.0 255.255.255.0 192.168.1.20"])}).N; const t=C.sessionsFor(N).R1; t.exec("enable"); const r=t.exec("show ip route 172.16.5.9");
   ok(/172\.16\.5\.0/.test(r)&&/192\.168\.1\.20/.test(r),"LPM: show ip route обирає найдовший префікс"); }
+// ---- DHCP-клієнт на маршрутизаторі й HSRP track ----
+{ const def={devices:{R1:{type:"router"},ISP:{type:"router"},R2:{type:"router"}},links:[["R1","Gi0/0","ISP","Gi0/0"],["R1","Gi0/1","R2","Gi0/1"]]};
+  const {N,ses}=net(def,{ISP:["interface g0/0","ip address 203.0.113.1 255.255.255.0","no shutdown","exit","ip dhcp excluded-address 203.0.113.1","ip dhcp pool WAN","network 203.0.113.0 255.255.255.0","default-router 203.0.113.1"],
+    R1:["interface g0/0","ip address dhcp","no shutdown","interface g0/1","ip address 10.0.0.1 255.255.255.0","no shutdown","standby 1 ip 10.0.0.254","standby 1 priority 110","standby 1 preempt","standby 1 track g0/0 20"],
+    R2:["interface g0/1","ip address 10.0.0.2 255.255.255.0","no shutdown","standby 1 ip 10.0.0.254","standby 1 preempt"]});
+  N.recompute(); const r=ses.R1; ok(N.dev.R1.ifs["Gi0/0"].ip==="203.0.113.2","ip address dhcp: адреса з пулу ISP"); ok(/S\*\s+0\.0\.0\.0\/0 \[254\/0\] via 203\.0\.113\.1/.test(r.exec("show ip route")),"ip address dhcp: маршрут за замовчуванням AD 254");
+  ok(/ip address dhcp/.test(r.exec("show running-config"))&&!/ip route 0\.0\.0\.0/.test(r.exec("show running-config")),"ip address dhcp: running-config"); ok(/DHCP/.test(r.exec("show ip interface brief")),"ip address dhcp: Method DHCP");
+  ok(N.hsrpState("R1","Gi0/1",1).state==="Active","HSRP: R1 active з пріоритетом 110"); r.exec("conf t"); r.exec("interface g0/0"); r.exec("shutdown"); r.exec("end"); N.recompute();
+  ok(N.hsrpState("R1","Gi0/1",1).state==="Standby"&&N.hsrpPrio("R1","Gi0/1",1)===90,"HSRP track: падіння Gi0/0 знижує пріоритет до 90 і роль переходить до R2"); ok(/track GigabitEthernet0\/0 20/.test(r.exec("show running-config")),"HSRP track у running-config"); }
 console.log(fails? "\n❌ Модульні тести: помилок "+fails+" з "+n : "\n✅ Модульні тести симулятора: "+n+" перевірок");
 process.exit(fails?1:0);

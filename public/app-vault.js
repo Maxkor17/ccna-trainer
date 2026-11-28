@@ -25,3 +25,23 @@ function obButtons(q) { if (!opts.obVault || !q || q.gen) return ""; const B = [
   B.push(`<a class="mini linkbtn" href="${esc(obUri("new", { vault: opts.obVault, file: (opts.obWriteDir || "CCNA/Тренажер") + "/Вхідні картки", content: "\n" + card, append: "true" }))}">📝 Картку в Obsidian</a>`);
   return `<div class="row" style="margin:4px 0">${B.join("")}</div>`; }
 ACTS.obvault = () => { const v = (($("#obvault") || {}).value || "").trim(); opts.obVault = v; lsSet(LS.opts, opts); const m = $("#obmsg"); if (m) m.textContent = v ? "Vault «" + v + "» збережено: після помилки з'явиться кнопка «Картку в Obsidian»." : "Назву vault очищено."; };
+// ---- тижневий звіт: розширені розділи для «Тиждень <wk>.md» ----
+function weekExtraMd(wk) { const days = weekDays(wk); const t0 = new Date(days[0]).getTime(), t1 = t0 + 7 * 864e5; const L = [];
+  const inW = r => r && r.l >= t0 && r.l < t1; const byT = {}; for (const [id, r] of Object.entries(prog)) { const q = QMAP[id]; if (!q || !inW(r)) continue; (byT[q.t] = byT[q.t] || 0); byT[q.t]++; }
+  const touched = Object.entries(byT).map(([t, n]) => [t, n, topicReady(t) || { p: 0 }]).sort((a, b) => b[1] - a[1]);
+  if (touched.length) { L.push("## Теми тижня", "", "| Модуль | Питань тренував | Готовність зараз |", "|---|---|---|"); for (const [t, n, r] of touched.slice(0, 12)) L.push(`| ${tlabel(t)} ${TMAP[t].name} | ${n} | ${Math.round(r.p * 100)}% |`); L.push(""); }
+  const pr = (pfx, name) => { const a = Object.entries(prog).filter(([k, r]) => k.startsWith(pfx) && inW(r)); if (!a.length) return null; const c = a.reduce((x, [, r]) => x + (r.k ? 1 : 0), 0); return `- ${name}: ${a.length} вправ (останні відповіді правильні: ${c})`; };
+  const P = [pr("sh-", "Читання виводів"), pr("bg-", "Знайди помилку"), pr("cb-", "Збери команду"), pr("pw-", "Пакет покроково"), pr("iv:", "Співбесіда")].filter(Boolean);
+  const W = lsGet("ccna.chweek", {})[wk]; if (W && W.best) P.push(`- Челендж тижня: найкраще ${W.best.correct}/15, спроб ${W.tries}`);
+  const sa = lsGet("ccna.sa.hist", []).filter(x => x.ts >= t0 && x.ts < t1); if (sa.length) P.push(`- Skills Assessment: ${sa.length} спроб, найкраще ${Math.max(...sa.map(x => x.pct))}%`);
+  if (P.length) L.push("## Практика", "", ...P, "");
+  const md = TOPICS.filter(t => t.g === "SRWE").map(t => [t, typeof mdStat === "function" ? mdStat(t.id) : null]).filter(([, s]) => s);
+  if (md.length) { const done = md.filter(([, s]) => s.done).length; L.push("## Модулі SRWE", "", `Готово ${done}/${md.length}. [[SRWE — готовність]]`, ""); }
+  const plan = []; const fw = typeof fwPlan === "function" ? fwPlan() : null;
+  if (fw && fw.days >= 0 && fw.days <= 14) { for (const d of fw.items.filter(x => x.date > dkey()).slice(0, 7)) plan.push(`- [ ] ${d.date}: ${d.tasks.map(t => t[1]).join(", ")}`); }
+  else { const next = md.find(([, s]) => !s.done); if (next) plan.push(`- [ ] ${tlabel(next[0].id)} ${next[0].name}: ${["прочитати теорію", "виконати Packet Tracer", "скласти module exam ≥ 80%", "підтягнути тренажер ≥ 70%"].filter((_, k) => !next[1].parts[k]).join(", ")}`);
+    const weak = TOPICS.filter(t => t.g !== "LNX").map(t => [t, topicReady(t.id)]).filter(([, r]) => r && r.seen >= 5 && r.p < 0.7).sort((a, b) => a[1].p - b[1].p).slice(0, 3);
+    for (const [t, r] of weak) plan.push(`- [ ] Тренувати ${tlabel(t.id)} ${t.name} (зараз ${Math.round(r.p * 100)}%)`);
+    const rq = typeof reviewQueue === "function" ? reviewQueue().length : 0; if (rq) plan.push(`- [ ] Розібрати чергу повторення (${rq})`); plan.push("- [ ] Челендж тижня — побити минулий результат"); }
+  if (plan.length) L.push("## План на наступний тиждень", "", ...plan, "");
+  return L; }

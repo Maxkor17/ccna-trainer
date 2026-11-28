@@ -172,8 +172,9 @@ add("if","switchport",F((i,a,s)=>{ if(i.svi) return INV; i.switchport=true; i.ip
 add("if","no switchport",F((i,a,s)=>{ if(i.svi||s.router) return INV; if(!s.l3) return INV; i.switchport=false; }));
 add("if","encapsulation dot1q <n>",F((i,a,s)=>{ if(!s.router||!i.sub) return INV; i.encap=a[0]; i.native=false; }));
 add("if","encapsulation dot1q <n> native",F((i,a,s)=>{ if(!s.router||!i.sub) return INV; i.encap=a[0]; i.native=true; }));
-add("if","ip address <ip> <mask>",F((i,a,s)=>{ if(!i.svi && i.switchport) return "% IP addresses may not be configured on L2 links."; if(i.sub && !i.encap) return "% Configuring IP routing on a LAN subinterface is only allowed if that\nsubinterface is already configured as part of an IEEE 802.10, IEEE 802.1Q,\nor ISL vLAN."; if(!maskOk(a[1])) return "Bad mask "+a[1]+" for address "+a[0]; i.ip=a[0]; i.mask=a[1]; }));
-add("if","no ip address",F(i=>{i.ip=null;i.mask=null;}));
+add("if","ip address <ip> <mask>",F((i,a,s)=>{ if(!i.svi && i.switchport) return "% IP addresses may not be configured on L2 links."; if(i.sub && !i.encap) return "% Configuring IP routing on a LAN subinterface is only allowed if that\nsubinterface is already configured as part of an IEEE 802.10, IEEE 802.1Q,\nor ISL vLAN."; if(!maskOk(a[1])) return "Bad mask "+a[1]+" for address "+a[0]; i.ip=a[0]; i.mask=a[1]; if(i.ipDhcp) s.routes=s.routes.filter(r=>!r.dhcp); i.ipDhcp=false; delete i.dhcpLease; }));
+add("if","no ip address",F((i,a,s)=>{ if(i.ipDhcp) s.routes=s.routes.filter(r=>!r.dhcp); i.ip=null;i.mask=null;i.ipDhcp=false;delete i.dhcpLease;}));
+add("if","ip address dhcp",F((i,a,s)=>{ if(!i.svi && i.switchport) return "% IP addresses may not be configured on L2 links."; if(i.sub && !i.encap) return INV; i.ip=null; i.mask=null; i.ipDhcp=true; delete i.dhcpLease; }));
 add("if","channel-group <n> mode <w>",F((i,a,s,n)=>{ if(!isPhys(n)) return INV; const m=["active","passive","desirable","auto","on"].find(x=>x.startsWith(a[1].toLowerCase())); if(!m) return INV; i.chGroup=a[0]; i.chMode=m; const po="Po"+a[0]; if(!s.ifs[po]){ s.ifs[po]=newIf(po); Object.assign(s.ifs[po],{mode:i.mode,accessVlan:i.accessVlan,nativeVlan:i.nativeVlan,allowed:i.allowed,switchport:i.switchport}); return "Creating a port-channel interface Port-channel "+a[0]; } }));
 add("if","no channel-group",F(i=>{i.chGroup=null;i.chMode=null;}));
 add("if","spanning-tree portfast",F(i=>{ i.portfast=true; return "%Warning: portfast should only be enabled on ports connected to a single\n host. Connecting hubs, concentrators, switches, bridges, etc... to this\n interface  when portfast is enabled, can cause temporary bridging loops.\n Use with CAUTION"; }));
@@ -364,7 +365,7 @@ function showDhcpBind(s){ let o="Bindings from all pools not associated with VRF
 function showDhcpPool(s){ return Object.values(s.dhcp.pools).map(p=>"\nPool "+p.name+" :\n Utilization mark (high/low)    : 100 / 0\n Total addresses                : "+(p.mask?Math.pow(2,32-maskLen(p.mask))-2:0)+"\n Leased addresses               : "+Object.values(s.dhcp.bind).filter(b=>b.pool===p.name).length+"\n Excluded addresses             : "+s.dhcp.excl.length+"\n 1 subnet is currently in the pool :\n Current index        IP address range                    Leased/Excluded/Total\n "+(p.net||"0.0.0.0").padEnd(20)+(p.net||"")+" - "+(p.net?n2ipT((ipToN(p.net)|~ipToN(p.mask))>>>0):"")).join("\n"); }
 function l3extra(i){ const L=[]; for(const h of i.helper||[]) L.push(" ip helper-address "+h); if(i.aclIn) L.push(" ip access-group "+i.aclIn+" in"); if(i.aclOut) L.push(" ip access-group "+i.aclOut+" out");
   for(const x of i.v6||[]) L.push(" ipv6 address "+(x.eui?v6fmt(v6net(v6parse(x.addr),64))+"/64 eui-64":x.addr+"/"+x.len)); if(i.llStatic) L.push(" ipv6 address "+i.llStatic+" link-local"); if(i.v6on&&!(i.v6||[]).length&&!i.llStatic) L.push(" ipv6 enable");
-  for(const [g,h] of Object.entries(i.hsrp||{})){ if(h.ip) L.push(" standby "+g+" ip "+h.ip); if(h.prio!==100) L.push(" standby "+g+" priority "+h.prio); if(h.preempt) L.push(" standby "+g+" preempt"); } if(i.hsrpV===2) L.push(" standby version 2"); if(i.cdpOff) L.push(" no cdp enable");
+  for(const [g,h] of Object.entries(i.hsrp||{})){ if(h.ip) L.push(" standby "+g+" ip "+h.ip); if(h.prio!==100) L.push(" standby "+g+" priority "+h.prio); if(h.preempt) L.push(" standby "+g+" preempt"); if(h.track) L.push(" standby "+g+" track "+longIf(h.track.ifn)+(h.track.dec!==10?" "+h.track.dec:"")); } if(i.hsrpV===2) L.push(" standby version 2"); if(i.cdpOff) L.push(" no cdp enable");
   if(i.natIn) L.push(" ip nat inside"); if(i.natOut) L.push(" ip nat outside"); if(i.ospfPid) L.push(" ip ospf "+i.ospfPid+" area "+i.ospfArea); if(i.ospfCost) L.push(" ip ospf cost "+i.ospfCost); if(i.ospfPrio!==1) L.push(" ip ospf priority "+i.ospfPrio);
   if(i.hello!==10) L.push(" ip ospf hello-interval "+i.hello); if(i.deadSet) L.push(" ip ospf dead-interval "+i.dead); if(i.ospfP2p) L.push(" ip ospf network point-to-point"); if(i.bw) L.push(" bandwidth "+i.bw); L.push(...v6ndRun(i)); L.push(...v2RunL3(i)); return L; }
 
@@ -373,15 +374,18 @@ const hsrpG=(i,g)=>{ i.hsrp=i.hsrp||{}; if(!i.hsrp[g]) i.hsrp[g]={ip:null,prio:1
 add("if","standby <n> ip <ip>",F((i,a)=>{ if(i.switchport&&!i.svi) return INV; if(a[0]>4095) return INV; hsrpG(i,a[0]).ip=a[1]; }));
 add("if","standby <n> priority <n>",F((i,a)=>{ if(a[1]>255) return INV; hsrpG(i,a[0]).prio=a[1]; }));
 add("if","standby <n> preempt",F((i,a)=>{ hsrpG(i,a[0]).preempt=true; }));
+add("if","standby <n> track <if>",F((i,a,s)=>{ if(!s.ifs[a[1]]) return INV; hsrpG(i,a[0]).track={ifn:a[1],dec:10}; }));
+add("if","standby <n> track <if> <n>",F((i,a,s)=>{ if(!s.ifs[a[1]]||a[2]<1||a[2]>255) return INV; hsrpG(i,a[0]).track={ifn:a[1],dec:a[2]}; }));
+add("if","no standby <n> track <if>",F((i,a)=>{ const h=i.hsrp&&i.hsrp[a[0]]; if(h) delete h.track; }));
 add("if","no standby <n> preempt",F((i,a)=>{ hsrpG(i,a[0]).preempt=false; }));
 add("if","no standby <n>",F((i,a)=>{ if(i.hsrp) delete i.hsrp[a[0]]; }));
 add("if","standby version <n>",F((i,a)=>{ if(a[0]!==1&&a[0]!==2) return INV; i.hsrpV=a[0]; }));
 for(const m of ["user","exec"]){
   add(m,"show standby brief",(s)=>{ let o="                     P indicates configured to preempt.\n                     |\nInterface   Grp  Pri P State   Active          Standby         Virtual IP\n";
     for(const i of Object.values(s.ifs)) for(const [g,h] of Object.entries(i.hsrp||{})){ const st=s.net? s.net.hsrpState(s.devName,i.name,Number(g)) : {state:"Init",active:"unknown",standby:"unknown"};
-      o+=i.name.padEnd(12)+g.padEnd(5)+String(h.prio).padEnd(4)+(h.preempt?"P ":"  ")+st.state.padEnd(8)+st.active.padEnd(16)+st.standby.padEnd(16)+(h.ip||"unknown")+"\n"; } return o.trimEnd(); });
+      o+=i.name.padEnd(12)+g.padEnd(5)+String(s.net?s.net.hsrpPrio(s.devName,i.name,Number(g)):h.prio).padEnd(4)+(h.preempt?"P ":"  ")+st.state.padEnd(8)+st.active.padEnd(16)+st.standby.padEnd(16)+(h.ip||"unknown")+"\n"; } return o.trimEnd(); });
   add(m,"show standby",(s)=>{ let o=""; for(const i of Object.values(s.ifs)) for(const [g,h] of Object.entries(i.hsrp||{})){ const st=s.net? s.net.hsrpState(s.devName,i.name,Number(g)) : {state:"Init",active:"unknown",standby:"unknown"};
-      o+=longIf(i.name)+" - Group "+g+(i.hsrpV===2?" (version 2)":"")+"\n  State is "+st.state+"\n  Virtual IP address is "+(h.ip||"unknown")+"\n  Active virtual MAC address is "+(i.hsrpV===2?"0000.0c9f.f"+Number(g).toString(16).padStart(3,"0"):"0000.0c07.ac"+Number(g).toString(16).padStart(2,"0"))+"\n  Hello time 3 sec, hold time 10 sec\n  Preemption "+(h.preempt?"enabled":"disabled")+"\n  Active router is "+st.active+"\n  Standby router is "+st.standby+"\n  Priority "+h.prio+" (default 100)\n"; } return o.trimEnd(); });
+      o+=longIf(i.name)+" - Group "+g+(i.hsrpV===2?" (version 2)":"")+"\n  State is "+st.state+"\n  Virtual IP address is "+(h.ip||"unknown")+"\n  Active virtual MAC address is "+(i.hsrpV===2?"0000.0c9f.f"+Number(g).toString(16).padStart(3,"0"):"0000.0c07.ac"+Number(g).toString(16).padStart(2,"0"))+"\n  Hello time 3 sec, hold time 10 sec\n  Preemption "+(h.preempt?"enabled":"disabled")+"\n  Active router is "+st.active+"\n  Standby router is "+st.standby+"\n  Priority "+(s.net?s.net.hsrpPrio(s.devName,i.name,Number(g)):h.prio)+(h.track?" (configured "+h.prio+")\n    Track interface "+longIf(h.track.ifn)+" state "+(s.net&&s.net.hsrpTrackDown(s.devName,i.name,Number(g))?"Down":"Up")+" decrement "+h.track.dec:" (default 100)")+"\n"; } return o.trimEnd(); });
   add(m,"show ntp associations",(s)=>{ const v=s.svc&&s.svc.ntp||[]; if(!v.length) return "%NTP is not enabled."; return "  address         ref clock       st   when   poll reach  delay  offset   disp\n"+v.map(x=>"*~"+x.padEnd(15)+"127.127.1.1      3     12     64   377  1.204  -0.315   0.937").join("\n")+"\n * sys.peer, # selected, + candidate, - outlyer, x falseticker, ~ configured"; });
   add(m,"show ntp status",(s)=>{ const v=s.svc&&s.svc.ntp||[]; return v.length?"Clock is synchronized, stratum 4, reference is "+v[0]:"Clock is unsynchronized, stratum 16, no reference clock"; });
   add(m,"show snmp community",(s)=>((s.svc&&s.svc.snmp)||[]).map(c=>"Community name: "+c.name+"\nCommunity Index: "+c.name+"\nstorage-type: nonvolatile        active access-list: "+(c.acl||"")+"\n"+(c.rw?"read-write":"read-only")).join("\n\n"));
@@ -984,7 +988,7 @@ function ifStatus(s,i){
 function showIpBrief(s){
   let o="Interface              IP-Address      OK? Method Status                Protocol\n";
   const list=Object.values(s.ifs).sort((a,b)=>(a.svi-b.svi)||a.name.localeCompare(b.name,undefined,{numeric:true}));
-  for(const i of list){ const [st,pr]=ifStatus(s,i); o+=longIf(i.name).padEnd(23)+(i.ip||"unassigned").padEnd(16)+"YES "+(i.ip?"manual":"unset ").padEnd(7)+st.padEnd(22)+pr+"\n"; }
+  for(const i of list){ const [st,pr]=ifStatus(s,i); o+=longIf(i.name).padEnd(23)+(i.ip||"unassigned").padEnd(16)+"YES "+(i.ipDhcp?"DHCP":i.ip?"manual":"unset ").padEnd(7)+st.padEnd(22)+pr+"\n"; }
   return o;
 }
 function showStatus(s){ let o="Port      Name               Status       Vlan       Duplex  Speed Type\n";
@@ -1045,9 +1049,9 @@ function activeStatics(s){ // статичні маршрути, що потра
 }
 function runIf(s,i){
   const L=[]; L.push("interface "+longIf(i.name)); if(i.desc) L.push(" description "+i.desc);
-  if(i.svi||i.loop){ L.push(i.ip?" ip address "+i.ip+" "+i.mask:" no ip address"); L.push(...l3extra(i)); if(i.shutdown) L.push(" shutdown"); return L; }
-  if(i.sub){ if(i.encap) L.push(" encapsulation dot1Q "+i.encap+(i.native?" native":"")); L.push(i.ip?" ip address "+i.ip+" "+i.mask:" no ip address"); L.push(...l3extra(i)); if(i.shutdown) L.push(" shutdown"); return L; }
-  if(!i.switchport){ if(!s.router) L.push(" no switchport"); L.push(i.ip?" ip address "+i.ip+" "+i.mask:" no ip address"); L.push(...l3extra(i)); }
+  if(i.svi||i.loop){ L.push(i.ipDhcp?" ip address dhcp":i.ip?" ip address "+i.ip+" "+i.mask:" no ip address"); L.push(...l3extra(i)); if(i.shutdown) L.push(" shutdown"); return L; }
+  if(i.sub){ if(i.encap) L.push(" encapsulation dot1Q "+i.encap+(i.native?" native":"")); L.push(i.ipDhcp?" ip address dhcp":i.ip?" ip address "+i.ip+" "+i.mask:" no ip address"); L.push(...l3extra(i)); if(i.shutdown) L.push(" shutdown"); return L; }
+  if(!i.switchport){ if(!s.router) L.push(" no switchport"); L.push(i.ipDhcp?" ip address dhcp":i.ip?" ip address "+i.ip+" "+i.mask:" no ip address"); L.push(...l3extra(i)); }
   else{
     if(i.accessVlan!==1) L.push(" switchport access vlan "+i.accessVlan);
     if(i.nativeVlan!==1) L.push(" switchport trunk native vlan "+i.nativeVlan);
@@ -1087,8 +1091,8 @@ function showRun(s){
   { const sv=svcRun(s); if(sv.length) L.push(...sv,"!"); }
   if(s.v6routing) L.push("ipv6 unicast-routing","!"); for(const r of s.routes6||[]) L.push("ipv6 route "+r.pfx+"/"+r.len+(r.ifc?" "+longIf(r.ifc):"")+(r.nh?" "+r.nh:"")+(r.ad>1?" "+r.ad:""));
   if(s.defaultGw) L.push("ip default-gateway "+s.defaultGw,"!");
-  for(const r of s.routes) L.push("ip route "+r.net+" "+r.mask+(r.ifc?" "+longIf(r.ifc):"")+(r.nh?" "+r.nh:"")+(r.ad&&r.ad!==1?" "+r.ad:""));
-  if(s.routes.length) L.push("!");
+  for(const r of s.routes.filter(r=>!r.dhcp)) L.push("ip route "+r.net+" "+r.mask+(r.ifc?" "+longIf(r.ifc):"")+(r.nh?" "+r.nh:"")+(r.ad&&r.ad!==1?" "+r.ad:""));
+  if(s.routes.some(r=>!r.dhcp)) L.push("!");
   for(const [n,acl] of Object.entries(s.acls)){ if(acl.named){ L.push("ip access-list "+(acl.type==="std"?"standard":"extended")+" "+n); for(const r of acl.rules) L.push(" "+aceText(acl,r,true)); } else for(const r of acl.rules) L.push("access-list "+n+" "+aceText(acl,r,true)); L.push("!"); }
   L.push("line con 0"); if(s.con.password) L.push(" password "+s.con.password); if(s.con.login) L.push(s.con.login==="local"?" login local":" login");
   L.push("line vty 0 15"); if(s.vty.execTimeout) L.push(" exec-timeout "+s.vty.execTimeout.join(" ")); if(s.vty.authList) L.push(" login authentication "+s.vty.authList); if(s.vty.password) L.push(" password "+s.vty.password); if(s.vty.login) L.push(s.vty.login==="local"?" login local":" login"); if(s.vty.acl) L.push(" access-class "+s.vty.acl+" in"); if(s.vty.transport!=="all") L.push(" transport input "+s.vty.transport);
@@ -1304,6 +1308,10 @@ function Net(def){
       if(ia&&ib&&!ia.shutdown&&!ib.shutdown&&operTrunk(ia)&&operTrunk(ib)&&ia.nativeVlan!==ib.nativeVlan){
         msgs.push([l.a,"%CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on "+longIf(l.pa)+" ("+ia.nativeVlan+"), with "+l.b+" "+longIf(l.pb)+" ("+ib.nativeVlan+")."]);
         msgs.push([l.b,"%CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on "+longIf(l.pb)+" ("+ib.nativeVlan+"), with "+l.a+" "+longIf(l.pa)+" ("+ia.nativeVlan+")."]); } }
+    // ---------- DHCP-клієнт на інтерфейсах маршрутизатора (ip address dhcp) ----------
+    for(const d of Object.values(N.dev)) if(!isHost(d)&&d.type!=="hub") for(const i of Object.values(d.ifs)) if(i.ipDhcp&&!i.ip&&ifStatus(d,i)[1]==="up"){
+      for(const e of fromIface(d,i.name,{noVip:true})||[]){ if(e.kind==="pc"||e.dev===d.devName||!e.ip) continue; const sd=N.dev[e.dev]; const p=poolFor(sd,e.ip); if(!p) continue; const ip=allocate(sd,p,d.devName+":"+i.name);
+        if(ip){ i.ip=ip; i.mask=p.mask; i.dhcpLease={srv:e.dev,gw:p.gw||null}; if(p.gw&&!d.routes.some(r=>r.dhcp)) d.routes.push({net:"0.0.0.0",mask:"0.0.0.0",nh:p.gw,ifc:null,ad:254,dhcp:true}); msgs.push([d.devName,"%DHCP-6-ADDRESS_ASSIGN: Interface "+longIf(i.name)+" assigned DHCP address "+ip+", mask "+p.mask+", hostname "+d.devName]); } break; } }
     try{ msgs.push(...N.debugMsgs()); }catch(e){}
     const out=[]; for(const m of msgs){ const k=m.join("|"); if(!N.seenMsgs.has(k)){ N.seenMsgs.add(k); out.push(m); } }
     if(N._dq&&N._dq.length) out.push(...N._dq.splice(0));
@@ -1359,10 +1367,14 @@ function Net(def){
     if(opt&&opt.l2check&&!opt.origin) opt=Object.assign({},opt,{origin:{mac:macOf(d.devName,ifn),ip:i.ip}}); if(i.svi) return domain({sw:d.devName,v:Number(ifn.slice(4))},opt);
     const ph=i.sub? ifn.split(".")[0] : ifn; const pr=N.peer(d.devName,ph); if(!pr) return [];
     const tag= i.sub? (i.native? null : i.encap) : null; return domain({dev:pr.dev,port:pr.port,tag},opt); };
+  const hsrpTrackDown=(d,i,g)=>{ const h=i.hsrp&&i.hsrp[g]; if(!h||!h.track) return false; const t=d.ifs[h.track.ifn]; return !t||ifStatus(d,t)[1]!=="up"; };
+  const hsrpEff=(d,i,g)=>{ const h=i.hsrp[g]; return Math.max(0,h.prio-(hsrpTrackDown(d,i,g)?h.track.dec:0)); };
+  N.hsrpPrio=(devName,ifn,g)=>{ const d=N.dev[devName]; const i=d.ifs[ifn]; return i&&i.hsrp&&i.hsrp[g]?hsrpEff(d,i,g):100; };
+  N.hsrpTrackDown=(devName,ifn,g)=>{ const d=N.dev[devName]; const i=d.ifs[ifn]; return !!(i&&hsrpTrackDown(d,i,g)); };
   function hsrpPeers(devName,ifn,g){ const d=N.dev[devName]; const i=d.ifs[ifn]; if(!i||!i.hsrp||!i.hsrp[g]) return []; const vip=i.hsrp[g].ip; const out=[];
-    if(ifStatus(d,i)[1]==="up"&&i.ip) out.push({dev:devName,ifn,prio:i.hsrp[g].prio,ip:i.ip});
+    if(ifStatus(d,i)[1]==="up"&&i.ip) out.push({dev:devName,ifn,prio:hsrpEff(d,i,g),ip:i.ip});
     if(!out.length) return out;
-    for(const e of fromIface(d,ifn,{noVip:true})){ if(e.kind==="pc"||e.dev===devName) continue; const o=N.dev[e.dev]; const j=o.ifs[e.ifn]; if(!j||!j.hsrp||!j.hsrp[g]||j.hsrp[g].ip!==vip||j.ip!==e.ip) continue; if(ifStatus(o,j)[1]!=="up") continue; out.push({dev:e.dev,ifn:e.ifn,prio:j.hsrp[g].prio,ip:j.ip}); }
+    for(const e of fromIface(d,ifn,{noVip:true})){ if(e.kind==="pc"||e.dev===devName) continue; const o=N.dev[e.dev]; const j=o.ifs[e.ifn]; if(!j||!j.hsrp||!j.hsrp[g]||j.hsrp[g].ip!==vip||j.ip!==e.ip) continue; if(ifStatus(o,j)[1]!=="up") continue; out.push({dev:e.dev,ifn:e.ifn,prio:hsrpEff(o,j,g),ip:j.ip}); }
     return out.sort((a,b)=>b.prio-a.prio||ipToN(b.ip)-ipToN(a.ip)); }
   function vrrpPeers(devName,ifn,g){ const d=N.dev[devName]; const i=d.ifs[ifn]; if(!i||!i.vrrp||!i.vrrp[g]) return []; const v=i.vrrp[g]; if(ifStatus(d,i)[1]!=="up"||!i.ip||!v.ip) return [];
     const pr=(ii,vv)=>ii.ip===vv.ip?255:vv.prio; const out=[{dev:devName,ifn,prio:pr(i,v),ip:i.ip,own:i.ip===v.ip}];

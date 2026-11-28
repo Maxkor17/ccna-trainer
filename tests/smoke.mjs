@@ -280,6 +280,24 @@ await step("перша спроба без варіантів і підсвіт�
   if (!(await page.locator("#blindin").count())) throw new Error("немає поля першої спроби"); if (!(await page.locator("mark.trap").count())) throw new Error("пастку не підсвічено");
   await page.fill("#blindin", "моя версія"); await act('[data-act="blindshow"]'); if (!(await page.locator('[data-act="pick"]').count())) throw new Error("варіанти не показано"); await has("Ваша відповідь: моя версія");
   await page.evaluate(() => { opts.blind = false; S = null; }); await home(); });
+await step("пакет покроково: сценарій з поломкою", async () => {
+  await page.evaluate(() => ACTS.packet()); await act('[data-act="pwscn"][data-k="inter"]'); await act('[data-act="pwfault"][data-k="acl"]');
+  for (let i = 0; i < 10; i++) { const a = await page.evaluate(() => PWV.steps[PWV.i].q.a); await act(`[data-act="pwans"][data-i="${a}"]`); if (!(await page.locator('[data-act="pwnext"]').count())) break; await act('[data-act="pwnext"]'); }
+  await has("Пакет загубився тут"); await has("Destination net unreachable"); await home(); });
+await step("Skills Assessment: завдання, еталон → 100%, історія", async () => {
+  await page.evaluate(() => { lsSet(SA_CUR, null); ACTS.sa(); }); await act('[data-act="sanew"]'); await has("Таблиця адрес");
+  const t = await page.evaluate(() => { const c = lsGet(SA_CUR, null); const P = saGen(c.seed); const S = saSolution(P); return ["R1", "S1", "S2"].map(h => "Building configuration...\n" + S[h].join("\n") + (h !== "R1" ? "\n" + h + "#show vlan brief\n" + saVlanBrief(P) : "")).join("\n"); });
+  await page.fill("#satext", t); await act('[data-act="sacheck"]'); await has("(100%)"); await act('[data-act="safinish"]'); const h = await page.evaluate(() => lsGet(SA_HIST, [])); if (!h.length || h[0].pct !== 100) throw new Error(JSON.stringify(h)); await home(); });
+await step("VLSM → генератор, документація мережі, поясни вголос", async () => {
+  await page.evaluate(() => ACTS.vlsm()); await act('[data-act="vlrun"]'); await has("192.168.0.0/24"); await act('[data-act="vltogen"]'); await act('[data-act="cggen"]'); await has("ip dhcp pool USERS");
+  await page.evaluate(() => ACTS.netdoc()); await act('[data-act="ndsample"]'); await has("SEP001122334455");
+  await page.evaluate(() => ivStart("feyn", "SRWE5")); await has("Поясни тему SRWE"); await page.evaluate(() => { IV = null; }); await home(); });
+await step("челенджі: тиждень, посилання з результатом друга", async () => {
+  await page.evaluate(() => ACTS.challenge()); await act('[data-act="chweek"]'); const n = await page.evaluate(() => S && S.challenge && S.items.length); if (n !== 15) throw new Error("питань " + n);
+  await page.evaluate(() => finishExam()); await has("Ваш результат");
+  const link = await page.evaluate(async () => { const ch = Object.assign({}, CHV.ch); delete ch.week; return await chLink("chr", { ch, r: { name: "Друг", correct: 15, n: 15, dur: 300, bits: "1".repeat(15) } }); });
+  await page.goto(link); await page.waitForFunction(() => typeof view !== "undefined" && view === "challenge" && CHV && CHV.mode === "cmp", null, { timeout: 5000 }); await has("За питаннями"); await has("Друг попереду");
+  const wk = await page.evaluate(() => lsGet(CH_WK, {})[chWeekKey()]); if (!wk || wk.tries < 1) throw new Error("рекорд тижня не записано"); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));

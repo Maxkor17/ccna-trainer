@@ -152,7 +152,7 @@ function startCcna(n,en,bp){ const prev=opts.lang, pbp=opts.bp; if(en&&prev!=="e
 customQs=lsGet(LS.custom,[]); rebuildQB(); applyLook();
 if(opts.lang==="en") loadTR().then(()=>{ rebuildQB(); if(!S) render(); }).catch(()=>{});
 render();
-initStore(); setTimeout(sbOpenShared,400); addEventListener("hashchange",sbOpenShared); setTimeout(()=>{ if(store.mode!=="db") autoBackup(); },8000);
+initStore(); setTimeout(sbOpenShared,400); addEventListener("hashchange",sbOpenShared); setTimeout(()=>{ if(typeof chOpenShared==="function") chOpenShared(); },450); addEventListener("hashchange",()=>{ if(typeof chOpenShared==="function") chOpenShared(); }); setTimeout(()=>{ if(store.mode!=="db") autoBackup(); },8000);
 if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
 addEventListener("online",setStatus); addEventListener("offline",setStatus);
 var installEvt=null; addEventListener("beforeinstallprompt",e=>{ e.preventDefault(); installEvt=e; if(view==="home") render(); });
