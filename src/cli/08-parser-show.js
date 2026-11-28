@@ -108,7 +108,7 @@ function ifStatus(s,i){
 function showIpBrief(s){
   let o="Interface              IP-Address      OK? Method Status                Protocol\n";
   const list=Object.values(s.ifs).sort((a,b)=>(a.svi-b.svi)||a.name.localeCompare(b.name,undefined,{numeric:true}));
-  for(const i of list){ const [st,pr]=ifStatus(s,i); o+=longIf(i.name).padEnd(23)+(i.ip||"unassigned").padEnd(16)+"YES "+(i.ip?"manual":"unset ").padEnd(7)+st.padEnd(22)+pr+"\n"; }
+  for(const i of list){ const [st,pr]=ifStatus(s,i); o+=longIf(i.name).padEnd(23)+(i.ip||"unassigned").padEnd(16)+"YES "+(i.ipDhcp?"DHCP":i.ip?"manual":"unset ").padEnd(7)+st.padEnd(22)+pr+"\n"; }
   return o;
 }
 function showStatus(s){ let o="Port      Name               Status       Vlan       Duplex  Speed Type\n";
@@ -169,9 +169,9 @@ function activeStatics(s){ // статичні маршрути, що потра
 }
 function runIf(s,i){
   const L=[]; L.push("interface "+longIf(i.name)); if(i.desc) L.push(" description "+i.desc);
-  if(i.svi||i.loop){ L.push(i.ip?" ip address "+i.ip+" "+i.mask:" no ip address"); L.push(...l3extra(i)); if(i.shutdown) L.push(" shutdown"); return L; }
-  if(i.sub){ if(i.encap) L.push(" encapsulation dot1Q "+i.encap+(i.native?" native":"")); L.push(i.ip?" ip address "+i.ip+" "+i.mask:" no ip address"); L.push(...l3extra(i)); if(i.shutdown) L.push(" shutdown"); return L; }
-  if(!i.switchport){ if(!s.router) L.push(" no switchport"); L.push(i.ip?" ip address "+i.ip+" "+i.mask:" no ip address"); L.push(...l3extra(i)); }
+  if(i.svi||i.loop){ L.push(i.ipDhcp?" ip address dhcp":i.ip?" ip address "+i.ip+" "+i.mask:" no ip address"); L.push(...l3extra(i)); if(i.shutdown) L.push(" shutdown"); return L; }
+  if(i.sub){ if(i.encap) L.push(" encapsulation dot1Q "+i.encap+(i.native?" native":"")); L.push(i.ipDhcp?" ip address dhcp":i.ip?" ip address "+i.ip+" "+i.mask:" no ip address"); L.push(...l3extra(i)); if(i.shutdown) L.push(" shutdown"); return L; }
+  if(!i.switchport){ if(!s.router) L.push(" no switchport"); L.push(i.ipDhcp?" ip address dhcp":i.ip?" ip address "+i.ip+" "+i.mask:" no ip address"); L.push(...l3extra(i)); }
   else{
     if(i.accessVlan!==1) L.push(" switchport access vlan "+i.accessVlan);
     if(i.nativeVlan!==1) L.push(" switchport trunk native vlan "+i.nativeVlan);
@@ -211,8 +211,8 @@ function showRun(s){
   { const sv=svcRun(s); if(sv.length) L.push(...sv,"!"); }
   if(s.v6routing) L.push("ipv6 unicast-routing","!"); for(const r of s.routes6||[]) L.push("ipv6 route "+r.pfx+"/"+r.len+(r.ifc?" "+longIf(r.ifc):"")+(r.nh?" "+r.nh:"")+(r.ad>1?" "+r.ad:""));
   if(s.defaultGw) L.push("ip default-gateway "+s.defaultGw,"!");
-  for(const r of s.routes) L.push("ip route "+r.net+" "+r.mask+(r.ifc?" "+longIf(r.ifc):"")+(r.nh?" "+r.nh:"")+(r.ad&&r.ad!==1?" "+r.ad:""));
-  if(s.routes.length) L.push("!");
+  for(const r of s.routes.filter(r=>!r.dhcp)) L.push("ip route "+r.net+" "+r.mask+(r.ifc?" "+longIf(r.ifc):"")+(r.nh?" "+r.nh:"")+(r.ad&&r.ad!==1?" "+r.ad:""));
+  if(s.routes.some(r=>!r.dhcp)) L.push("!");
   for(const [n,acl] of Object.entries(s.acls)){ if(acl.named){ L.push("ip access-list "+(acl.type==="std"?"standard":"extended")+" "+n); for(const r of acl.rules) L.push(" "+aceText(acl,r,true)); } else for(const r of acl.rules) L.push("access-list "+n+" "+aceText(acl,r,true)); L.push("!"); }
   L.push("line con 0"); if(s.con.password) L.push(" password "+s.con.password); if(s.con.login) L.push(s.con.login==="local"?" login local":" login");
   L.push("line vty 0 15"); if(s.vty.execTimeout) L.push(" exec-timeout "+s.vty.execTimeout.join(" ")); if(s.vty.authList) L.push(" login authentication "+s.vty.authList); if(s.vty.password) L.push(" password "+s.vty.password); if(s.vty.login) L.push(s.vty.login==="local"?" login local":" login"); if(s.vty.acl) L.push(" access-class "+s.vty.acl+" in"); if(s.vty.transport!=="all") L.push(" transport input "+s.vty.transport);

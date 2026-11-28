@@ -4,7 +4,7 @@
 // оцінка захищеності за чеклістом і перевірка синтаксису симулятором.
 const CC_LS = "ccna.confcheck";
 const CC_PFX = [["tengigabitethernet", "Te"], ["gigabitethernet", "Gi"], ["fastethernet", "Fa"], ["ethernet", "Et"], ["serial", "Se"], ["port-channel", "Po"], ["loopback", "Lo"], ["tunnel", "Tu"], ["vlan", "Vlan"],
-  ["te", "Te"], ["gi", "Gi"], ["g", "Gi"], ["fa", "Fa"], ["f", "Fa"], ["et", "Et"], ["e", "Et"], ["se", "Se"], ["s", "Se"], ["po", "Po"], ["lo", "Lo"], ["tu", "Tu"]];
+  ["gig", "Gi"], ["fas", "Fa"], ["ten", "Te"], ["ser", "Se"], ["eth", "Et"], ["te", "Te"], ["gi", "Gi"], ["g", "Gi"], ["fa", "Fa"], ["f", "Fa"], ["et", "Et"], ["e", "Et"], ["se", "Se"], ["s", "Se"], ["po", "Po"], ["lo", "Lo"], ["tu", "Tu"]];
 function ccIf(n) { n = String(n || "").trim().replace(/\s+/g, ""); const m = n.match(/^([a-z-]+)([\d/.:]+)$/i); if (!m) return n; const p = CC_PFX.find(([k]) => m[1].toLowerCase() === k); return p ? p[1] + m[2] : n; }
 const ip2n = s => { const p = String(s).split(".").map(Number); return p.length === 4 && p.every(x => x >= 0 && x <= 255) ? ((p[0] << 24) >>> 0) + (p[1] << 16) + (p[2] << 8) + p[3] : null; };
 const n2ip = n => [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join(".");
