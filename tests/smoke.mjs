@@ -191,7 +191,9 @@ await step("запис у vault через GitHub API (мок)", async () => {
   await page.evaluate(() => { localStorage.setItem("ccna.ghtoken", "test-token"); opts.obRepo = "test/vault"; opts.obBranch = ""; prog["e1-2"] = Object.assign({}, prog["e1-2"] || {}, { w: 2, c: 0, s: 2, b: 0, d: 0, l: 0, k: 0 }); view = "custom"; render(); });
   await page.evaluate(() => pushVault(false)); await page.waitForFunction(() => /Записано|актуально|Помилка/.test((document.querySelector("#obmsg") || {}).textContent || ""), null, { timeout: 5000 });
   const msg = await page.evaluate(() => document.querySelector("#obmsg").textContent); if (!/Записано/.test(msg)) throw new Error(msg);
-  if (puts.length !== 3 || !puts.some(p => /Картки з помилок\.md$/.test(p.path) && /::/.test(p.text)) || !puts.every(p => p.branch === "main" && p.auth === "Bearer test-token")) throw new Error(JSON.stringify(puts.map(p => p.path)));
+  const mod = puts.find(p => /\/Помилки\/.+\.md$/.test(p.path)); const moc = puts.find(p => /SRWE — готовність\.md$/.test(p.path));
+  if (!mod || !/## Картки/.test(mod.text) || !/#flashcards\/(ITN|SRWE|ENSA)/.test(mod.text) || !moc || !/\| Модуль \|/.test(moc.text)) throw new Error("нотатки модулів/MOC: " + JSON.stringify(puts.map(p => p.path)));
+  if (puts.length < 5 || !puts.some(p => /Картки з помилок\.md$/.test(p.path) && /::/.test(p.text)) || !puts.every(p => p.branch === "main" && p.auth === "Bearer test-token")) throw new Error(JSON.stringify(puts.map(p => p.path)));
   await page.unroute(/api\.github\.com/); await page.evaluate(() => { localStorage.removeItem("ccna.ghtoken"); delete opts.obRepo; }); await home(); });
 await step("аудіорежим: озвучення питання, відповідь, пояснення", async () => {
   await page.evaluate(() => { window.__said = []; const fake = { getVoices: () => [], cancel() {}, speak(u) { window.__said.push(u.text); setTimeout(() => u.onend && u.onend(), 5); }, onvoiceschanged: null };
@@ -252,6 +254,32 @@ await step("фінішний тиждень: план за датою, позн�
   const cb = page.locator('[data-act="fwdone"]:not([disabled])').first(); await cb.click(); await page.waitForTimeout(60);
   const f = await page.evaluate(() => Object.entries(flags).filter(([k, v]) => k.startsWith("fw:") && v.done).length); if (f < 1) throw new Error("позначка дня не збереглася");
   await page.evaluate(() => { exams.shift(); opts.examDate = ""; opts.homeTab = "all"; }); await home(); });
+await step("SRWE руками: читання виводів, знайди помилку, плитки", async () => {
+  await page.evaluate(() => { opts.homeTab = "prac"; view = "home"; render(); }); await act('[data-act="showread"]'); await has("Читання виводів");
+  await page.locator('.shl[data-act="shline"]').first().click(); if (!(await page.locator(".shn").count())) throw new Error("пояснення рядка не з'явилось");
+  const a = await page.evaluate(() => SHV.it.a); await act(`[data-act="shpick"][data-i="${a}"]`); await has("Правильно!"); await act('[data-act="shnext"]');
+  await page.evaluate(() => ACTS.bugs()); const bl = await page.evaluate(() => BGV.bugs.map(b => b[0])); for (const i of bl) await act(`[data-act="bgpick"][data-i="${i}"]`); await act('[data-act="bgcheck"]'); await has("Має бути");
+  await page.evaluate(() => ACTS.cbuild()); const toks = await page.evaluate(() => CBV.it.ans.split(" ")); for (const t of toks) { const i = await page.evaluate(t => CBV.tiles.find(x => x.t === t && !CBV.line.includes(x.i)).i, t); await act(`[data-act="cbadd"][data-i="${i}"]`); } await act('[data-act="cbcheck"]'); await has("Правильно!");
+  const r = await page.evaluate(() => [Object.keys(prog).some(k => k.startsWith("sh-")), Object.keys(prog).some(k => k.startsWith("bg-")), !!prog["cb-" + CBV.it.id]]); if (r.some(x => !x)) throw new Error("SR не записано: " + r); await page.evaluate(() => { opts.homeTab = "all"; }); await home(); });
+await step("STP передбач зміну й EtherChannel: таблиця режимів", async () => {
+  await page.evaluate(() => ACTS.stpviz()); await act('[data-act="stpmode"][data-m="predict"]'); await has("До зміни"); await act('[data-act="stpcheck"]');
+  await page.evaluate(() => ACTS.eclab()); const cells = await page.locator('[data-act="ecpick"]').count(); if (cells !== 25) throw new Error("клітинок " + cells);
+  await act('[data-act="ecmis"][data-k="native"]'); await has("suspended"); await act('[data-act="ecquiz"]'); await act('[data-act="ecans"]'); await home(); });
+await step("аналізатор і генератор конфігурацій", async () => {
+  await page.evaluate(() => ACTS.confcheck()); await act('[data-act="ccsample"]'); await act('[data-act="ccrun2"]'); await has("різні області"); await has("Захищеність");
+  await page.evaluate(() => ACTS.confgen()); await act('[data-act="cgrole"][data-r="router"]'); await act('[data-act="cggen"]'); await has("encapsulation dot1Q 10"); await has("ip nat inside source list NAT-INSIDE");
+  await page.fill("#cgold", "hostname R1\nip http server\n"); await act('[data-act="cgdiff"]'); await has("Лише в старій"); await home(); });
+await step("трекер модулів, Packet Tracer, довідник, діагностика, пастки", async () => {
+  await page.evaluate(() => ACTS.modtrack()); await act('[data-act="mdopen"][data-t="SRWE3"]'); await act('[data-act="mdread"][data-t="SRWE3"]'); await page.fill("#mdex-SRWE3", "90"); await act('[data-act="mdexam"][data-t="SRWE3"]');
+  const f = await page.evaluate(() => flags["md:SRWE3"]); if (!f || !f.read || f.exam !== 90 || f.on !== false) throw new Error(JSON.stringify(f));
+  await act('[data-act="ptopen"][data-p="trunk"]'); await has("Configure Trunks"); await page.fill("#pttext", "hostname S1\ninterface gi0/1\n switchport mode trunk\n switchport trunk native vlan 99\n"); await act('[data-act="ptcheck"]'); await has("Що вимагає активність");
+  await page.evaluate(() => ACTS.ref()); await has("LACP (Link Aggregation Control Protocol)"); await page.evaluate(() => ACTS.runbook()); await act('[data-act="rbopen"][data-k="err"]'); await act('[data-act="rbgo"]'); await has("Рішення");
+  await page.evaluate(() => ACTS.traps()); await has("Пастки й час"); await home(); });
+await step("перша спроба без варіантів і підсвітка пасток", async () => {
+  await page.evaluate(() => { opts.blind = true; const q = QB.find(q => qtype(q) === "mc" && /\bNOT\b|НЕ/.test(q.q)); startSession("train", [q], "t"); render(); });
+  if (!(await page.locator("#blindin").count())) throw new Error("немає поля першої спроби"); if (!(await page.locator("mark.trap").count())) throw new Error("пастку не підсвічено");
+  await page.fill("#blindin", "моя версія"); await act('[data-act="blindshow"]'); if (!(await page.locator('[data-act="pick"]').count())) throw new Error("варіанти не показано"); await has("Ваша відповідь: моя версія");
+  await page.evaluate(() => { opts.blind = false; S = null; }); await home(); });
 await step("налаштування", async () => { await page.evaluate(() => { view = "settings"; render(); }); await has("Норма часу"); await home(); });
 
 for (const extra of (globalThis.SMOKE_EXTRA || [])) await step(extra.name, () => extra.fn({ page, act, home, has }));

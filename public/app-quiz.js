@@ -171,6 +171,8 @@ function renderBody(q, k, ans, checked, interactive){
         if(checked){ cls+=" locked"; if(cs.has(oi)) cls+=sel?" ok":" miss"; else if(sel) cls+=" bad"; } else if(sel) cls+=" sel"; const tag=interactive&&!checked?"button":"div";
         return `<${tag} class="${cls}" ${tag==="button"?`data-act="spick" data-p="${pi}" data-i="${oi}"`:""}><span class="mk">${letters[pos]}.</span>${esc(text)}${checked?`<span class="ex">${cs.has(oi)?"✅ ":"❌ "}${esc(ex)}</span>`:""}</${tag}>`; }).join("")+`</div>`; }).join("");
   }
+  if(t==="mc"&&interactive&&!checked&&blindOn(k)){
+    return h+`<div class="blind"><div class="small muted" style="margin:6px 0">🙈 Перша спроба: спершу відповідайте самі — варіанти з'являться після.</div><textarea id="blindin" rows="3" style="width:100%;min-height:70px" placeholder="Ваша відповідь своїми словами…">${esc((S.blindTxt||{})[k]||"")}</textarea><div class="navbar"><button class="primary" data-act="blindshow">Показати варіанти</button></div></div>`; }
   if(t==="mc"){
     const order=S&&S.order[k]? S.order[k] : q.o.map((_,i)=>i); const chosen=ans||[]; const cs=correctSet(q);
     if(q.a.length>1) h+=`<div class="small muted">Оберіть ${q.a.length}.</div>`;
@@ -222,7 +224,7 @@ function renderQuiz(){ qtMark();
   const checked = S.mode!=="exam" && S.checked[k];
   const modeName=S.title||{train:"Тренування",review:"Повтор помилок",exam:"Екзамен",gen:"Розрахунки",module:"Тест модуля"}[S.mode];
   const badge=(q.src==="my"?` <span class="chip" style="font-size:11px;padding:1px 7px">✍ моє</span>`:"")+(q.src==="na"?` <span class="chip" style="font-size:11px;padding:1px 7px">🎓 NetAcad</span>`:"")+(q.src==="n"?` <span class="chip" style="font-size:11px;padding:1px 7px">📒 з нотаток</span>`:"")+(q.gen?` <span class="chip" style="font-size:11px;padding:1px 7px">🎲 генератор</span>`:"")+(TYPE_NAME[qtype(q)]?` <span class="chip" style="font-size:11px;padding:1px 7px">${TYPE_NAME[qtype(q)]}</span>`:"");
-  let verdict=""; if(checked){ const ok=isCorrect(q,ans); verdict=`<div class="verdict ${ok?"ok":"bad"}">${ok?"Правильно!":"Неправильно"}</div>`+(!ok&&prog[recId(q)]?whyChips(q,k):"")+mineBox(q); }
+  let verdict=""; if(checked){ const ok=isCorrect(q,ans); verdict=`<div class="verdict ${ok?"ok":"bad"}">${ok?"Правильно!":"Неправильно"}</div>`+(!ok&&prog[recId(q)]?whyChips(q,k):"")+(!ok&&typeof obButtons==="function"?obButtons(q):"")+mineBox(q); }
   let nav="";
   if(S.mode==="exam"){
     const done=S.items.filter((qq,i)=>hasAnswer(qq,S.ans[i])).length;
@@ -238,7 +240,7 @@ function renderQuiz(){ qtMark();
     <div class="qmeta"><span>${modeName} · ${S.i+1}/${S.items.length}</span>${S.mode==="exam"?`<span>⏱ <span id="timer">${fmtLeft(S.deadline-Date.now())}</span></span>`:`<span>${tlabel(q.t)}</span>`}</div>
     <div class="progress"><i style="width:${Math.round(S.i/S.items.length*100)}%"></i></div>
     <div class="small muted">${S.mode==="exam"?tlabel(q.t)+" · ":""}${esc(TMAP[q.t].name)}${badge}</div>
-    <div class="qtext">${opts.enTerms&&q.src!=="en"&&!q._tr?annotate(esc(q.q)):esc(q.q)}</div>${q._uk?`<details class="small muted"><summary>Українською</summary>${esc(q._uk)}</details>`:(window.QB_TR&&window.QB_TR[q.id]?`<details class="small muted"><summary>In English</summary>${esc(window.QB_TR[q.id].q)}</details>`:"")}${q.fig?topoSVG(q.fig):""}${q.c?`<pre>${esc(q.c)}</pre>`:""}
+    <div class="qtext">${trapHL(opts.enTerms&&q.src!=="en"&&!q._tr?annotate(esc(q.q)):esc(q.q))}</div>${S.blindTxt&&S.blindTxt[k]&&!blindOn(k)?`<div class="small muted" style="margin:0 0 6px">🙈 Ваша відповідь: ${esc(S.blindTxt[k])}</div>`:""}${q._uk?`<details class="small muted"><summary>Українською</summary>${esc(q._uk)}</details>`:(window.QB_TR&&window.QB_TR[q.id]?`<details class="small muted"><summary>In English</summary>${esc(window.QB_TR[q.id].q)}</details>`:"")}${q.fig?topoSVG(q.fig):""}${q.c?`<pre>${esc(q.c)}</pre>`:""}
     ${renderBody(q,k,ans,checked,true)}${verdict}${nav}
   </div>
   <button class="ghost" data-act="quit">✕ Вийти${S.mode==="exam"?" (екзамен не зарахується)":""}</button>`;
@@ -260,3 +262,12 @@ ACTS.catback=el=>{ const box=el.closest("[data-catdrop]"); if(S.catSel!=null&&bo
 document.addEventListener("dragstart",ev=>{ const t=ev.target.closest&&ev.target.closest("[data-act='catpick'],[data-act='catback']"); if(t&&ev.dataTransfer){ ev.dataTransfer.setData("text/plain",t.dataset.i); ev.dataTransfer.effectAllowed="move"; } });
 document.addEventListener("dragover",ev=>{ if(ev.target.closest&&ev.target.closest("[data-catdrop]")) ev.preventDefault(); });
 document.addEventListener("drop",ev=>{ const box=ev.target.closest&&ev.target.closest("[data-catdrop]"); if(!box||!S) return; ev.preventDefault(); const i=Number(ev.dataTransfer.getData("text/plain")); if(isNaN(i)) return; const c=Number(box.dataset.catdrop); catSet(i,c<0?null:c); });
+
+// ---- Перша спроба без варіантів і підсвітка пасток у формулюванні ----
+function blindOn(k){ return !!(opts.blind&&S&&S.mode!=="exam"&&!(S.blindDone&&S.blindDone[k])&&qtype(S.items[k])==="mc"); }
+const TRAP_RE=/(^|[^\p{L}])(NOT|EXCEPT|LEAST|BEST|MOST|FIRST|(?:[Cc]hoose|[Ss]elect) (?:two|three|2|3)|НЕ|не є|не належить|неправильн\p{L}*|best|most likely|найкращ\p{L}*|найімовірніш\p{L}*|найменш\p{L}*|спочатку|першим|оберіть (?:два|дві|три|2|3)|(?:два|дві|три) (?:твердження|відповіді|варіанти))(?=$|[^\p{L}])/gu;
+function trapHL(html){ if(opts.traps===false||(S&&S.mode==="exam")) return html; return html.replace(TRAP_RE,(m,p,w)=>p+'<mark class="trap">'+w+'</mark>'); }
+const hasTrap=q=>{ TRAP_RE.lastIndex=0; const r=TRAP_RE.test(q.q||""); TRAP_RE.lastIndex=0; return r; };
+ACTS.blindshow=()=>{ const k=S.i; const ta=$("#blindin"); S.blindTxt=S.blindTxt||{}; S.blindTxt[k]=ta?ta.value.trim():""; S.blindDone=S.blindDone||{}; S.blindDone[k]=true; render(); };
+ACTS.blindtoggle=()=>{ opts.blind=!opts.blind; lsSet(LS.opts,opts); render(); };
+ACTS.traptoggle=()=>{ opts.traps=opts.traps===false; lsSet(LS.opts,opts); render(); };

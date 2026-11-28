@@ -76,6 +76,7 @@ add(C,"banner motd <rest>",(s,a)=>{ s.motd=a[0].replace(/^(.)(.*)\1$/,"$2"); });
 add(C,"security passwords min-length <n>",(s,a)=>{ if(a[0]<1||a[0]>16) return INV; s.pwMin=a[0]; });
 add(C,"login block-for <n> attempts <n> within <n>",(s,a)=>{ s.loginBlock=a.slice(); });
 add(C,"no ip http server",s=>{ s.httpOff=true; }); add(C,"ip http server",s=>{ s.httpOff=false; });
+add(C,"no ip http secure-server",s=>{ s.httpsOff=true; }); add(C,"ip http secure-server",s=>{ s.httpsOff=false; }); add("line","logging synchronous",()=>{}); add("line","no logging synchronous",()=>{});
 for(const m of ["exec"]){
   for(const src of ["running-config","startup-config"]) add(m,"copy "+src+" <w>",(s,a)=>{ if(!/^(scp|sftp|tftp|ftp):/i.test(a[0])) return INV; if(src==="startup-config"&&!s.saved) return "%Error opening nvram:/startup-config (No such file or directory)"; return s.net? s.net.fileCopy(s,a[0],src) : "%Error opening "+a[0]+" (Network is unreachable)"; });
 }
